@@ -4560,7 +4560,16 @@ export class Bot extends Player {
         }
 
         // check if player nearby
-        if (closestPlayer2 != undefined && closestDist2 < 6 * GameConfig.player.reviveRange) {
+        // if (closestPlayer2 != undefined && closestDist2 < 6 * GameConfig.player.reviveRange)
+        const nearbyEnemy3 = this.game.grid
+            .intersectCollider(
+                rect,
+            )
+            .filter(
+                (obj): obj is Player =>
+                    obj.__type == ObjectType.Player && !obj.dead,
+            );
+        if (closestPlayer2 != undefined && nearbyEnemy3.includes(closestPlayer2)) {
             closestPlayer = closestPlayer2;
             closestDist = closestDist2;
         }
@@ -4757,7 +4766,16 @@ export class DumBot extends Bot {
         }
 
         // check if player nearby
-        if (closestPlayer2 != undefined && closestDist2 < 6 * GameConfig.player.reviveRange) {
+        // if (closestPlayer2 != undefined && closestDist2 < 6 * GameConfig.player.reviveRange) {
+            const nearbyEnemy3 = this.game.grid
+            .intersectCollider(
+                rect,
+            )
+            .filter(
+                (obj): obj is Player =>
+                    obj.__type == ObjectType.Player && !obj.dead,
+            );
+        if (closestPlayer2 != undefined && nearbyEnemy3.includes(closestPlayer2)) {
             closestPlayer = closestPlayer2;
             closestDist = closestDist2;
         }
@@ -4772,6 +4790,7 @@ export class DumBot extends Bot {
         let dd = 1;
 
         if (closestPlayer != undefined && closestDist > 6 * GameConfig.player.reviveRange) {
+        // if (closestPlayer != undefined && nearbyEnemy.includes(closestPlayer)) {
             this.shootHold = false;
             this.shootStart = false;
             if (closestPlayer.pos.x > this.pos.x + dd) {
