@@ -1681,7 +1681,7 @@ export class Player extends BaseGameObject {
                     case "gun":
                         const freeSlot = this.getFreeGunSlot(closestLoot);
                         if (
-                            freeSlot.slot &&
+                            freeSlot.slot !== null &&
                             freeSlot.slot !== this.curWeapIdx &&
                             !this.weapons[freeSlot.slot].type
                         ) {
