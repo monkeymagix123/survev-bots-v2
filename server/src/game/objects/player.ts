@@ -156,6 +156,27 @@ export class PlayerBarn {
 
         const player = new Player(this.game, pos, layer, socketId, joinMsg);
 
+        // Dev convenience: when internal match bots are enabled, give real players a basic
+        // starting loadout so they can fight immediately (explicit bot looting comes later).
+        if (
+            Config.bots.enabled &&
+            !player.bot &&
+            !this.game.map.perkMode &&
+            !player.weapons[GameConfig.WeaponSlot.Primary].type &&
+            !player.weapons[GameConfig.WeaponSlot.Secondary].type
+        ) {
+            this._equipStarterGun(player, GameConfig.WeaponSlot.Primary, "mosin");
+            this._equipStarterGun(player, GameConfig.WeaponSlot.Secondary, "spas12");
+
+            player.weaponManager.setCurWeapIndex(
+                GameConfig.WeaponSlot.Primary,
+                true,
+                true,
+                true,
+            );
+            player.weapons[GameConfig.WeaponSlot.Primary].cooldown = 0;
+        }
+
         this.socketIdToPlayer.set(socketId, player);
 
         if (team && group) {
@@ -210,6 +231,31 @@ export class PlayerBarn {
         this.game.updateData();
 
         return player;
+    }
+
+    private _equipStarterGun(player: Player, slot: number, gunType: string): void {
+        const def = GameObjectDefs[gunType];
+        if (def?.type !== "gun") return;
+
+        const gunDef = def as GunDef;
+        const trueMaxClip = player.weaponManager.getTrueAmmoStats(gunDef).trueMaxClip;
+        player.weaponManager.setWeapon(slot, gunType, trueMaxClip);
+
+        const ammoType = gunDef.ammo;
+        const backpackLevel = player.getGearLevel(player.backpack);
+        const bagSpace = this.bagSizes[ammoType]
+            ? this.bagSizes[ammoType][backpackLevel]
+            : 0;
+        if (!bagSpace) return;
+
+        const extraAmmo = Math.max(gunDef.ammoSpawnCount - trueMaxClip, 0);
+        if (!extraAmmo) return;
+
+        player.inventory[ammoType] = Math.min(
+            bagSpace,
+            player.inventory[ammoType] + extraAmmo,
+        );
+        player.inventoryDirty = true;
     }
 
     update(dt: number) {
