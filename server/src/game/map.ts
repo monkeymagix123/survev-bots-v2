@@ -443,7 +443,9 @@ export class GameMap {
         this.init(seed);
 
         for (const player of this.game.playerBarn.players) {
-            player.sendData(this.mapStream.getBuffer());
+            if (!player.disconnected && player.hasClient) {
+                player.sendData(this.mapStream.getBuffer());
+            }
         }
     }
 

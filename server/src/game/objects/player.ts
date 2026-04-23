@@ -156,66 +156,6 @@ export class PlayerBarn {
 
         const player = new Player(this.game, pos, layer, socketId, joinMsg);
 
-        // bots?
-        if (this.game.modeManager.isSolo) {
-            // player.inventory["8xscope"] = 1;
-            // player.scope = "8xscope";
-            player.inventory["4xscope"] = 1;
-            player.scope = "4xscope";
-
-            player.addPerk("endless_ammo", false);
-            player.addPerk("takedown", false);
-
-            const slot1 = GameConfig.WeaponSlot.Primary;
-            // this.weapons[slot1].type = "hk416";
-            player.weapons[slot1].type = "mosin";
-            // this.weapons[slot1].type = "awc";
-            const gunDef1 = GameObjectDefs[player.weapons[slot1].type] as GunDef;
-            player.weapons[slot1].ammo = gunDef1.maxClip;
-
-            const slot2 = GameConfig.WeaponSlot.Secondary;
-            player.weapons[slot2].type = "spas12";
-            const gunDef2 = GameObjectDefs[player.weapons[slot2].type] as GunDef;
-            player.weapons[slot2].ammo = gunDef2.maxClip;
-
-            let n = 77;
-            for (let i = 0; i < n; i++) {
-                const pos2: Vec2 = this.game.map.getSpawnPos();
-                let r = Math.random();
-                let bot = new DumBot(this.game, pos2, layer, socketId, joinMsg);
-                // chance of mosin bot
-                if (r < 0.1) {
-                    bot = new Bot(this.game, pos2, layer, socketId, joinMsg);
-                }
-
-                // starting scope
-                // bot.inventory["4xscope"] = 1;
-                // bot.scope = "4xscope";
-
-                // starting perks
-                bot.addPerk("endless_ammo", false);
-                bot.addPerk("takedown", false);
-                
-                this.game.logger.log(`Bot ${bot.name} joined`);
-
-                this.newPlayers.push(bot);
-                this.game.objectRegister.register(bot);
-                this.players.push(bot);
-                this.livingPlayers.push(bot);
-
-                // new group
-                let group = this.addGroup(false);
-
-                this.groups.push(group);
-                this.groupsByHash.set(group.hash, group);
-
-                bot.groupId = group.groupId;
-                bot.teamId = bot.groupId;
-
-                bot.name = "Bot" + Math.floor(Math.random() * 100);
-            }
-        }
-
         this.socketIdToPlayer.set(socketId, player);
 
         if (team && group) {
@@ -342,7 +282,7 @@ export class PlayerBarn {
     sendMsgs() {
         for (let i = 0; i < this.players.length; i++) {
             const player = this.players[i];
-            if (player.disconnected) continue;
+            if (player.disconnected || !player.hasClient) continue;
             player.sendMsgs();
         }
     }
@@ -356,6 +296,7 @@ export class PlayerBarn {
 
         for (let i = 0; i < this.players.length; i++) {
             const player = this.players[i];
+            player.msgsToSend.length = 0;
             player.healthDirty = false;
             player.boostDirty = false;
             player.zoomDirty = false;
@@ -1126,6 +1067,17 @@ export class Player extends BaseGameObject {
     isMobile: boolean;
 
     bot: boolean;
+
+    /**
+     * True for internal server-side bots (no websocket).
+     * Distinct from `bot` which is derived from JoinMsg.bot (external websocket bots).
+     */
+    isAi = false;
+    /**
+     * True when this player is backed by a websocket client.
+     * Internal bots set this to false.
+     */
+    hasClient = true;
 
     debug = {
         zoomOverride: GameConfig.scopeZoomRadius["desktop"]["1xscope"],

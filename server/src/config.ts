@@ -47,6 +47,18 @@ export const Config = {
         allowEditMsg: !isProduction,
     },
 
+    bots: {
+        enabled: false,
+        minHumansToEnable: 1,
+        reserveSlots: 8,
+        spawnPerSecond: 4,
+        decisionTps: 10,
+        difficulty: "normal",
+        proChance: 0.05,
+        enableQuickSwitch: true,
+        allowBotVsBot: true,
+    },
+
     rateLimitsEnabled: isProduction,
 
     client: {
@@ -189,6 +201,39 @@ export interface ConfigType {
         spawnPos?: Vec2;
         allowBots: boolean;
         allowEditMsg: boolean;
+    };
+
+    bots: {
+        enabled: boolean;
+        /**
+         * Minimum number of connected human players required to enable internal bots.
+         * External websocket bots (JoinMsg.bot=true) do not count towards this.
+         */
+        minHumansToEnable: number;
+        /**
+         * Game-level reserved capacity while lobby is open.
+         * This is NOT related to Group.reservedSlots.
+         */
+        reserveSlots: number;
+        /**
+         * Optional hard cap on internal bots. If omitted, derived from desiredTotalPlayers.
+         */
+        maxBots?: number;
+        /**
+         * Internal bot spawn/retire rate.
+         */
+        spawnPerSecond: number;
+        /**
+         * AI decision tick rate (expensive scans). Actuation runs every game tick.
+         */
+        decisionTps: number;
+        difficulty: "normal" | "hard" | "pro";
+        /**
+         * If difficulty is not "pro", chance a bot is upgraded to "pro".
+         */
+        proChance: number;
+        enableQuickSwitch: boolean;
+        allowBotVsBot: boolean;
     };
 
     // overrides for default items; doesn't apply to bots

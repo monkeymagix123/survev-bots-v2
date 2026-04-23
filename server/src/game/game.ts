@@ -21,6 +21,7 @@ import { PlaneBarn } from "./objects/plane";
 import { PlayerBarn } from "./objects/player";
 import { ProjectileBarn } from "./objects/projectile";
 import { SmokeBarn } from "./objects/smoke";
+import { BotManager } from "./bots/botManager";
 import { PluginManager } from "./pluginManager";
 
 export interface GroupData {
@@ -84,6 +85,7 @@ export class Game {
 
     map: GameMap;
     gas: Gas;
+    botManager: BotManager;
 
     now!: number;
 
@@ -130,6 +132,7 @@ export class Game {
         this.mapIndicatorBarn = new MapIndicatorBarn();
 
         this.gas = new Gas(this);
+        this.botManager = new BotManager(this);
 
         this.modeManager = new GameModeManager(this);
 
@@ -163,6 +166,7 @@ export class Game {
         // Update modules
         //
         this.gas.update(dt);
+        this.botManager.update(dt);
         this.playerBarn.update(dt);
         this.map.update(dt);
         this.lootBarn.update(dt);
@@ -399,7 +403,7 @@ export class Game {
         this.stopped = true;
         this.allowJoin = false;
         for (const player of this.playerBarn.players) {
-            if (!player.disconnected) {
+            if (!player.disconnected && player.hasClient) {
                 this.closeSocket(player.socketId);
             }
         }

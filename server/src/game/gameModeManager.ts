@@ -48,7 +48,15 @@ export class GameModeManager {
 
     /** true if game needs to end */
     handleGameEnd(): boolean {
-        if (!this.game.started || this.aliveCount() > 1) return false;
+        if (!this.game.started) return false;
+
+        const aliveCount = this.aliveCount();
+        if (aliveCount > 1) return false;
+        if (aliveCount <= 0) {
+            // No winner (all players removed/disconnected). End the match safely.
+            return true;
+        }
+
         switch (this.mode) {
             case GameMode.Solo: {
                 const winner = this.game.playerBarn.livingPlayers[0];
