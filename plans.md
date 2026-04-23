@@ -10,6 +10,7 @@ Last updated: 2026-04-23
 - Fixed mobile auto-pickup free-slot logic (helps bots/players pick up first gun correctly).
 - Added bot-only starting loadout: internal bots spawn with random guns picked from the current map loot tiers.
 - Added player starting loadout (when `Config.bots.enabled`): websocket players start with `mosin` + `spas12` equipped so they can fight immediately.
+- Fixed bot over-spawning: internal bots no longer "respawn" endlessly when bots kill each other (fill now caps total internal bots for the match).
 
 ## In Progress
 - Manual sanity testing: join/leave during lobby window, verify bots retire to make room, verify no match-end spam.

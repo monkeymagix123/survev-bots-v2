@@ -101,13 +101,14 @@ export class BotManager {
             Math.max(2, maxPlayers - Config.bots.reserveSlots),
         );
 
-        const livingPlayers = this.game.playerBarn.livingPlayers;
+        // Use total participants (not just alive) so bots don't "respawn" as players die.
+        const players = this.game.playerBarn.players;
 
         let occupiedNonAi = 0;
         let connectedHumans = 0;
 
-        for (let i = 0; i < livingPlayers.length; i++) {
-            const p = livingPlayers[i];
+        for (let i = 0; i < players.length; i++) {
+            const p = players[i];
             if (p.isAi) {
                 continue;
             }
@@ -139,10 +140,11 @@ export class BotManager {
         this._spawnBudget += dt * spawnRate;
         this._retireBudget += dt * spawnRate;
 
-        const livingPlayers = this.game.playerBarn.livingPlayers;
+        // Total internal bots, including dead ones (prevents infinite re-spawning during lobby).
+        const players = this.game.playerBarn.players;
         let bots = 0;
-        for (let i = 0; i < livingPlayers.length; i++) {
-            if (livingPlayers[i].isAi) bots++;
+        for (let i = 0; i < players.length; i++) {
+            if (players[i].isAi) bots++;
         }
 
         // Spawn
