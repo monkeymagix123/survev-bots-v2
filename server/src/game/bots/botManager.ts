@@ -1,3 +1,5 @@
+import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
+import type { GunDef } from "../../../../shared/defs/gameObjects/gunDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import type { Vec2 } from "../../../../shared/utils/v2";
@@ -227,6 +229,8 @@ export class BotManager {
             group.spawnLeader = bot;
         }
 
+        this._applyStartingLoadout(bot);
+
         playerBarn.newPlayers.push(bot);
         this.game.objectRegister.register(bot);
         playerBarn.players.push(bot);
@@ -250,6 +254,77 @@ export class BotManager {
         this.game.updateData();
 
         return bot.__id;
+    }
+
+    private _applyStartingLoadout(bot: Player): void {
+        // Perk mode roles grant their own loadouts; keep internal bots neutral here for now.
+        if (this.game.map.perkMode) return;
+
+        const exclude = new Set<string>();
+        const primary = this._pickLootGun(exclude);
+        if (primary) {
+            exclude.add(primary);
+            this._equipGun(bot, GameConfig.WeaponSlot.Primary, primary);
+        }
+
+        const secondary = this._pickLootGun(exclude);
+        if (secondary) {
+            exclude.add(secondary);
+            this._equipGun(bot, GameConfig.WeaponSlot.Secondary, secondary);
+        }
+
+        if (primary) {
+            bot.weaponManager.setCurWeapIndex(
+                GameConfig.WeaponSlot.Primary,
+                true,
+                true,
+                true,
+            );
+            // Spawn holding the gun immediately (avoid a draw delay on first tick)
+            bot.weapons[GameConfig.WeaponSlot.Primary].cooldown = 0;
+        }
+    }
+
+    private _pickLootGun(exclude: Set<string>): string | undefined {
+        const tier = this.game.map.mapDef.lootTable["tier_guns"] ? "tier_guns" : "tier_world";
+        for (let attempt = 0; attempt < 30; attempt++) {
+            const items = this.game.lootBarn.getLootTable(tier);
+            if (!items.length) return undefined;
+
+            const item = items[0];
+            const type = item.name;
+            if (!type) continue;
+            if (exclude.has(type)) continue;
+
+            const def = GameObjectDefs[type];
+            if (def?.type !== "gun") continue;
+
+            return type;
+        }
+
+        return undefined;
+    }
+
+    private _equipGun(bot: Player, slot: number, gunType: string): void {
+        const def = GameObjectDefs[gunType];
+        if (def?.type !== "gun") return;
+
+        const gunDef = def as GunDef;
+        const trueMaxClip = bot.weaponManager.getTrueAmmoStats(gunDef).trueMaxClip;
+        bot.weaponManager.setWeapon(slot, gunType, trueMaxClip);
+
+        const ammoType = gunDef.ammo;
+        const backpackLevel = bot.getGearLevel(bot.backpack);
+        const bagSpace = bot.bagSizes[ammoType]
+            ? bot.bagSizes[ammoType][backpackLevel]
+            : 0;
+        if (!bagSpace) return;
+
+        const extraAmmo = Math.max(gunDef.ammoSpawnCount - trueMaxClip, 0);
+        if (!extraAmmo) return;
+
+        bot.inventory[ammoType] = Math.min(bagSpace, bot.inventory[ammoType] + extraAmmo);
+        bot.inventoryDirty = true;
     }
 
     private _retireOneBot(connectedHumans: number): boolean {
