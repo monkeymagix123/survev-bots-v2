@@ -1,0 +1,33 @@
+{
+    "player": {
+        "defaultItems": {
+            "weapons": [
+                { "type": "", "ammo": 0 },
+                { "type": "", "ammo": 0 },
+                { "type": "fists", "ammo": 0 },
+                { "type": "", "ammo": 0 }
+            ],
+            "outfit": "outfitBase",
+            "backpack": "backpack00",
+            "helmet": "",
+            "chest": "",
+            "scope": "4xscope",
+            "perks": [{ "type": "endless_ammo", "droppable": false }],
+            "inventory": {
+                "frag": 0,
+                "smoke": 0,
+                "strobe": 0,
+                "mirv": 0,
+                "bandage": 0,
+                "healthkit": 0,
+                "soda": 0,
+                "painkiller": 0,
+                "1xscope": 1,
+                "2xscope": 0,
+                "4xscope": 1,
+                "8xscope": 0,
+                "15xscope": 0
+            }
+        }
+    }
+}
