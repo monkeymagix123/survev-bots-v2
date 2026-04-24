@@ -63,6 +63,7 @@ export const Config = {
                 competitive: 0.05,
             },
         },
+        debugParity: false,
         enableQuickSwitch: true,
         allowBotVsBot: true,
     },
@@ -241,6 +242,11 @@ export interface ConfigType {
          */
         proChance: number;
         brainMix: BrainMixConfig;
+        /**
+         * TEMP (Phase 1 parity verification): compares refactored bots vs legacy.
+         * Logs mismatches to console. Remove once validated.
+         */
+        debugParity: boolean;
         enableQuickSwitch: boolean;
         allowBotVsBot: boolean;
     };

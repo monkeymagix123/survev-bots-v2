@@ -17,6 +17,7 @@ import { BotAimController } from "./systems/botAimController";
 import { BotNavigationLite } from "./systems/botNavigationLite";
 import { BotPerception } from "./systems/botPerception";
 import { BotWeaponLogic } from "./systems/botWeaponLogic";
+import { LegacyBotController } from "./legacy/legacyBotController";
 
 export class BotController {
     private _time = 0;
@@ -28,6 +29,10 @@ export class BotController {
     private readonly _aim: BotAimController;
     private readonly _weaponLogic: BotWeaponLogic;
     private readonly _brain: BotBrain;
+
+    // TEMP (Phase 1 parity verification)
+    private readonly _legacy?: LegacyBotController;
+    private _parityMismatchCount = 0;
 
     private _lastPos: Vec2;
     private _lastMovedTime = 0;
@@ -42,6 +47,10 @@ export class BotController {
         this._aim = new BotAimController(player, difficulty);
         this._weaponLogic = new BotWeaponLogic(difficulty);
         this._brain = this._createBrain(brainType);
+
+        if (Config.bots.debugParity) {
+            this._legacy = new LegacyBotController(game, player, difficulty);
+        }
     }
 
     /**
@@ -91,6 +100,15 @@ export class BotController {
         }
 
         const msg = this._buildInput(dt);
+
+        // TEMP (Phase 1 parity verification): compare outputs vs legacy controller
+        if (this._legacy && this._parityMismatchCount < 30) {
+            const legacyStep = this._legacy.step(dt);
+            if (legacyStep) {
+                this._compareParity(msg, legacyStep.msg, legacyStep.aimAngleRad);
+            }
+        }
+
         player.handleInput(msg);
     }
 
@@ -263,7 +281,62 @@ export class BotController {
 
         return msg;
     }
+
+    private _compareParity(
+        msgNew: net.InputMsg,
+        msgLegacy: net.InputMsg,
+        legacyAimAngleRad: number,
+    ): void {
+        const epsLen = 1e-4;
+        const epsAngleRad = 1e-4;
+
+        const angleNew = Math.atan2(msgNew.toMouseDir.y, msgNew.toMouseDir.x);
+        const angleLegacy = Math.atan2(msgLegacy.toMouseDir.y, msgLegacy.toMouseDir.x);
+        const angleDiff = Math.atan2(Math.sin(angleLegacy - angleNew), Math.cos(angleLegacy - angleNew));
+
+        const inputsNew = msgNew.inputs;
+        const inputsLegacy = msgLegacy.inputs;
+
+        const mismatch =
+            msgNew.moveLeft !== msgLegacy.moveLeft ||
+            msgNew.moveRight !== msgLegacy.moveRight ||
+            msgNew.moveUp !== msgLegacy.moveUp ||
+            msgNew.moveDown !== msgLegacy.moveDown ||
+            msgNew.shootHold !== msgLegacy.shootHold ||
+            msgNew.shootStart !== msgLegacy.shootStart ||
+            msgNew.useItem !== msgLegacy.useItem ||
+            Math.abs(msgNew.toMouseLen - msgLegacy.toMouseLen) > epsLen ||
+            Math.abs(angleDiff) > epsAngleRad ||
+            inputsNew.length !== inputsLegacy.length ||
+            inputsNew.some((v, i) => v !== inputsLegacy[i]);
+
+        if (!mismatch) return;
+
+        this._parityMismatchCount++;
+        const aimAngleDiff = Math.atan2(
+            Math.sin(legacyAimAngleRad - this._aim.aimAngleRad),
+            Math.cos(legacyAimAngleRad - this._aim.aimAngleRad),
+        );
+
+        // eslint-disable-next-line no-console
+        console.warn(
+            `[bots][parity] mismatch#${this._parityMismatchCount} ` +
+                `id=${this.player.__id} name=${this.player.name} ` +
+                `t=${this._time.toFixed(3)} ` +
+                `move=${Number(msgNew.moveLeft)}${Number(msgNew.moveRight)}${Number(
+                    msgNew.moveUp,
+                )}${Number(msgNew.moveDown)} vs ${Number(msgLegacy.moveLeft)}${Number(
+                    msgLegacy.moveRight,
+                )}${Number(msgLegacy.moveUp)}${Number(msgLegacy.moveDown)} ` +
+                `shoot=${Number(msgNew.shootHold)}${Number(msgNew.shootStart)} vs ${Number(
+                    msgLegacy.shootHold,
+                )}${Number(msgLegacy.shootStart)} ` +
+                `mouseLen=${msgNew.toMouseLen.toFixed(2)} vs ${msgLegacy.toMouseLen.toFixed(2)} ` +
+                `mouseAngDeg=${(math.rad2deg(angleDiff)).toFixed(3)} ` +
+                `aimAngDeg=${(math.rad2deg(aimAngleDiff)).toFixed(3)} ` +
+                `inputs=${inputsNew.join(",")} vs ${inputsLegacy.join(",")}`,
+        );
+    }
 }
 
 export type { BotDifficulty } from "./botDifficulty";
-

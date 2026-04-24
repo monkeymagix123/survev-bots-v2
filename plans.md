@@ -19,6 +19,7 @@ Last updated: 2026-04-24
 
 ## In Progress
 - Manual sanity testing: join/leave during lobby window, verify bots retire to make room, verify no match-end spam (incl Plan 3 gunplay).
+- Phase 1 parity verification: enable `Config.bots.debugParity` and check for `[bots][parity]` mismatches (remove legacy comparator after).
 
 ## Next
 - Phase 2: range-based movement + reload/heal retreat + better LOS reacquire/angle seeking.
