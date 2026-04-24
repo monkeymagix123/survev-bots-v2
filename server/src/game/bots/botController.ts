@@ -716,6 +716,11 @@ export class BotController {
                     this._postShotNoFireT = profile.postShotNoFireSec;
                 }
             }
+
+            // Prevent rare outlier behavior where bloom grows without bound (e.g. extended fights).
+            const bloomMaxDeg =
+                weaponClass === "precision" ? 8 : weaponClass === "shotgun" ? 15 : 12;
+            this._bloomDeg = Math.min(this._bloomDeg, bloomMaxDeg);
         }
 
         // Aim noise only on shot ticks (keeps aim from vibrating constantly)
@@ -734,6 +739,10 @@ export class BotController {
             }
 
             noiseDeg = randomNormal(0, spreadDeg);
+
+            // Truncate normal tails so rare samples don't look like 360° sprays in spectate.
+            const cap = Math.min(25, spreadDeg * 3);
+            noiseDeg = math.clamp(noiseDeg, -cap, cap);
         }
 
         const shotAngleRad = this._aimAngleRad + math.deg2rad(noiseDeg);

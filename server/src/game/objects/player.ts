@@ -2042,7 +2042,7 @@ export class Player extends BaseGameObject {
         if (this.spectating == undefined) {
             // not spectating anyone
             player = this;
-        } else if (this.spectating.dead) {
+        } else if (this.spectating.dead || this.spectating.destroyed) {
             // was spectating someone but they died so find new player to spectate
             player =
                 this.spectating.killedBy && !this.spectating.killedBy.dead
