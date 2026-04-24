@@ -10,6 +10,27 @@ import type { Team } from "../team";
 import { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import { BotController, type BotDifficulty } from "./botController";
+import * as fs from "fs";
+import * as path from "path";
+
+// ─── Wave config types ────────────────────────────────────────────────────────
+
+interface WaveEntry {
+    count: number;
+    /**
+     * Optional exact counts per brain type.
+     * Values are treated as counts, not weights.
+     * If omitted or counts don't sum to `count`, remaining slots use random brain selection.
+     */
+    brains?: Partial<Record<BotBrainType, number>>;
+    difficulty?: BotDifficulty;
+}
+
+interface WaveConfig {
+    waves: WaveEntry[];
+}
+
+// ─── Brain weight helpers ─────────────────────────────────────────────────────
 
 const DefaultBrainWeights: Record<BotBrainType, number> = {
     practice: 0.15,
@@ -55,6 +76,75 @@ function sampleBrainType(weights: Record<BotBrainType, number>): BotBrainType {
     return "competitive";
 }
 
+/**
+ * Builds a shuffled queue of brain types for a wave entry.
+ * Exact counts from `entry.brains` are honoured first; any remaining
+ * slots (due to missing / mismatched counts) are filled with random picks.
+ */
+function buildBrainQueue(
+    entry: WaveEntry,
+    pickRandom: () => BotBrainType,
+): BotBrainType[] {
+    const queue: BotBrainType[] = [];
+
+    if (entry.brains) {
+        for (const [brainType, count] of Object.entries(entry.brains) as [BotBrainType, number][]) {
+            const n = Math.max(0, Math.floor(count));
+            for (let i = 0; i < n; i++) {
+                queue.push(brainType);
+            }
+        }
+
+        const sum = queue.length;
+        if (sum !== entry.count) {
+            console.warn(
+                `[BotManager] Wave brain counts sum to ${sum} but wave count is ${entry.count}. ` +
+                `Filling ${Math.max(0, entry.count - sum)} remaining slot(s) randomly.`,
+            );
+            const remaining = Math.max(0, entry.count - sum);
+            for (let i = 0; i < remaining; i++) {
+                queue.push(pickRandom());
+            }
+        }
+    } else {
+        // No explicit brain breakdown — all random
+        for (let i = 0; i < entry.count; i++) {
+            queue.push(pickRandom());
+        }
+    }
+
+    // Fisher-Yates shuffle so brain types interleave naturally
+    for (let i = queue.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [queue[i], queue[j]] = [queue[j], queue[i]];
+    }
+
+    return queue;
+}
+
+// ─── Wave state ───────────────────────────────────────────────────────────────
+
+interface WaveState {
+    /** Index into the loaded WaveConfig.waves array */
+    index: number;
+    /** How many bots have already been spawned for the current wave */
+    spawned: number;
+    /**
+     * __id values of every bot spawned in this wave.
+     * Used to detect "all wave bots dead" without touching unrelated bots.
+     */
+    botIds: Set<number>;
+    /** True once all bots in this wave have died and we are waiting to advance */
+    waitingForNext: boolean;
+    /** Pre-built, shuffled queue of brain types — one entry per bot to spawn */
+    brainQueue: BotBrainType[];
+}
+
+/** Seconds to pause between waves. Adjust to taste. */
+const WAVE_INTER_DELAY_S = 3;
+
+// ─── BotManager ──────────────────────────────────────────────────────────────
+
 export class BotManager {
     private _nextBotId = 0;
 
@@ -63,7 +153,111 @@ export class BotManager {
 
     private readonly _controllers = new Map<number, BotController>();
 
-    constructor(readonly game: Game) {}
+    // ── Wave mode ──
+    /** Null when waves.json is absent or malformed — falls back to fill logic */
+    private readonly _waveConfig: WaveConfig | null;
+    private _wave: WaveState | null = null;
+    /** Countdown timer used for the inter-wave delay */
+    private _waveDelayRemaining = 0;
+
+    constructor(readonly game: Game) {
+        this._waveConfig = this._loadWaveConfig();
+
+        if (this._waveConfig) {
+            console.log(
+                `[BotManager] Wave mode active — ${this._waveConfig.waves.length} wave(s) loaded.`,
+            );
+            this._beginWave(0);
+        }
+    }
+
+    // ── Wave config loading ──────────────────────────────────────────────────
+
+    private _loadWaveConfig(): WaveConfig | null {
+        // Look for waves.json next to this file (server/src/game/bots/waves.json)
+        const candidates = [
+            path.resolve(__dirname, "waves.json"),
+            path.resolve(process.cwd(), "../waves.json"),
+            path.resolve(process.cwd(), "waves.json"),
+        ];
+
+        for (const filePath of candidates) {
+            if (!fs.existsSync(filePath)) continue;
+
+            try {
+                const raw = fs.readFileSync(filePath, "utf8");
+                const parsed = JSON.parse(raw) as WaveConfig;
+
+                if (
+                    !Array.isArray(parsed.waves) ||
+                    parsed.waves.length === 0 ||
+                    parsed.waves.some(
+                        (w) => typeof w.count !== "number" || w.count < 1,
+                    )
+                ) {
+                    console.warn(
+                        `[BotManager] waves.json at ${filePath} is invalid — ignoring.`,
+                    );
+                    return null;
+                }
+
+                console.log(`[BotManager] Loaded waves.json from ${filePath}`);
+                return parsed;
+            } catch (err) {
+                console.warn(
+                    `[BotManager] Failed to parse waves.json at ${filePath}:`,
+                    err,
+                );
+            }
+        }
+
+        return null;
+    }
+
+    // ── Wave lifecycle ───────────────────────────────────────────────────────
+
+    private _beginWave(index: number): void {
+        if (!this._waveConfig) return;
+
+        if (index >= this._waveConfig.waves.length) {
+            console.log("[BotManager] All waves complete.");
+            this._wave = null;
+            return;
+        }
+
+        const entry = this._waveConfig.waves[index];
+        const brainQueue = buildBrainQueue(entry, () => this._pickBrainType());
+
+        this._wave = {
+            index,
+            spawned: 0,
+            botIds: new Set(),
+            waitingForNext: false,
+            brainQueue,
+        };
+
+        const brainSummary = Object.entries(
+            brainQueue.reduce<Record<string, number>>((acc, b) => {
+                acc[b] = (acc[b] ?? 0) + 1;
+                return acc;
+            }, {}),
+        )
+            .map(([b, n]) => `${n}x ${b}`)
+            .join(", ");
+
+        console.log(
+            `[BotManager] Starting wave ${index + 1}/${this._waveConfig.waves.length} ` +
+            `— ${entry.count} bot(s) [${brainSummary}], ` +
+            `difficulty: ${entry.difficulty ?? "default"}.`,
+        );
+    }
+
+    private _currentWaveEntry(): WaveEntry | null {
+        if (!this._waveConfig || !this._wave) return null;
+        return this._waveConfig.waves[this._wave.index] ?? null;
+    }
+
+    // ── Main update ──────────────────────────────────────────────────────────
 
     update(dt: number): void {
         this._updateControllers(dt);
@@ -81,9 +275,67 @@ export class BotManager {
             return;
         }
 
-        const fill = this._computeFillTarget();
-        this._applyFillTarget(dt, fill);
+        if (this._waveConfig) {
+            this._updateWaveMode(dt);
+        } else {
+            const fill = this._computeFillTarget();
+            this._applyFillTarget(dt, fill);
+        }
     }
+
+    // ── Wave-mode update ─────────────────────────────────────────────────────
+
+    private _updateWaveMode(dt: number): void {
+        const wave = this._wave;
+
+        // All waves exhausted
+        if (!wave) return;
+
+        const entry = this._currentWaveEntry()!;
+
+        // ── Phase 1: spawn remaining bots for the current wave ──
+        if (wave.spawned < entry.count && !wave.waitingForNext) {
+            this._spawnBudget += dt * Math.max(Config.bots.spawnPerSecond, 0);
+
+            while (wave.spawned < entry.count && this._spawnBudget >= 1) {
+                // Pop the next brain type from the pre-built queue
+                const brainType = wave.brainQueue[wave.spawned] ?? this._pickBrainType();
+                const difficulty = entry.difficulty ?? this._pickDifficulty();
+                const id = this._spawnInternalBot(brainType, difficulty);
+
+                if (id !== undefined) {
+                    wave.botIds.add(id);
+                    wave.spawned++;
+                }
+                this._spawnBudget -= 1;
+            }
+        }
+
+        // ── Phase 2: detect wave completion (all wave bots dead) ──
+        if (wave.spawned >= entry.count && !wave.waitingForNext) {
+            const anyAlive = this.game.playerBarn.livingPlayers.some(
+                (p) => p.isAi && wave.botIds.has(p.__id),
+            );
+
+            if (!anyAlive) {
+                console.log(
+                    `[BotManager] Wave ${wave.index + 1} cleared — next wave in ${WAVE_INTER_DELAY_S}s.`,
+                );
+                wave.waitingForNext = true;
+                this._waveDelayRemaining = WAVE_INTER_DELAY_S;
+            }
+        }
+
+        // ── Phase 3: inter-wave delay then advance ──
+        if (wave.waitingForNext) {
+            this._waveDelayRemaining -= dt;
+            if (this._waveDelayRemaining <= 0) {
+                this._beginWave(wave.index + 1);
+            }
+        }
+    }
+
+    // ── Controller management ────────────────────────────────────────────────
 
     private _updateControllers(dt: number): void {
         const livingPlayers = this.game.playerBarn.livingPlayers;
@@ -132,6 +384,8 @@ export class BotManager {
         const weights = normalizeBrainWeights(mix.weights);
         return sampleBrainType(weights);
     }
+
+    // ── Fill-mode helpers ────────────────────────────────────────────────────
 
     private _computePendingJoinSlots(now: number): number {
         let pendingJoinSlots = 0;
@@ -223,7 +477,12 @@ export class BotManager {
         }
     }
 
-    private _spawnInternalBot(): number | undefined {
+    // ── Internal bot spawning ────────────────────────────────────────────────
+
+    private _spawnInternalBot(
+        brainType?: BotBrainType,
+        difficulty?: BotDifficulty,
+    ): number | undefined {
         const playerBarn = this.game.playerBarn;
 
         let group: Group | undefined;
@@ -287,6 +546,19 @@ export class BotManager {
         if (!bot.game.map.perkMode && group && !group.spawnLeader) {
             group.spawnLeader = bot;
         }
+
+        // Register the controller immediately with the resolved brain type so
+        // wave-assigned brain types are used rather than falling back to random
+        // in _updateControllers on the first tick.
+        const resolvedBrain = brainType ?? this._pickBrainType();
+        const resolvedDifficulty = difficulty ?? this._pickDifficulty();
+        const controller = new BotController(
+            this.game,
+            bot,
+            resolvedDifficulty,
+            resolvedBrain,
+        );
+        this._controllers.set(bot.__id, controller);
 
         this._applyStartingLoadout(bot);
 
@@ -385,6 +657,8 @@ export class BotManager {
         bot.inventory[ammoType] = Math.min(bagSpace, bot.inventory[ammoType] + extraAmmo);
         bot.inventoryDirty = true;
     }
+
+    // ── Retire (fill mode only) ──────────────────────────────────────────────
 
     private _retireOneBot(connectedHumans: number): boolean {
         const playerBarn = this.game.playerBarn;
