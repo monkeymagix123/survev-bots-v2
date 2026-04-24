@@ -12,6 +12,8 @@ Last updated: 2026-04-24
 - Added player starting loadout (when `Config.bots.enabled`): websocket players start with `mosin` + `spas12` equipped so they can fight immediately.
 - Fixed bot over-spawning: internal bots no longer "respawn" endlessly when bots kill each other (fill now caps total internal bots for the match).
 - Bots have weapon-specific shooting profiles; snipers pause; AR bursts; SMGs spray with bloom.
+- Capped bot bloom + truncated per-shot aim noise to prevent rare “random spraying” (esp. visible in spectate on pistols like `ot38`).
+- Fixed spectate edge case where a spectated player is retired/removed (`destroy()` without `dead`).
 
 ## In Progress
 - Manual sanity testing: join/leave during lobby window, verify bots retire to make room, verify no match-end spam (incl Plan 3 gunplay).
