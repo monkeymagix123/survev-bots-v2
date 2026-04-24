@@ -5,6 +5,7 @@ Last updated: 2026-04-24
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
 - Added `Config.bots` (fill/retire + difficulty tiers) with overrides via `survev-config.json`.
+- Added `Config.bots.brainMix` (practice/realistic/competitive) and per-bot brain sampling (Phase 1, behavior-preserving).
 - Added `Player.isAi` + `Player.hasClient` and updated server loops to avoid sending/closing sockets for internal bots.
 - Implemented lobby bot fill/retire that accounts for pending join tokens + avoids retiring bots in a way that would instantly end the match.
 - Fixed mobile auto-pickup free-slot logic (helps bots/players pick up first gun correctly).
@@ -14,6 +15,7 @@ Last updated: 2026-04-24
 - Bots have weapon-specific shooting profiles; snipers pause; AR bursts; SMGs spray with bloom.
 - Capped bot bloom + truncated per-shot aim noise to prevent rare “random spraying” (esp. visible in spectate on pistols like `ot38`).
 - Fixed spectate edge case where a spectated player is retired/removed (`destroy()` without `dead`).
+- Refactored bot AI into Phase 1 architecture (brains + perception/aim/weapon/navigation systems) without changing behavior.
 
 ## In Progress
 - Manual sanity testing: join/leave during lobby window, verify bots retire to make room, verify no match-end spam (incl Plan 3 gunplay).

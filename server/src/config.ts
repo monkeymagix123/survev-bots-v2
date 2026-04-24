@@ -4,6 +4,7 @@ import type { MapDefs } from "../../shared/defs/mapDefs";
 import { GameConfig, TeamMode } from "../../shared/gameConfig";
 import { util } from "../../shared/utils/util";
 import type { Vec2 } from "../../shared/utils/v2";
+import type { BrainMixConfig } from "./game/bots/botBrain";
 
 const isProduction = process.env["NODE_ENV"] === "production";
 
@@ -55,6 +56,13 @@ export const Config = {
         decisionTps: 10,
         difficulty: "normal",
         proChance: 0.05,
+        brainMix: {
+            weights: {
+                practice: 0.15,
+                realistic: 0.8,
+                competitive: 0.05,
+            },
+        },
         enableQuickSwitch: true,
         allowBotVsBot: true,
     },
@@ -232,6 +240,7 @@ export interface ConfigType {
          * If difficulty is not "pro", chance a bot is upgraded to "pro".
          */
         proChance: number;
+        brainMix: BrainMixConfig;
         enableQuickSwitch: boolean;
         allowBotVsBot: boolean;
     };

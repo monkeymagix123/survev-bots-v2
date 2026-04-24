@@ -8,7 +8,52 @@ import type { Game } from "../game";
 import type { Group } from "../group";
 import type { Team } from "../team";
 import { Player } from "../objects/player";
+import type { BotBrainType } from "./botBrain";
 import { BotController, type BotDifficulty } from "./botController";
+
+const DefaultBrainWeights: Record<BotBrainType, number> = {
+    practice: 0.15,
+    realistic: 0.8,
+    competitive: 0.05,
+};
+
+function normalizeBrainWeights(
+    weights?: Partial<Record<BotBrainType, number>>,
+): Record<BotBrainType, number> {
+    if (!weights) {
+        return DefaultBrainWeights;
+    }
+
+    const raw = {
+        practice: Math.max(weights.practice ?? 0, 0),
+        realistic: Math.max(weights.realistic ?? 0, 0),
+        competitive: Math.max(weights.competitive ?? 0, 0),
+    };
+
+    const sum = raw.practice + raw.realistic + raw.competitive;
+    if (sum <= 0) {
+        return DefaultBrainWeights;
+    }
+
+    return {
+        practice: raw.practice / sum,
+        realistic: raw.realistic / sum,
+        competitive: raw.competitive / sum,
+    };
+}
+
+function sampleBrainType(weights: Record<BotBrainType, number>): BotBrainType {
+    const r = Math.random();
+    let acc = 0;
+
+    acc += weights.practice;
+    if (r < acc) return "practice";
+
+    acc += weights.realistic;
+    if (r < acc) return "realistic";
+
+    return "competitive";
+}
 
 export class BotManager {
     private _nextBotId = 0;
@@ -49,10 +94,12 @@ export class BotManager {
 
             let controller = this._controllers.get(player.__id);
             if (!controller) {
+                const brainType = this._pickBrainType();
                 controller = new BotController(
                     this.game,
                     player,
                     this._pickDifficulty(),
+                    brainType,
                 );
                 this._controllers.set(player.__id, controller);
             }
@@ -74,6 +121,16 @@ export class BotManager {
         if (base === "pro") return "pro";
         if (Math.random() < Config.bots.proChance) return "pro";
         return base;
+    }
+
+    private _pickBrainType(): BotBrainType {
+        const mix = Config.bots.brainMix;
+        if (mix.force) {
+            return mix.force;
+        }
+
+        const weights = normalizeBrainWeights(mix.weights);
+        return sampleBrainType(weights);
     }
 
     private _computePendingJoinSlots(now: number): number {
