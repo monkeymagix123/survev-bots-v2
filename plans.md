@@ -1,6 +1,6 @@
 # Plans / Progress
 
-Last updated: 2026-04-23
+Last updated: 2026-04-24
 
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
@@ -11,11 +11,13 @@ Last updated: 2026-04-23
 - Added bot-only starting loadout: internal bots spawn with random guns picked from the current map loot tiers.
 - Added player starting loadout (when `Config.bots.enabled`): websocket players start with `mosin` + `spas12` equipped so they can fight immediately.
 - Fixed bot over-spawning: internal bots no longer "respawn" endlessly when bots kill each other (fill now caps total internal bots for the match).
+- Bots have weapon-specific shooting profiles; snipers pause; AR bursts; SMGs spray with bloom.
 
 ## In Progress
-- Manual sanity testing: join/leave during lobby window, verify bots retire to make room, verify no match-end spam.
+- Manual sanity testing: join/leave during lobby window, verify bots retire to make room, verify no match-end spam (incl Plan 3 gunplay).
 
 ## Next
+- Phase 2: range-based movement + reload/heal retreat + better LOS reacquire/angle seeking.
 - Explicit bot looting (waypointing toward nearby loot / weapon upgrades).
 - Duo/squad bot pairing (spawn in pairs and avoid friendly fire); coordination/shared targets later.
 - Players-vs-bots mode toggle + tuning of heal thresholds, strafing, and quickswitch behavior.

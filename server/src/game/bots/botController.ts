@@ -1,4 +1,5 @@
 import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
+import type { BulletDef } from "../../../../shared/defs/gameObjects/bulletDefs";
 import type { GunDef } from "../../../../shared/defs/gameObjects/gunDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
@@ -14,26 +15,215 @@ import type { Player } from "../objects/player";
 
 export type BotDifficulty = "normal" | "hard" | "pro";
 
-const DifficultySettings: Record<
-    BotDifficulty,
-    {
-        aimJitterDeg: number;
-        reactionDelay: number;
-    }
-> = {
+type WeaponClass = "shotgun" | "smg" | "ar" | "lmg" | "precision" | "pistol";
+
+type SkillProfile = {
+    reactionMinSec: number;
+    reactionMaxSec: number;
+    trackingDegPerSec: number;
+    baseAimErrorDeg: number;
+    predictionLeadScale: number;
+    losGraceSec: number;
+};
+
+type WeaponProfile = {
+    idealMin: number;
+    idealMax: number;
+    engageMax: number;
+
+    aimGateDeg: number;
+    bloomPerShotDeg: number;
+    bloomDecayDegPerSec: number;
+
+    minFocusTimeSec?: number; // precision-only
+    stopToShoot?: boolean; // precision-only
+
+    burstDistMin?: number;
+    burstHoldSec?: number;
+    burstPauseSec?: number;
+
+    postShotNoFireSec?: number; // shotgun-only
+    tapOnly?: boolean; // pistol-only
+};
+
+const SkillProfiles: Record<BotDifficulty, SkillProfile> = {
     normal: {
-        aimJitterDeg: 8,
-        reactionDelay: 0.35,
+        reactionMinSec: 0.25,
+        reactionMaxSec: 0.45,
+        trackingDegPerSec: 280,
+        baseAimErrorDeg: 3.5,
+        predictionLeadScale: 0.45,
+        losGraceSec: 0.25,
     },
     hard: {
-        aimJitterDeg: 3,
-        reactionDelay: 0.2,
+        reactionMinSec: 0.15,
+        reactionMaxSec: 0.25,
+        trackingDegPerSec: 420,
+        baseAimErrorDeg: 1.8,
+        predictionLeadScale: 0.75,
+        losGraceSec: 0.12,
     },
     pro: {
-        aimJitterDeg: 0.8,
-        reactionDelay: 0.08,
+        reactionMinSec: 0.06,
+        reactionMaxSec: 0.1,
+        trackingDegPerSec: 650,
+        baseAimErrorDeg: 0.8,
+        predictionLeadScale: 0.95,
+        losGraceSec: 0.05,
     },
 };
+
+function classifyWeapon(gunDef: GunDef): WeaponClass {
+    if (gunDef.pistol === true) return "pistol";
+
+    if (
+        gunDef.ammo === "12gauge" ||
+        gunDef.bulletCount >= 5 ||
+        gunDef.shotSpread >= 8
+    ) {
+        return "shotgun";
+    }
+
+    if (gunDef.maxClip >= 45 || gunDef.extendedClip >= 75) {
+        return "lmg";
+    }
+
+    if (gunDef.fireMode === "auto" && gunDef.ammo === "9mm") {
+        return "smg";
+    }
+
+    if (
+        gunDef.fireMode === "single" &&
+        (gunDef.aimDelay === true || gunDef.fireDelay >= 1.2 || gunDef.maxClip <= 10)
+    ) {
+        return "precision";
+    }
+
+    if (gunDef.fireMode === "burst" || gunDef.fireMode === "auto") {
+        return "ar";
+    }
+
+    return "ar";
+}
+
+function getWeaponProfile(weaponClass: WeaponClass, difficulty: BotDifficulty): WeaponProfile {
+    switch (weaponClass) {
+        case "shotgun":
+            return {
+                idealMin: 0,
+                idealMax: 10,
+                engageMax: 13,
+                aimGateDeg:
+                    difficulty === "pro" ? 3.5 : difficulty === "hard" ? 7 : 10,
+                bloomPerShotDeg: 1.0,
+                bloomDecayDegPerSec: 4.0,
+                postShotNoFireSec: 0.25,
+            };
+        case "smg":
+            return {
+                idealMin: 0,
+                idealMax: 18,
+                engageMax: 26,
+                aimGateDeg:
+                    difficulty === "pro" ? 2 : difficulty === "hard" ? 4 : 7,
+                bloomPerShotDeg: 0.35,
+                bloomDecayDegPerSec: 2.8,
+                burstDistMin: 16,
+                burstHoldSec: 0.18,
+                burstPauseSec: 0.12,
+            };
+        case "ar": {
+            const aimGateDeg = difficulty === "pro" ? 1.8 : difficulty === "hard" ? 3.5 : 6;
+            const burstHoldSec = difficulty === "pro" ? 0.26 : difficulty === "hard" ? 0.22 : 0.18;
+            const burstPauseSec = difficulty === "pro" ? 0.12 : difficulty === "hard" ? 0.16 : 0.18;
+            return {
+                idealMin: 6,
+                idealMax: 24,
+                engageMax: 32,
+                aimGateDeg,
+                bloomPerShotDeg: 0.25,
+                bloomDecayDegPerSec: 2.4,
+                burstDistMin: 20,
+                burstHoldSec,
+                burstPauseSec,
+            };
+        }
+        case "lmg":
+            return {
+                idealMin: 10,
+                idealMax: 28,
+                engageMax: 36,
+                aimGateDeg:
+                    difficulty === "pro" ? 2.2 : difficulty === "hard" ? 4 : 7,
+                bloomPerShotDeg: 0.3,
+                bloomDecayDegPerSec: 2.0,
+            };
+        case "precision": {
+            const aimGateDeg =
+                difficulty === "pro" ? 0.6 : difficulty === "hard" ? 1.2 : 2.5;
+            const minFocusTimeSec =
+                difficulty === "pro" ? 0.12 : difficulty === "hard" ? 0.25 : 0.45;
+            return {
+                idealMin: 18,
+                idealMax: 60,
+                engageMax: 70,
+                aimGateDeg,
+                bloomPerShotDeg: 0.8,
+                bloomDecayDegPerSec: 3.5,
+                minFocusTimeSec,
+                stopToShoot: true,
+            };
+        }
+        case "pistol":
+            return {
+                idealMin: 0,
+                idealMax: 16,
+                engageMax: 24,
+                aimGateDeg:
+                    difficulty === "pro" ? 2 : difficulty === "hard" ? 4 : 7,
+                bloomPerShotDeg: 0.25,
+                bloomDecayDegPerSec: 3.0,
+                tapOnly: true,
+            };
+    }
+}
+
+function wrapAngleRad(rad: number): number {
+    return Math.atan2(Math.sin(rad), Math.cos(rad));
+}
+
+function approachAngleRad(curRad: number, targetRad: number, maxDeltaRad: number): number {
+    const delta = wrapAngleRad(targetRad - curRad);
+    if (Math.abs(delta) <= maxDeltaRad) return targetRad;
+    return curRad + Math.sign(delta) * maxDeltaRad;
+}
+
+function absAngleDiffDeg(aRad: number, bRad: number): number {
+    return Math.abs(math.rad2deg(wrapAngleRad(bRad - aRad)));
+}
+
+function randomNormal(mean: number, stdDev: number): number {
+    if (stdDev <= 0) return mean;
+
+    // Box–Muller transform
+    let u = 0;
+    let v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    return mean + z * stdDev;
+}
+
+function movingAimPenaltyDeg(difficulty: BotDifficulty): number {
+    switch (difficulty) {
+        case "normal":
+            return 1.5;
+        case "hard":
+            return 0.9;
+        case "pro":
+            return 0.4;
+    }
+}
 
 export class BotController {
     private _time = 0;
@@ -48,7 +238,19 @@ export class BotController {
     private _targetId?: number;
     private _targetVisible = false;
     private _targetSeenTime = -Infinity;
-    private _targetChangedTime = -Infinity;
+
+    // Aim/shoot model state
+    private _aimAngleRad = 0;
+    private _targetAngleRad = 0;
+    private _focusTime = 0;
+    private _nextShootTime = -Infinity;
+    private _bloomDeg = 0;
+    private _burstHoldT = 0;
+    private _burstPauseT = 0;
+    private _postShotNoFireT = 0;
+    private _lastTargetId?: number;
+    private _lastVisible = false;
+    private _lostLosTime = -Infinity;
 
     private _lastPos: Vec2;
     private _lastMovedTime = 0;
@@ -62,6 +264,7 @@ export class BotController {
         readonly difficulty: BotDifficulty,
     ) {
         this._lastPos = v2.copy(player.pos);
+        this._aimAngleRad = Math.atan2(player.dir.y, player.dir.x);
     }
 
     /**
@@ -109,6 +312,7 @@ export class BotController {
 
     private _decide(): void {
         const player = this.player;
+        const skill = SkillProfiles[this.difficulty];
 
         const vision = player.zoom + 6;
         const rect = coldet.circleToAabb(player.pos, vision);
@@ -148,20 +352,51 @@ export class BotController {
         }
 
         const chosen = bestVisible ?? bestAny;
+        const prevTargetId = this._targetId;
+        const prevVisible = this._targetVisible;
+
         if (chosen) {
-            this._targetVisible = bestVisible === chosen;
-            if (this._targetId !== chosen.__id) {
-                this._targetId = chosen.__id;
-                this._targetChangedTime = this._time;
+            const newTargetId = chosen.__id;
+            const newVisible = bestVisible === chosen;
+
+            this._targetId = newTargetId;
+            this._targetVisible = newVisible;
+
+            if (prevTargetId !== newTargetId) {
+                this._lastTargetId = prevTargetId;
+                this._focusTime = 0;
+                this._nextShootTime =
+                    this._time + util.random(skill.reactionMinSec, skill.reactionMaxSec);
+                this._burstHoldT = 0;
+                this._burstPauseT = 0;
+                this._postShotNoFireT = 0;
+                this._lastVisible = newVisible;
+                this._lostLosTime = -Infinity;
+            } else {
+                // Track LOS-loss time for grace firing (only after having LOS)
+                if (prevVisible && !newVisible && this._lastVisible) {
+                    this._lostLosTime = this._time;
+                }
+                this._lastVisible = newVisible;
             }
 
             // Count as combat if we can see them
-            if (this._targetVisible) {
+            if (newVisible) {
                 this._targetSeenTime = this._time;
             }
         } else {
+            if (prevTargetId !== undefined) {
+                this._lastTargetId = prevTargetId;
+            }
             this._targetId = undefined;
             this._targetVisible = false;
+            this._focusTime = 0;
+            this._burstHoldT = 0;
+            this._burstPauseT = 0;
+            this._postShotNoFireT = 0;
+            this._lastVisible = false;
+            this._lostLosTime = -Infinity;
+            this._nextShootTime = -Infinity;
         }
 
         // Pick/refresh waypoint when not actively targeting
@@ -223,7 +458,7 @@ export class BotController {
 
     private _buildInput(dt: number): net.InputMsg {
         const player = this.player;
-        const settings = DifficultySettings[this.difficulty];
+        const skill = SkillProfiles[this.difficulty];
 
         const msg = new net.InputMsg();
         msg.seq = this._seq++ % 256;
@@ -260,21 +495,52 @@ export class BotController {
             goal = this._waypoint;
         }
 
-        // Aim
-        let aimDir = v2.create(1, 0);
+        const activeDef = GameObjectDefs[player.activeWeapon];
+        const gunDef = activeDef?.type === "gun" ? (activeDef as GunDef) : undefined;
+        const weaponClass = gunDef ? classifyWeapon(gunDef) : undefined;
+        const profile = weaponClass ? getWeaponProfile(weaponClass, this.difficulty) : undefined;
+
+        // Decrement timers
+        this._postShotNoFireT = Math.max(this._postShotNoFireT - dt, 0);
+
+        // Aim + prediction
         let aimLen = 0;
+        let distToTarget = Infinity;
 
         if (validTarget) {
-            const baseDir = v2.normalizeSafe(v2.sub(validTarget.pos, player.pos), v2.create(1, 0));
-            const jitter = math.deg2rad(util.random(-settings.aimJitterDeg, settings.aimJitterDeg));
-            aimDir = v2.rotate(baseDir, jitter);
-            aimLen = v2.distance(player.pos, validTarget.pos);
+            distToTarget = v2.distance(player.pos, validTarget.pos);
+            aimLen = distToTarget;
+
+            let predictedPos = validTarget.pos;
+            if (gunDef) {
+                const bulletDef = GameObjectDefs[gunDef.bulletType] as BulletDef | undefined;
+                const bulletSpeed = bulletDef?.speed ?? 1;
+                const tLead = math.clamp(
+                    (distToTarget / Math.max(bulletSpeed, 1)) * skill.predictionLeadScale,
+                    0,
+                    0.35,
+                );
+                predictedPos = v2.add(validTarget.pos, v2.mul(validTarget.moveVel, tLead));
+            }
+
+            this._targetAngleRad = Math.atan2(
+                predictedPos.y - player.pos.y,
+                predictedPos.x - player.pos.x,
+            );
         } else if (goal) {
-            aimDir = v2.normalizeSafe(v2.sub(goal, player.pos), v2.create(1, 0));
             aimLen = v2.distance(player.pos, goal);
+            this._targetAngleRad = Math.atan2(goal.y - player.pos.y, goal.x - player.pos.x);
         }
 
-        msg.toMouseDir = aimDir;
+        const maxDeltaRad = math.deg2rad(skill.trackingDegPerSec) * dt;
+        this._aimAngleRad = approachAngleRad(
+            this._aimAngleRad,
+            this._targetAngleRad,
+            maxDeltaRad,
+        );
+        const aimDir = v2.create(Math.cos(this._aimAngleRad), Math.sin(this._aimAngleRad));
+        const angleDeltaDeg = absAngleDiffDeg(this._aimAngleRad, this._targetAngleRad);
+
         msg.toMouseLen = math.clamp(aimLen, 0, net.Constants.MouseMaxDist);
 
         // Movement
@@ -310,6 +576,27 @@ export class BotController {
             }
         }
 
+        // Precision "stop to shoot" focus time
+        const standStillForPrecision =
+            !!validTarget &&
+            !!profile?.stopToShoot &&
+            weaponClass === "precision" &&
+            this._targetVisible &&
+            distToTarget >= profile.idealMin &&
+            distToTarget <= profile.idealMax &&
+            this._time >= this._nextShootTime &&
+            angleDeltaDeg <= profile.aimGateDeg * 2;
+
+        if (standStillForPrecision) {
+            msg.moveLeft = false;
+            msg.moveRight = false;
+            msg.moveUp = false;
+            msg.moveDown = false;
+            this._focusTime += dt;
+        } else {
+            this._focusTime = 0;
+        }
+
         // Use items
         msg.useItem = "";
         if (!player.downed && player.actionType === GameConfig.Action.None) {
@@ -326,48 +613,159 @@ export class BotController {
         msg.shootHold = false;
         msg.shootStart = false;
 
-        if (validTarget && this._targetVisible && !gasEmergency) {
-            const ready =
-                this._time - this._targetChangedTime >= settings.reactionDelay;
-            if (ready) {
-                const def = GameObjectDefs[player.activeWeapon];
-                if (def?.type === "gun") {
-                    const gun = def as GunDef;
-                    if (gun.fireMode === "auto" || gun.fireMode === "burst") {
-                        msg.shootHold = true;
-                    } else {
-                        msg.shootStart = true;
-                    }
-                } else {
-                    // melee/throwables: treat as hold
-                    msg.shootHold = true;
+        // Burst timer state machine (only used when profile enables it)
+        const burstEnabled =
+            !!validTarget &&
+            !!profile?.burstDistMin &&
+            !!profile.burstHoldSec &&
+            !!profile.burstPauseSec &&
+            distToTarget > profile.burstDistMin;
+
+        if (!burstEnabled) {
+            this._burstHoldT = 0;
+            this._burstPauseT = 0;
+        } else {
+            const burstHoldSec = profile.burstHoldSec!;
+            const burstPauseSec = profile.burstPauseSec!;
+            if (this._burstPauseT > 0) {
+                this._burstPauseT = Math.max(this._burstPauseT - dt, 0);
+            } else if (this._burstHoldT > 0) {
+                const prevHold = this._burstHoldT;
+                this._burstHoldT = Math.max(this._burstHoldT - dt, 0);
+                if (prevHold > 0 && this._burstHoldT === 0) {
+                    this._burstPauseT = burstPauseSec;
+                }
+            }
+            if (this._burstPauseT <= 0 && this._burstHoldT <= 0) {
+                this._burstHoldT = burstHoldSec;
+            }
+        }
+
+        const burstGateOk = !burstEnabled || this._burstPauseT <= 0;
+
+        let allowShooting = false;
+        if (validTarget && profile && !gasEmergency) {
+            const inRange = distToTarget <= profile.engageMax;
+            const reactionReady = this._time >= this._nextShootTime;
+            const aimReady = angleDeltaDeg <= profile.aimGateDeg;
+            const postShotReady = this._postShotNoFireT <= 0;
+
+            const visibleNow = this._targetVisible;
+            const graceAllowed =
+                (weaponClass === "smg" ||
+                    weaponClass === "ar" ||
+                    weaponClass === "lmg" ||
+                    weaponClass === "pistol") &&
+                this._time - this._lostLosTime <= skill.losGraceSec;
+            const losOk = visibleNow || graceAllowed;
+
+            allowShooting =
+                inRange && reactionReady && aimReady && postShotReady && losOk && burstGateOk;
+
+            if (allowShooting && weaponClass === "precision") {
+                const minFocus = profile.minFocusTimeSec ?? 0;
+                if (!visibleNow || this._focusTime < minFocus) {
+                    allowShooting = false;
                 }
             }
         }
+
+        if (allowShooting) {
+            if (profile?.tapOnly || gunDef?.fireMode === "single") {
+                msg.shootStart = true;
+            } else {
+                msg.shootHold = true;
+            }
+        }
+
+        // Compute whether a shot will fire this tick (used for bloom + per-shot noise)
+        const weapon = player.weapons[player.curWeapIdx];
+        const cooldownAfter = weapon.cooldown - dt;
+        let willShootThisTick = false;
+        let startingBurstThisTick = false;
+        if (gunDef) {
+            if (gunDef.fireMode === "auto") {
+                willShootThisTick = msg.shootHold && cooldownAfter <= 0;
+            } else if (gunDef.fireMode === "single") {
+                willShootThisTick = msg.shootStart && cooldownAfter < 0;
+            } else if (gunDef.fireMode === "burst") {
+                const scheduled =
+                    player.weaponManager.bursts.length > 0 &&
+                    player.weaponManager.bursts.some((t) => t <= dt);
+                startingBurstThisTick = msg.shootHold && cooldownAfter < 0;
+                willShootThisTick = scheduled || startingBurstThisTick;
+            }
+        } else {
+            // Non-gun: treat as "hold"
+            willShootThisTick = msg.shootHold;
+        }
+
+        // Bloom/spread update (bot-only)
+        if (profile) {
+            this._bloomDeg = Math.max(0, this._bloomDeg - profile.bloomDecayDegPerSec * dt);
+
+            if (willShootThisTick) {
+                if (gunDef?.fireMode === "burst" && startingBurstThisTick) {
+                    const burstCount = gunDef.burstCount ?? 1;
+                    this._bloomDeg += profile.bloomPerShotDeg * burstCount;
+                } else if (gunDef?.fireMode !== "burst") {
+                    this._bloomDeg += profile.bloomPerShotDeg;
+                }
+
+                if (weaponClass === "shotgun" && profile.postShotNoFireSec) {
+                    this._postShotNoFireT = profile.postShotNoFireSec;
+                }
+            }
+        }
+
+        // Aim noise only on shot ticks (keeps aim from vibrating constantly)
+        let noiseDeg = 0;
+        if (willShootThisTick && profile) {
+            let spreadDeg = skill.baseAimErrorDeg + this._bloomDeg;
+
+            const movingThisTick =
+                msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown;
+            if (movingThisTick) {
+                let movePenalty = movingAimPenaltyDeg(this.difficulty);
+                if (weaponClass === "precision") {
+                    movePenalty *= 0.5;
+                }
+                spreadDeg += movePenalty;
+            }
+
+            noiseDeg = randomNormal(0, spreadDeg);
+        }
+
+        const shotAngleRad = this._aimAngleRad + math.deg2rad(noiseDeg);
+        msg.toMouseDir = v2.create(Math.cos(shotAngleRad), Math.sin(shotAngleRad));
 
         // Quickswitch
         if (
             Config.bots.enableQuickSwitch &&
             (this.difficulty === "hard" || this.difficulty === "pro")
         ) {
-            const curIdx = player.curWeapIdx;
-            if (
-                curIdx === GameConfig.WeaponSlot.Primary ||
-                curIdx === GameConfig.WeaponSlot.Secondary
-            ) {
-                const activeDef = GameObjectDefs[player.activeWeapon];
-                if (activeDef?.type === "gun" && player.shotSlowdownTimer > 0) {
-                    const gunDef = activeDef as GunDef;
-                    if (gunDef.fireDelay - player.shotSlowdownTimer > 0.25) {
-                        const otherIdx = curIdx ^ 1;
-                        const otherType = player.weapons[otherIdx].type;
-                        const otherDef = otherType ? GameObjectDefs[otherType] : undefined;
-                        if (otherDef?.type === "gun") {
-                            msg.addInput(
-                                otherIdx === GameConfig.WeaponSlot.Primary
-                                    ? GameConfig.Input.EquipPrimary
-                                    : GameConfig.Input.EquipSecondary,
-                            );
+            if (this._burstHoldT > 0) {
+                // avoid swapping weapons mid-burst window
+            } else {
+                const curIdx = player.curWeapIdx;
+                if (
+                    curIdx === GameConfig.WeaponSlot.Primary ||
+                    curIdx === GameConfig.WeaponSlot.Secondary
+                ) {
+                    const activeDef = GameObjectDefs[player.activeWeapon];
+                    if (activeDef?.type === "gun" && player.shotSlowdownTimer > 0) {
+                        const gunDef = activeDef as GunDef;
+                        if (gunDef.fireDelay - player.shotSlowdownTimer > 0.25) {
+                            const otherIdx = curIdx ^ 1;
+                            const otherType = player.weapons[otherIdx].type;
+                            const otherDef = otherType ? GameObjectDefs[otherType] : undefined;
+                            if (otherDef?.type === "gun") {
+                                msg.addInput(
+                                    otherIdx === GameConfig.WeaponSlot.Primary
+                                        ? GameConfig.Input.EquipPrimary
+                                        : GameConfig.Input.EquipSecondary,
+                                );
+                            }
                         }
                     }
                 }
