@@ -31,7 +31,7 @@ export class BotPerception {
     scanForTarget(game: Game, player: Player): { target?: Player; visible: boolean } {
         const vision = player.zoom + 6;
         const rect = coldet.circleToAabb(player.pos, vision);
-        const objects = game.grid.intersectCollider(rect);
+        const objects = game.map.isWaveMap ? game.playerBarn.players : game.grid.intersectCollider(rect);
 
         let bestVisible: Player | undefined;
         let bestVisibleDist = Number.MAX_VALUE;
