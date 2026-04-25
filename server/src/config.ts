@@ -50,6 +50,12 @@ export const Config = {
 
     bots: {
         enabled: false,
+        /**
+         * Bot system mode.
+         * - "fill": internal bots behave as normal players and fill lobbies.
+         * - "waves": internal bots behave as PvE enemies and spawn in waves.
+         */
+        mode: "fill",
         minHumansToEnable: 1,
         reserveSlots: 8,
         spawnPerSecond: 4,
@@ -214,6 +220,12 @@ export interface ConfigType {
 
     bots: {
         enabled: boolean;
+        /**
+         * Bot system mode.
+         * - "fill": internal bots behave as normal players and fill lobbies.
+         * - "waves": internal bots behave as PvE enemies and spawn in waves.
+         */
+        mode: "fill" | "waves";
         /**
          * Minimum number of connected human players required to enable internal bots.
          * External websocket bots (JoinMsg.bot=true) do not count towards this.

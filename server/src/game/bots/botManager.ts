@@ -154,16 +154,23 @@ export class BotManager {
     private readonly _controllers = new Map<number, BotController>();
 
     // ── Wave mode ──
-    /** Null when waves.json is absent or malformed — falls back to fill logic */
+    /** Null when wave mode is disabled, or waves.json is absent/malformed */
     private readonly _waveConfig: WaveConfig | null;
     private _wave: WaveState | null = null;
     /** Countdown timer used for the inter-wave delay */
     private _waveDelayRemaining = 0;
+    /** True when waves are paused due to insufficient connected humans */
+    private _wavePausedForNoHumans = false;
 
     constructor(readonly game: Game) {
-        this._waveConfig = this._loadWaveConfig();
+        const waveModeEnabled = Config.bots.mode === "waves";
+        this._waveConfig = waveModeEnabled ? this._loadWaveConfig() : null;
 
-        if (this._waveConfig) {
+        if (waveModeEnabled && !this._waveConfig) {
+            console.warn(
+                "[BotManager] bots.mode is \"waves\" but no valid waves.json was found. Wave mode disabled.",
+            );
+        } else if (this._waveConfig) {
             console.log(
                 `[BotManager] Wave mode active — ${this._waveConfig.waves.length} wave(s) loaded.`,
             );
@@ -225,6 +232,8 @@ export class BotManager {
             return;
         }
 
+        this._cleanupDeadInternalBots();
+
         const entry = this._waveConfig.waves[index];
         const brainQueue = buildBrainQueue(entry, () => this._pickBrainType());
 
@@ -257,6 +266,79 @@ export class BotManager {
         return this._waveConfig.waves[this._wave.index] ?? null;
     }
 
+    private _countConnectedHumans(): number {
+        const players = this.game.playerBarn.players;
+        let connectedHumans = 0;
+
+        for (let i = 0; i < players.length; i++) {
+            const p = players[i];
+            // Humans are websocket-backed, connected, and not external websocket "bots" (JoinMsg.bot=true)
+            if (p.hasClient && !p.disconnected && !p.bot) {
+                connectedHumans++;
+            }
+        }
+
+        return connectedHumans;
+    }
+
+    private _pauseWaveModeForNoHumans(): void {
+        if (this._wavePausedForNoHumans) return;
+        this._wavePausedForNoHumans = true;
+
+        this._wave = null;
+        this._waveDelayRemaining = 0;
+        this._spawnBudget = 0;
+    }
+
+    private _resumeWaveModeIfNeeded(): void {
+        if (!this._wavePausedForNoHumans) return;
+        this._wavePausedForNoHumans = false;
+
+        // Restart at wave 1 whenever a match becomes human-populated again.
+        if (this._waveConfig) {
+            this._beginWave(0);
+        }
+    }
+
+    private _removeAllInternalBots(): void {
+        const playerBarn = this.game.playerBarn;
+        const bots = playerBarn.players.filter((p) => p.isAi && !p.destroyed);
+        for (let i = 0; i < bots.length; i++) {
+            const bot = bots[i];
+            this._controllers.delete(bot.__id);
+            playerBarn.removePlayer(bot);
+        }
+    }
+
+    private _cleanupDeadInternalBots(): void {
+        const playerBarn = this.game.playerBarn;
+        const deadBots = playerBarn.players.filter(
+            (p) => p.isAi && !p.destroyed && p.dead,
+        );
+        for (let i = 0; i < deadBots.length; i++) {
+            const bot = deadBots[i];
+            this._controllers.delete(bot.__id);
+            playerBarn.removePlayer(bot);
+        }
+    }
+
+    private _cleanupWaveBots(botIds: Set<number>): void {
+        if (botIds.size === 0) return;
+
+        const playerBarn = this.game.playerBarn;
+        const bots = playerBarn.players.filter(
+            (p) => p.isAi && !p.destroyed && p.dead && botIds.has(p.__id),
+        );
+
+        for (let i = 0; i < bots.length; i++) {
+            const bot = bots[i];
+            this._controllers.delete(bot.__id);
+            playerBarn.removePlayer(bot);
+        }
+
+        botIds.clear();
+    }
+
     // ── Main update ──────────────────────────────────────────────────────────
 
     update(dt: number): void {
@@ -270,17 +352,30 @@ export class BotManager {
             return;
         }
 
+        if (Config.bots.mode === "waves") {
+            const connectedHumans = this._countConnectedHumans();
+
+            // No bot-only games: if there are no connected humans, remove internal bots and
+            // reset wave progression so a future join starts from wave 1 again.
+            if (connectedHumans < Config.bots.minHumansToEnable) {
+                this._pauseWaveModeForNoHumans();
+                this._removeAllInternalBots();
+                return;
+            }
+
+            if (!this._waveConfig) return;
+            this._resumeWaveModeIfNeeded();
+            this._updateWaveMode(dt);
+            return;
+        }
+
         // Fill/retire only while the lobby is open / joinable
         if (this.game.gas.stage >= 2) {
             return;
         }
 
-        if (this._waveConfig) {
-            this._updateWaveMode(dt);
-        } else {
-            const fill = this._computeFillTarget();
-            this._applyFillTarget(dt, fill);
-        }
+        const fill = this._computeFillTarget();
+        this._applyFillTarget(dt, fill);
     }
 
     // ── Wave-mode update ─────────────────────────────────────────────────────
@@ -318,6 +413,7 @@ export class BotManager {
             );
 
             if (!anyAlive) {
+                this._cleanupWaveBots(wave.botIds);
                 console.log(
                     `[BotManager] Wave ${wave.index + 1} cleared — next wave in ${WAVE_INTER_DELAY_S}s.`,
                 );
