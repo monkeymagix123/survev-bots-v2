@@ -342,7 +342,7 @@ export class Gas {
         }
 
         if (this.circleIdx !== circleIdxOld) {
-            if (this.game.map.factionMode) {
+            if (this.game.map.isFactionPvp) {
                 if (this.circleIdx == 1) {
                     const red = this.game.playerBarn.teams[0];
                     const blue = this.game.playerBarn.teams[1];

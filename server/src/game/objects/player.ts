@@ -2553,7 +2553,7 @@ export class Player extends BaseGameObject {
         this.game.broadcastMsg(net.MsgType.Kill, downedMsg);
 
         // lone survivr can be given on knock or kill
-        if (this.game.map.factionMode) {
+        if (this.game.map.isFactionPvp) {
             this.team!.checkAndApplyLastMan();
         }
     }
@@ -2657,7 +2657,7 @@ export class Player extends BaseGameObject {
             }
         }
 
-        if (this.game.map.factionMode) {
+        if (this.game.map.isFactionPvp) {
             // lone survivr can be given on knock or kill
             this.team!.checkAndApplyLastMan();
 
