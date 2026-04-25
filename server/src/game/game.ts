@@ -221,8 +221,19 @@ export class Game {
     }
 
     get canJoin(): boolean {
+        const isWaveMap = !!this.map.mapDef.isWave;
+        let aliveForJoin = this.aliveCount;
+        if (isWaveMap) {
+            const livingPlayers = this.playerBarn.livingPlayers;
+            aliveForJoin = 0;
+            for (let i = 0; i < livingPlayers.length; i++) {
+                const p = livingPlayers[i];
+                if (p.isAi || p.bot) continue;
+                aliveForJoin++;
+            }
+        }
         return (
-            this.aliveCount < this.map.mapDef.gameMode.maxPlayers &&
+            aliveForJoin < this.map.mapDef.gameMode.maxPlayers &&
             !this.over &&
             this.gas.stage < 2
         );

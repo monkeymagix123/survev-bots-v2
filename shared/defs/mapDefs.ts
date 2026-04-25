@@ -11,6 +11,7 @@ import { PotatoSpring } from "./maps/potatoSpringDefs";
 import { Savannah } from "./maps/savannahDefs";
 import { Snow } from "./maps/snowDefs";
 import { Turkey } from "./maps/turkeyDefs";
+import { Wave } from "./maps/waveDefs";
 import { Woods } from "./maps/woodsDefs";
 import { WoodsSnow } from "./maps/woodsSnowDefs";
 import { WoodsSpring } from "./maps/woodsSpringDefs";
@@ -33,6 +34,7 @@ export const MapDefs = {
     savannah: Savannah,
     cobalt: Cobalt,
     turkey: Turkey,
+    wave: Wave,
 } satisfies Record<string, MapDef>;
 
 export type Atlas =
@@ -51,6 +53,11 @@ export type Atlas =
 
 export interface MapDef {
     mapId: number;
+    /**
+     * True if this map should run the wave PvE ruleset (humans vs bots).
+     * Used by both server and client to toggle wave-specific behavior.
+     */
+    isWave?: boolean;
     desc: {
         name: string;
         icon: string;

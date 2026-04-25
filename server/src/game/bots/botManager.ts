@@ -163,12 +163,12 @@ export class BotManager {
     private _wavePausedForNoHumans = false;
 
     constructor(readonly game: Game) {
-        const waveModeEnabled = Config.bots.mode === "waves";
+        const waveModeEnabled = !!this.game.map.mapDef.isWave;
         this._waveConfig = waveModeEnabled ? this._loadWaveConfig() : null;
 
         if (waveModeEnabled && !this._waveConfig) {
             console.warn(
-                "[BotManager] bots.mode is \"waves\" but no valid waves.json was found. Wave mode disabled.",
+                "[BotManager] Wave map is active but no valid waves.json was found. Wave mode disabled.",
             );
         } else if (this._waveConfig) {
             console.log(
@@ -344,7 +344,10 @@ export class BotManager {
     update(dt: number): void {
         this._updateControllers(dt);
 
-        if (!Config.bots.enabled) {
+        const isWaveMap = !!this.game.map.mapDef.isWave;
+        const botsEnabled = Config.bots.enabled || isWaveMap;
+
+        if (!botsEnabled) {
             return;
         }
 
@@ -352,7 +355,7 @@ export class BotManager {
             return;
         }
 
-        if (Config.bots.mode === "waves") {
+        if (isWaveMap) {
             const connectedHumans = this._countConnectedHumans();
 
             // No bot-only games: if there are no connected humans, remove internal bots and
@@ -580,12 +583,21 @@ export class BotManager {
         difficulty?: BotDifficulty,
     ): number | undefined {
         const playerBarn = this.game.playerBarn;
+        const isWaveMap = !!this.game.map.mapDef.isWave;
 
         let group: Group | undefined;
         let team: Team | undefined;
 
         if (this.game.map.factionMode) {
-            team = playerBarn.getSmallestTeam();
+            if (isWaveMap) {
+                // Wave map: internal bots always spawn on Team 2 (Blue).
+                team =
+                    playerBarn.teams.find((t) => t.teamId === 2) ??
+                    playerBarn.teams[1] ??
+                    playerBarn.getSmallestTeam();
+            } else {
+                team = playerBarn.getSmallestTeam();
+            }
         }
 
         // Simple policy: every bot is its own group (even in Duo/Squad).

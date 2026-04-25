@@ -46,9 +46,42 @@ export class GameModeManager {
         }
     }
 
+    private _countAliveHumans(): number {
+        const livingPlayers = this.game.playerBarn.livingPlayers;
+        let count = 0;
+
+        for (let i = 0; i < livingPlayers.length; i++) {
+            const p = livingPlayers[i];
+            if (!p.isAi && !p.bot && !p.disconnected) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     /** true if game needs to end */
     handleGameEnd(): boolean {
         if (!this.game.started) return false;
+
+        const isWaveMap = !!this.game.map.mapDef.isWave;
+        if (isWaveMap) {
+            const aliveHumans = this._countAliveHumans();
+            if (aliveHumans > 0) return false;
+
+            // Wave map ends only when all humans are dead/disconnected.
+            // Bots always win (Team 2 / Blue).
+            for (const p of this.game.playerBarn.players) {
+                if (p.hasClient && !p.disconnected && !p.bot) {
+                    p.addGameOverMsg(TeamColor.Blue);
+                }
+            }
+
+            // Prevent the killed-player "placement" gameover message from overwriting the
+            // final defeat message (winningTeamId=Blue) on the same tick.
+            this.game.playerBarn.killedPlayers.length = 0;
+            return true;
+        }
 
         const aliveCount = this.aliveCount();
         if (aliveCount > 1) return false;
@@ -81,6 +114,9 @@ export class GameModeManager {
     }
 
     isGameStarted(): boolean {
+        if (this.game.map.mapDef.isWave) {
+            return this._countAliveHumans() > 0;
+        }
         return this.aliveCount() > 1;
     }
 
@@ -219,6 +255,9 @@ export class GameModeManager {
     }
 
     showStatsMsg(player: Player): boolean {
+        if (this.game.map.mapDef.isWave) {
+            return this._countAliveHumans() > 0;
+        }
         switch (this.mode) {
             case GameMode.Solo:
                 return false;
@@ -307,11 +346,15 @@ export class GameModeManager {
     getPlayerStatuses(player: Player): PlayerStatus[] {
         if (this.isSolo) return [];
 
+        const isWaveMap = !!this.game.map.mapDef.isWave;
         const players: Player[] = this.getPlayerStatusPlayers(player)!;
         return players.map((p) => ({
             hasData: p.playerStatusDirty,
             pos: p.pos,
-            visible: p.teamId === player.teamId || p.timeUntilHidden > 0,
+            visible:
+                isWaveMap && (p.isAi || p.bot)
+                    ? true
+                    : p.teamId === player.teamId || p.timeUntilHidden > 0,
             dead: p.dead,
             downed: p.downed,
             role: p.role,

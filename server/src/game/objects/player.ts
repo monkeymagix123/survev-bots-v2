@@ -136,11 +136,22 @@ export class PlayerBarn {
 
         const result = this.getGroupAndTeam(joinData);
         const group = result?.group;
-        // solo 50v50 just chooses the smallest team everytime no matter what
-        const team =
-            this.game.map.factionMode && !this.game.isTeamMode
-                ? this.getSmallestTeam()
-                : result?.team;
+        const isWaveMap = !!this.game.map.mapDef.isWave;
+        let team = result?.team;
+
+        // In Solo faction mode, teams are normally auto-balanced.
+        // On the Wave map, force humans to Team 1 (Red) and external websocket bots to Team 2 (Blue).
+        if (this.game.map.factionMode && !this.game.isTeamMode) {
+            if (isWaveMap) {
+                const isExternalBot = Config.debug.allowBots && joinMsg.bot;
+                const forcedTeamId = isExternalBot ? 2 : 1;
+                team =
+                    this.teams.find((t) => t.teamId === forcedTeamId) ??
+                    this.getSmallestTeam();
+            } else {
+                team = this.getSmallestTeam();
+            }
+        }
 
         let pos: Vec2;
         let layer: number;
@@ -159,7 +170,7 @@ export class PlayerBarn {
         // Dev convenience: when internal match bots are enabled, give real players a basic
         // starting loadout so they can fight immediately (explicit bot looting comes later).
         if (
-            Config.bots.enabled &&
+            (Config.bots.enabled || isWaveMap) &&
             !player.bot &&
             !this.game.map.perkMode &&
             !player.weapons[GameConfig.WeaponSlot.Primary].type &&

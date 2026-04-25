@@ -102,8 +102,8 @@ function createSprite() {
     return sprite;
 }
 
-const desktopZoomRads = Object.values(GameConfig.scopeZoomRadius.desktop);
-const mobileZoomRads = Object.values(GameConfig.scopeZoomRadius.mobile);
+const desktopZoomRads = Object.values(GameConfig.scopeZoomRadius.desktop) as number[];
+const mobileZoomRads = Object.values(GameConfig.scopeZoomRadius.mobile) as number[];
 
 class Gun {
     gunBarrel = createSprite();
