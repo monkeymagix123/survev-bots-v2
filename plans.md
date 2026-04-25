@@ -1,6 +1,6 @@
 # Plans / Progress
 
-Last updated: 2026-04-24
+Last updated: 2026-04-25
 
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
@@ -16,6 +16,12 @@ Last updated: 2026-04-24
 - Capped bot bloom + truncated per-shot aim noise to prevent rare “random spraying” (esp. visible in spectate on pistols like `ot38`).
 - Fixed spectate edge case where a spectated player is retired/removed (`destroy()` without `dead`).
 - Refactored bot AI into Phase 1 architecture (brains + perception/aim/weapon/navigation systems) without changing behavior.
+- Implemented Wave map-driven wave mode (`mapDef.isWave`) as a 2-team faction match: humans on Team 1 (Red), bots on Team 2 (Blue).
+- Removed `Config.bots.mode`; wave mode is now selected by the Wave map itself and force-enables internal bots on that map (still respects `Config.bots.minHumansToEnable` to prevent bot-only games).
+- Wave map lifecycle: game starts with 1 connected human; match only ends when all humans are dead/disconnected (clearing a wave no longer ends the match).
+- Wave map UI/data: bots are always visible on minimap/big map; bots don’t consume human join slots (join cutoff still uses `gas.stage < 2`).
+- Added `GameMap.isFactionPvp` to keep faction teams without inheriting 50v50-only terrain + mechanics (special faction rivers/bridges, special airdrop, lone survivr).
+- Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress
 - Manual sanity testing: join/leave during lobby window, verify bots retire to make room, verify no match-end spam (incl Plan 3 gunplay).
