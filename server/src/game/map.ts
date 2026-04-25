@@ -1805,11 +1805,37 @@ export class GameMap {
                 const vec = v2.create(Math.cos(rad), Math.sin(rad));
                 const idx = team.teamId - 1;
 
-                //farthest fifth from the center of the team's half. 1/5 * 1/2 = 1/10 hence the 10 divisions
-                const divisions = 10;
-                spawnAabb = coldet.divideAabb(spawnAabb, vec, divisions)[
-                    idx * (divisions - 1)
-                ];
+                if (this.isWaveMap) {
+                    // Wave map spawns should stay inside the current safe region.
+                    // The classic faction spawn logic uses the farthest 1/10th of each half,
+                    // which can end up fully outside the safe zone once the circle moves.
+                    const halves = coldet.divideAabb(spawnAabb, vec, 2);
+                    spawnAabb = halves[idx] ?? spawnAabb;
+
+                    const gas = this.game.gas;
+                    const safeAabb = collider.createAabb(
+                        v2.create(gas.posNew.x - gas.radNew, gas.posNew.y - gas.radNew),
+                        v2.create(gas.posNew.x + gas.radNew, gas.posNew.y + gas.radNew),
+                    );
+
+                    const min = v2.create(
+                        Math.max(spawnAabb.min.x, safeAabb.min.x),
+                        Math.max(spawnAabb.min.y, safeAabb.min.y),
+                    );
+                    const max = v2.create(
+                        Math.min(spawnAabb.max.x, safeAabb.max.x),
+                        Math.min(spawnAabb.max.y, safeAabb.max.y),
+                    );
+                    if (min.x < max.x && min.y < max.y) {
+                        spawnAabb = collider.createAabb(min, max);
+                    }
+                } else {
+                    //farthest fifth from the center of the team's half. 1/5 * 1/2 = 1/10 hence the 10 divisions
+                    const divisions = 10;
+                    spawnAabb = coldet.divideAabb(spawnAabb, vec, divisions)[
+                        idx * (divisions - 1)
+                    ];
+                }
             }
 
             getPos = () => {

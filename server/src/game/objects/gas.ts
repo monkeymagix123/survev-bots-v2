@@ -12,6 +12,11 @@ interface StageData {
     damage: number;
 }
 
+// Wave maps use the gas stage counter as a "lobby closed" gate (`stage >= 2`),
+// but we don't want the circle to keep shrinking (bots will die in the red zone).
+// Freeze gas progression once we reach this stage.
+const WAVE_GAS_STOP_STAGE = 2;
+
 const GasStages: StageData[] = [
     {
         mode: GasMode.Inactive,
@@ -303,6 +308,26 @@ export class Gas {
     }
 
     advanceGasStage() {
+        if (this.game.map.isWaveMap && this.stage >= WAVE_GAS_STOP_STAGE) {
+            // Snap to the current safe-zone circle and stop advancing.
+            // Ensure old/new circles match so clients render a stable ring.
+            this._running = false;
+            this.mode = GasMode.Waiting;
+            this.duration = 0;
+            this._gasTicker = 0;
+            this.gasT = 0;
+
+            this.posOld = v2.copy(this.posNew);
+            this.currentPos = v2.copy(this.posNew);
+            this.radOld = this.radNew;
+            this.currentRad = this.radNew;
+
+            this.dirty = true;
+            this.timeDirty = true;
+            this.game.updateData();
+            return;
+        }
+
         this.stage++;
         this._running = true;
 
