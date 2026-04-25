@@ -608,8 +608,10 @@ export class GameMap {
         ).widths;
 
         for (let i = 0; i < widths.length; i++) {
-            //in factions mode, we always assume the first width in widths is the main faction river
-            const isFactionRiver = this.factionMode;
+            // in factions mode, we always assume the first width in widths is the main faction river
+            // In faction 50v50 we generate a special "split" river. Wave map uses faction teams
+            // but should keep normal terrain generation.
+            const isFactionRiver = this.factionMode && !this.mapDef.isWave;
 
             this.trySpawn(`river_${widths[i]}`, () => {
                 const riverPoints = riverCreator.create(isFactionRiver);
@@ -628,7 +630,7 @@ export class GameMap {
     /** only called inside generateObjects, separates logic into function to simplify control flow */
     private generateBridges(mapDef: MapDef): void {
         //factions mode always had one extra large bridge on each side of the river town's extra large bridge.
-        if (this.factionMode) {
+        if (this.factionMode && !this.mapDef.isWave) {
             this.genBridge(
                 mapDef.mapGen.bridgeTypes.xlarge,
                 this.terrain.rivers[0],
