@@ -15,3 +15,6 @@ or cd into server and client directories and run `pnpm dev` for each
 
 ## Production builds
 See [HOSTING.md](./HOSTING.md)
+
+## Bots
+See `server/src/game/bots/README.md` for current bot behavior and tuning notes.
