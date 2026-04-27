@@ -33,6 +33,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - If in gas / outside safe zone: move toward the safe-zone center (`gas.posNew`) and disable anchoring/strafe.
 - State-driven movement (when a target exists):
   - `push`: target too far → close toward weapon `idealMax`.
+    - For `ar`/`lmg`/`precision`, bots only `push` when the target is outside `engageMax` (no “walk closer” once already in a shootable range).
   - `back_off`: target too close → create distance toward `idealMin`.
   - `hold_range` / `hold_position` (anchor): minimal movement in the usable band.
   - `strafe`: lateral movement in the usable band (direction flips every ~0.25–0.6s).
@@ -60,7 +61,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 
 ## Item usage
 - If not busy with another action:
-  - Heal when `health < 60`: `healthkit` > `bandage`.
+  - Heal when `health < 60` and the target is not currently visible: `healthkit` > `bandage`.
   - Boost when `boost < 40`: `painkiller` > `soda`.
 
 ## Brains / Difficulty
@@ -74,5 +75,5 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 ## Known limitations (intentional for now)
 - No explicit looting/pathing toward items (bots only get a starting loadout).
 - Cover is **cover-lite only** (nearby point sampling + LOS check); no peeking, no pathfinding, and no multi-enemy evaluation yet.
-- No explicit reload input; bots rely on standard weapon behavior (shooting empty schedules reload) and retreat when reloading under threat.
+- Bots can press reload explicitly when empty and it’s safe/out-of-range, but still rely on standard weapon behavior for most reload timing.
 - No squad coordination or shared targeting.

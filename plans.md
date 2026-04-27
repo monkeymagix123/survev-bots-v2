@@ -25,6 +25,7 @@ Last updated: 2026-04-27
 - Phase 2: added a movement-only combat state machine (push/hold/back off/strafe/anchor) with chase-last-seen + retreat-to-heal/reload behavior (no aim/shoot tuning changes).
 - Phase 3: refined danger scoring + reduced panic retreat (short recent-damage panic, added brief damage-dodge strafe, diagonal/evasive retreat points).
 - Phase 4: cover-lite point selection for retreat-like states (sample nearby points, prefer enemy LOS-blocked, cache briefly; fallback to diagonal retreat).
+- Phase 5: improved movement discipline (AR/LMG/precision stop auto-closing within `engageMax`; safer healing + explicit reload when safe/out-of-range).
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress
@@ -32,7 +33,6 @@ Last updated: 2026-04-27
 - Phase 1 parity verification: enable `Config.bots.debugParity` and check for `[bots][parity]` mismatches (remove legacy comparator after).
 
 ## Next
-- Phase 5: improve movement (weapon-range discipline + less bot-like pushing/holding).
 - Phase 6: basic navigation (blocked-goal detection + waypointing; no full pathfinding).
 - Explicit bot looting (waypointing toward nearby loot / weapon upgrades).
 - Duo/squad bot pairing (spawn in pairs and avoid friendly fire); coordination/shared targets later.

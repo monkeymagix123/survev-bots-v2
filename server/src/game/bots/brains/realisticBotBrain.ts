@@ -147,6 +147,7 @@ export class RealisticBotBrain implements BotBrain {
 
         const idealMin = profile?.idealMin ?? 0;
         const idealMax = profile?.idealMax ?? 18;
+        const engageMax = profile?.engageMax ?? idealMax;
         const rangeSlack = tuning.rangeSlack;
 
         const lowHp = player.health < 60;
@@ -199,6 +200,14 @@ export class RealisticBotBrain implements BotBrain {
         } else if (needsReload && danger >= tuning.retreatDangerMin) {
             state = "retreat_reload";
             reason = "reload_under_threat";
+        } else if (needsReload) {
+            if (distToTarget < idealMin - rangeSlack) {
+                state = "back_off";
+                reason = "reload_too_close";
+            } else {
+                state = "hold_range";
+                reason = "reload_hold";
+            }
         } else if (damageDodging && !lowHp && !needsReload && !gasEmergency) {
             if (distToTarget < idealMin - rangeSlack) {
                 state = "back_off";
@@ -216,7 +225,13 @@ export class RealisticBotBrain implements BotBrain {
         } else if (distToTarget < idealMin - rangeSlack) {
             state = "back_off";
             reason = "too_close";
-        } else if (distToTarget > idealMax + rangeSlack) {
+        } else if (
+            distToTarget >
+            (weaponClass === "ar" || weaponClass === "lmg" || weaponClass === "precision"
+                ? engageMax
+                : idealMax) +
+                rangeSlack
+        ) {
             state = "push";
             reason = "too_far";
         } else {

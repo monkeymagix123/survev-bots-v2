@@ -225,12 +225,35 @@ export class BotController {
             this._aim.focusTime = 0;
         }
 
+        // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
+        const activeWeapon = player.weapons[player.curWeapIdx];
+        const ammoType = gunDef?.ammo;
+        const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+        const wantsReload =
+            !!gunDef &&
+            player.actionType === GameConfig.Action.None &&
+            activeWeapon.ammo === 0 &&
+            spareAmmo > 0;
+        if (wantsReload) {
+            const outOfEngage = !!profile && aimUpdate.distToTarget > profile.engageMax;
+            if (
+                this._combat.state === "retreat_reload" ||
+                !validTarget ||
+                this._perception.targetVisible === false ||
+                outOfEngage
+            ) {
+                msg.addInput(GameConfig.Input.Reload);
+            }
+        }
+
         // Use items
         msg.useItem = "";
         if (!player.downed && player.actionType === GameConfig.Action.None) {
             if (player.health < 60) {
-                if (player.inventory["healthkit"] > 0) msg.useItem = "healthkit";
-                else if (player.inventory["bandage"] > 0) msg.useItem = "bandage";
+                if (!validTarget || this._perception.targetVisible === false) {
+                    if (player.inventory["healthkit"] > 0) msg.useItem = "healthkit";
+                    else if (player.inventory["bandage"] > 0) msg.useItem = "bandage";
+                }
             } else if (player.boost < 40) {
                 if (player.inventory["painkiller"] > 0) msg.useItem = "painkiller";
                 else if (player.inventory["soda"] > 0) msg.useItem = "soda";
