@@ -3,7 +3,7 @@ import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
 import { coldet } from "../../../../../shared/utils/coldet";
 import { collisionHelpers } from "../../../../../shared/utils/collisionHelpers";
 import { util } from "../../../../../shared/utils/util";
-import { v2 } from "../../../../../shared/utils/v2";
+import { type Vec2, v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { Game } from "../../game";
 import type { Player } from "../../objects/player";
@@ -12,6 +12,8 @@ export class BotPerception {
     targetId?: number;
     targetVisible = false;
     targetSeenTime = -Infinity;
+    lastSeenPos?: Vec2;
+    lastSeenTime = -Infinity;
 
     /**
      * True when bot has seen an enemy recently (used for retire priority).
@@ -22,6 +24,12 @@ export class BotPerception {
 
     markTargetSeen(timeNow: number): void {
         this.targetSeenTime = timeNow;
+    }
+
+    markTargetVisible(timeNow: number, pos: Vec2): void {
+        this.targetSeenTime = timeNow;
+        this.lastSeenTime = timeNow;
+        this.lastSeenPos = v2.copy(pos);
     }
 
     /**

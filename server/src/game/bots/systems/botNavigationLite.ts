@@ -29,9 +29,13 @@ export class BotNavigationLite {
         player: Player,
         gasEmergency: boolean,
         targetPos?: Vec2,
+        overrideGoal?: Vec2,
     ): Vec2 | undefined {
         if (gasEmergency) {
             return game.gas.posNew;
+        }
+        if (overrideGoal) {
+            return overrideGoal;
         }
         if (targetPos) {
             return targetPos;
@@ -53,23 +57,37 @@ export class BotNavigationLite {
         goal?: Vec2;
         hasTarget: boolean;
         gasEmergency: boolean;
+        distToTarget?: number;
+        allowStrafe: boolean;
+        anchor: boolean;
         aimDir: Vec2;
         dt: number;
     }): void {
-        const { msg, player, goal, hasTarget, gasEmergency, aimDir, dt } = params;
+        const {
+            msg,
+            player,
+            goal,
+            hasTarget,
+            gasEmergency,
+            distToTarget,
+            allowStrafe,
+            anchor,
+            aimDir,
+            dt,
+        } = params;
 
         msg.moveLeft = false;
         msg.moveRight = false;
         msg.moveUp = false;
         msg.moveDown = false;
 
-        if (!goal) return;
+        if (!goal || anchor) return;
 
         const toGoal = v2.sub(goal, player.pos);
-        const dist = v2.length(toGoal);
+        const dist = distToTarget ?? v2.length(toGoal);
 
         const dd = 1;
-        const strafe = hasTarget && dist < 18 && !gasEmergency;
+        const strafe = allowStrafe && hasTarget && dist < 18 && !gasEmergency;
         if (strafe) {
             this._strafeTicker -= dt;
             if (this._strafeTicker <= 0) {

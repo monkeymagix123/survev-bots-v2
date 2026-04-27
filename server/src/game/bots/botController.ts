@@ -13,6 +13,7 @@ import type { BotBrain } from "./brains/botBrainLogic";
 import { CompetitiveBotBrain } from "./brains/competitiveBotBrain";
 import { PracticeBotBrain } from "./brains/practiceBotBrain";
 import { RealisticBotBrain } from "./brains/realisticBotBrain";
+import { BotCombatMemory } from "./botCombat";
 import { BotAimController } from "./systems/botAimController";
 import { BotNavigationLite } from "./systems/botNavigationLite";
 import { BotPerception } from "./systems/botPerception";
@@ -26,6 +27,7 @@ export class BotController {
 
     private readonly _perception = new BotPerception();
     private readonly _navigation = new BotNavigationLite();
+    private readonly _combat = new BotCombatMemory();
     private readonly _aim: BotAimController;
     private readonly _weaponLogic: BotWeaponLogic;
     private readonly _brain: BotBrain;
@@ -36,6 +38,7 @@ export class BotController {
 
     private _lastPos: Vec2;
     private _lastMovedTime = 0;
+    private _lastHealth = 0;
 
     constructor(
         readonly game: Game,
@@ -44,6 +47,7 @@ export class BotController {
         readonly brainType: BotBrainType = "realistic",
     ) {
         this._lastPos = v2.copy(player.pos);
+        this._lastHealth = player.health;
         this._aim = new BotAimController(player, difficulty);
         this._weaponLogic = new BotWeaponLogic(difficulty);
         this._brain = this._createBrain(brainType);
@@ -75,6 +79,11 @@ export class BotController {
             return;
         }
 
+        if (player.health < this._lastHealth - 0.001) {
+            this._combat.lastDamagedTime = this._time;
+        }
+        this._lastHealth = player.health;
+
         this._navigation.tick(dt, this._perception.targetId !== undefined);
 
         const movedDist = v2.distance(player.pos, this._lastPos);
@@ -94,6 +103,7 @@ export class BotController {
                 timeNow: this._time,
                 perception: this._perception,
                 navigation: this._navigation,
+                combat: this._combat,
                 aim: this._aim,
                 weaponLogic: this._weaponLogic,
             });
@@ -158,6 +168,7 @@ export class BotController {
             player,
             gasEmergency,
             validTarget?.pos,
+            this._combat.goalPos,
         );
 
         const { gunDef, weaponClass, profile } = this._weaponLogic.getWeaponInfo(player);
@@ -179,6 +190,9 @@ export class BotController {
             goal,
             hasTarget: !!validTarget,
             gasEmergency,
+            distToTarget: validTarget ? aimUpdate.distToTarget : undefined,
+            allowStrafe: this._combat.movementStyle === "strafe" && !gasEmergency,
+            anchor: this._combat.movementStyle === "anchor" && !gasEmergency,
             aimDir: aimUpdate.aimDir,
             dt,
         });

@@ -6,6 +6,7 @@ import type { BotAimController } from "../systems/botAimController";
 import type { BotNavigationLite } from "../systems/botNavigationLite";
 import type { BotPerception } from "../systems/botPerception";
 import type { BotWeaponLogic } from "../systems/botWeaponLogic";
+import type { BotCombatMemory } from "../botCombat";
 
 export type BotBrainContext = {
     game: Game;
@@ -15,6 +16,7 @@ export type BotBrainContext = {
 
     perception: BotPerception;
     navigation: BotNavigationLite;
+    combat: BotCombatMemory;
     aim: BotAimController;
     weaponLogic: BotWeaponLogic;
 };
@@ -23,4 +25,3 @@ export interface BotBrain {
     readonly type: BotBrainType;
     decide(ctx: BotBrainContext): void;
 }
-
