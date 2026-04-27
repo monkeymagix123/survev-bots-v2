@@ -39,6 +39,13 @@ export class BotCombatMemory {
     evadeUntil = -Infinity;
 
     /**
+     * Cached cover target used during retreat-like states.
+     */
+    coverPos?: Vec2;
+    coverTargetId?: number;
+    coverUntil = -Infinity;
+
+    /**
      * Movement intent derived from the combat state machine.
      * These are consumed by navigation/movement only.
      */

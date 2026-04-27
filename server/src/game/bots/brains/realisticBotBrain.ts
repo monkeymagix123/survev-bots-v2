@@ -1,3 +1,7 @@
+import { GameConfig } from "../../../../../shared/gameConfig";
+import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
+import { coldet } from "../../../../../shared/utils/coldet";
+import { collisionHelpers } from "../../../../../shared/utils/collisionHelpers";
 import { math } from "../../../../../shared/utils/math";
 import { util } from "../../../../../shared/utils/util";
 import { v2 } from "../../../../../shared/utils/v2";
@@ -324,6 +328,142 @@ export class RealisticBotBrain implements BotBrain {
             return sanitizeGoal(biased);
         };
 
+        const coverState =
+            state === "seek_cover" ||
+            state === "retreat_reload" ||
+            state === "retreat_heal";
+        const enteringCoverState = stateChanged && coverState;
+
+        const isCoverPosValid = (pos: { x: number; y: number }) => {
+            if (gas.isInGas(pos) || gas.isOutSideSafeZone(pos)) return false;
+            if (game.map.isOnWater(pos, player.layer)) return false;
+            return true;
+        };
+
+        const segmentHasLineOfSight = (
+            a: { x: number; y: number },
+            b: { x: number; y: number },
+            height: number,
+            hackStairs: boolean,
+        ): boolean => {
+            const len = v2.distance(a, b);
+            if (len <= 0.0001) return true;
+
+            const dir = v2.normalizeSafe(v2.sub(b, a), v2.create(1, 0));
+            const aabb = coldet.lineSegmentToAabb(a, b);
+            const nearby = game.grid.intersectCollider(aabb);
+            const obstacles = nearby.filter(
+                (o) => o.__type === ObjectType.Obstacle,
+            ) as any[];
+
+            const dist = collisionHelpers.intersectSegmentDist(
+                obstacles,
+                a,
+                dir,
+                len,
+                height,
+                player.layer,
+                hackStairs,
+            );
+
+            return dist >= len - 0.05;
+        };
+
+        const pickCoverPoint = () => {
+            if (gasEmergency) return undefined;
+
+            const targetId = perception.targetId;
+            if (targetId === undefined) return undefined;
+
+            if (
+                !enteringCoverState &&
+                timeNow < combat.coverUntil &&
+                combat.coverTargetId === targetId
+            ) {
+                if (!combat.coverPos) return undefined;
+                if (isCoverPosValid(combat.coverPos)) return combat.coverPos;
+            }
+
+            const considerCandidate = (candidate: { x: number; y: number }) => {
+                game.map.clampToMapBounds(candidate);
+
+                if (!isCoverPosValid(candidate)) return;
+
+                const losBlocked = !segmentHasLineOfSight(
+                    target.pos,
+                    candidate,
+                    GameConfig.bullet.height,
+                    true,
+                );
+                if (!losBlocked) return;
+
+                const distFromBot = v2.distance(player.pos, candidate);
+                const distFromEnemy = v2.distance(target.pos, candidate);
+
+                const safeEdgeDist = gas.radNew - 2;
+                const gasPenalty =
+                    Math.max(0, v2.distance(candidate, gas.posNew) - safeEdgeDist) * 10;
+
+                const reachable = segmentHasLineOfSight(
+                    player.pos,
+                    candidate,
+                    0.0,
+                    false,
+                );
+                const reachPenalty = reachable ? 0 : 200;
+
+                const score =
+                    1000 -
+                    distFromBot * 2 +
+                    distFromEnemy * 0.5 -
+                    gasPenalty -
+                    reachPenalty;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestPos = v2.copy(candidate);
+                }
+            };
+
+            let bestPos: { x: number; y: number } | undefined;
+            let bestScore = -Infinity;
+
+            const sampleCount = util.randomInt(12, 16);
+            const ringCount = Math.max(1, Math.floor(sampleCount * 0.4));
+            const randomCount = sampleCount - ringCount;
+
+            const away = v2.normalizeSafe(
+                v2.sub(player.pos, target.pos),
+                v2.create(1, 0),
+            );
+
+            const arc = Math.PI / 2;
+            for (let i = 0; i < ringCount; i++) {
+                const t = ringCount === 1 ? 0.5 : i / Math.max(ringCount - 1, 1);
+                const ang = math.lerp(t, -arc, arc);
+                const dir = v2.rotate(away, ang);
+                const radius = util.random(10, 14);
+                considerCandidate(v2.add(player.pos, v2.mul(dir, radius)));
+            }
+
+            for (let i = 0; i < randomCount; i++) {
+                const dir = v2.randomUnit();
+                const radius = util.random(4, 14);
+                considerCandidate(v2.add(player.pos, v2.mul(dir, radius)));
+            }
+
+            combat.coverTargetId = targetId;
+            combat.coverUntil = timeNow + util.random(0.75, 1.5);
+
+            if (bestPos) {
+                combat.coverPos = bestPos;
+                return bestPos;
+            }
+
+            combat.coverPos = undefined;
+            return undefined;
+        };
+
         combat.goalPos = undefined;
         combat.movementStyle = "direct";
 
@@ -343,15 +483,15 @@ export class RealisticBotBrain implements BotBrain {
                 combat.movementStyle = "direct";
                 break;
             case "seek_cover":
-                combat.goalPos = retreatPoint(14);
+                combat.goalPos = pickCoverPoint() ?? retreatPoint(14);
                 combat.movementStyle = "direct";
                 break;
             case "retreat_reload":
-                combat.goalPos = retreatPoint(16);
+                combat.goalPos = pickCoverPoint() ?? retreatPoint(16);
                 combat.movementStyle = "direct";
                 break;
             case "retreat_heal":
-                combat.goalPos = retreatPoint(18);
+                combat.goalPos = pickCoverPoint() ?? retreatPoint(18);
                 combat.movementStyle = "direct";
                 break;
             case "hold_position":
