@@ -17,7 +17,7 @@ export class BotNavigationLite {
         }
     }
 
-    ensureWaypoint(game: Game, player: Player): void {
+    ensureWaypoint(game: Game, _player: Player): void {
         if (!this.waypoint || this.waypointTtl <= 0) {
             this.waypoint = this._pickWaypoint(game);
             this.waypointTtl = util.random(5, 10);
@@ -26,7 +26,7 @@ export class BotNavigationLite {
 
     getGoal(
         game: Game,
-        player: Player,
+        _player: Player,
         gasEmergency: boolean,
         targetPos?: Vec2,
         overrideGoal?: Vec2,
@@ -59,6 +59,7 @@ export class BotNavigationLite {
         gasEmergency: boolean;
         distToTarget?: number;
         allowStrafe: boolean;
+        strafeSign?: -1 | 1;
         anchor: boolean;
         aimDir: Vec2;
         dt: number;
@@ -71,6 +72,7 @@ export class BotNavigationLite {
             gasEmergency,
             distToTarget,
             allowStrafe,
+            strafeSign,
             anchor,
             aimDir,
             dt,
@@ -90,7 +92,9 @@ export class BotNavigationLite {
         const strafe = allowStrafe && hasTarget && dist < 18 && !gasEmergency;
         if (strafe) {
             this._strafeTicker -= dt;
-            if (this._strafeTicker <= 0) {
+            if (strafeSign !== undefined) {
+                this._strafeSign = strafeSign;
+            } else if (this._strafeTicker <= 0) {
                 this._strafeTicker = util.random(0.25, 0.6);
                 this._strafeSign = Math.random() < 0.5 ? -1 : 1;
             }

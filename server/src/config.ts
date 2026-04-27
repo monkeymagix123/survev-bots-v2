@@ -64,6 +64,7 @@ export const Config = {
             },
         },
         debugParity: false,
+        debugCombat: false,
         enableQuickSwitch: true,
         allowBotVsBot: true,
     },
@@ -247,6 +248,10 @@ export interface ConfigType {
          * Logs mismatches to console. Remove once validated.
          */
         debugParity: boolean;
+        /**
+         * Logs bot combat state transitions (movement/state only).
+         */
+        debugCombat: boolean;
         enableQuickSwitch: boolean;
         allowBotVsBot: boolean;
     };

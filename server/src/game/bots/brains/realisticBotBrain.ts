@@ -1,7 +1,9 @@
+import { math } from "../../../../../shared/utils/math";
+import { util } from "../../../../../shared/utils/util";
+import { v2 } from "../../../../../shared/utils/v2";
+import { Config } from "../../../config";
 import type { BotBrainType } from "../botBrain";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
-import { math } from "../../../../../shared/utils/math";
-import { v2 } from "../../../../../shared/utils/v2";
 
 type BrainTuning = {
     rangeSlack: number;
@@ -47,8 +49,16 @@ export class RealisticBotBrain implements BotBrain {
     readonly type: BotBrainType = "realistic";
 
     decide(ctx: BotBrainContext): void {
-        const { game, player, timeNow, perception, navigation, combat, aim, weaponLogic } =
-            ctx;
+        const {
+            game,
+            player,
+            timeNow,
+            perception,
+            navigation,
+            combat,
+            aim,
+            weaponLogic,
+        } = ctx;
 
         const scan = perception.scanForTarget(game, player);
 
@@ -84,11 +94,41 @@ export class RealisticBotBrain implements BotBrain {
             weaponLogic.onTargetCleared();
         }
 
+        const prevState = combat.state;
+
         if (!perception.targetId) {
             combat.setState("wander", timeNow, "no_target");
             combat.goalPos = undefined;
             combat.movementStyle = "direct";
             navigation.ensureWaypoint(game, player);
+
+            if (Config.bots.debugCombat && prevState !== combat.state) {
+                const { gunDef, weaponClass } = weaponLogic.getWeaponInfo(player);
+                const activeWeapon = player.weapons[player.curWeapIdx];
+                const ammoType = gunDef?.ammo;
+                const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+                const needsReload =
+                    player.isReloading() ||
+                    (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
+
+                const gas = game.gas;
+                const gasEmergency =
+                    gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
+
+                console.log("[botCombat]", {
+                    brainType: this.type,
+                    state: combat.state,
+                    stateReason: combat.stateReason,
+                    danger: 0,
+                    hp: Math.round(player.health),
+                    dist: undefined,
+                    visible: false,
+                    recentlyDamaged: timeNow - combat.lastDamagedTime < 0.45,
+                    needsReload,
+                    gasEmergency,
+                    weaponClass,
+                });
+            }
             return;
         }
 
@@ -106,22 +146,27 @@ export class RealisticBotBrain implements BotBrain {
         const rangeSlack = tuning.rangeSlack;
 
         const lowHp = player.health < 60;
-        const recentlyDamaged = timeNow - combat.lastDamagedTime < 1.0;
+        const recentlyDamaged = timeNow - combat.lastDamagedTime < 0.45;
         const visible = perception.targetVisible;
-
-        let danger = 0;
-        if (visible) danger += 0.4;
-        danger += clamp01(1 - distToTarget / 20) * 0.2;
-        if (lowHp) danger += 0.25;
-        if (recentlyDamaged) danger += 0.3;
-        danger = clamp01(danger);
 
         const activeWeapon = player.weapons[player.curWeapIdx];
         const ammoType = gunDef?.ammo;
         const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+        const isReloading = player.isReloading();
         const needsReload =
-            player.isReloading() ||
-            (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
+            isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
+
+        const gas = game.gas;
+        const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
+
+        let danger = 0;
+        if (visible) danger += 0.38;
+        danger += clamp01(1 - distToTarget / 20) * 0.22;
+        if (lowHp) danger += 0.22;
+        if (needsReload) danger += isReloading ? 0.18 : 0.14;
+        if (recentlyDamaged) danger += 0.12;
+        if (gasEmergency) danger += 0.25;
+        danger = clamp01(danger);
 
         const lastSeenFresh =
             !visible &&
@@ -133,18 +178,34 @@ export class RealisticBotBrain implements BotBrain {
         let state: State = "hold_range";
         let reason = "default";
 
+        const newDamageSinceLastDodge =
+            combat.lastDamagedTime > combat.damageDodgeUntil - 0.35;
+        if (recentlyDamaged && newDamageSinceLastDodge) {
+            const alreadyDodging = timeNow < combat.damageDodgeUntil;
+            combat.damageDodgeUntil = timeNow + 0.35;
+            if (!alreadyDodging) {
+                combat.damageDodgeSign = Math.random() < 0.5 ? -1 : 1;
+            }
+        }
+        const damageDodging = timeNow < combat.damageDodgeUntil;
+
         if (lowHp && danger >= tuning.retreatDangerMin) {
             state = "retreat_heal";
             reason = "low_hp";
         } else if (needsReload && danger >= tuning.retreatDangerMin) {
             state = "retreat_reload";
             reason = "reload_under_threat";
-        } else if (
-            (recentlyDamaged || visible) &&
-            (lowHp || needsReload || danger >= tuning.highDangerMin)
-        ) {
+        } else if (damageDodging && !lowHp && !needsReload && !gasEmergency) {
+            if (distToTarget < idealMin - rangeSlack) {
+                state = "back_off";
+                reason = "too_close";
+            } else {
+                state = "strafe";
+                reason = "damage_dodge";
+            }
+        } else if ((lowHp || needsReload) && danger >= tuning.highDangerMin) {
             state = "seek_cover";
-            reason = recentlyDamaged ? "recent_damage" : "exposed";
+            reason = "high_danger";
         } else if (lastSeenFresh) {
             state = "chase_last_seen";
             reason = "lost_los";
@@ -184,7 +245,24 @@ export class RealisticBotBrain implements BotBrain {
             }
         }
 
+        const stateChanged = prevState !== state;
         combat.setState(state, timeNow, reason);
+
+        if (Config.bots.debugCombat && stateChanged) {
+            console.log("[botCombat]", {
+                brainType: this.type,
+                state,
+                stateReason: reason,
+                danger: Number(danger.toFixed(3)),
+                hp: Math.round(player.health),
+                dist: Number(distToTarget.toFixed(2)),
+                visible,
+                recentlyDamaged,
+                needsReload,
+                gasEmergency,
+                weaponClass,
+            });
+        }
 
         const sanitizeGoal = (pos: { x: number; y: number }) => {
             let goal = v2.copy(pos);
@@ -217,18 +295,32 @@ export class RealisticBotBrain implements BotBrain {
         };
 
         const retreatPoint = (retreatDist: number) => {
+            const enteringRetreat =
+                stateChanged &&
+                (state === "seek_cover" ||
+                    state === "retreat_reload" ||
+                    state === "retreat_heal");
+            if (enteringRetreat || timeNow > combat.evadeUntil) {
+                combat.evadeAwayFrac = util.random(0.6, 0.8);
+                combat.evadePerpSign = Math.random() < 0.5 ? -1 : 1;
+                combat.evadeUntil = timeNow + util.random(0.5, 1.0);
+            }
+
             const away = v2.normalizeSafe(
                 v2.sub(player.pos, target.pos),
-                v2.randomUnit()
+                v2.randomUnit(),
             );
-            const side = v2.mul(v2.perp(away), Math.random() < 0.5 ? 1 : -1);
+            const perp = v2.perp(away);
             const dir = v2.normalizeSafe(
-                v2.add(v2.mul(away, 0.7), v2.mul(side, 0.3)),
+                v2.add(
+                    v2.mul(away, combat.evadeAwayFrac),
+                    v2.mul(perp, (1 - combat.evadeAwayFrac) * combat.evadePerpSign),
+                ),
                 away,
             );
 
             const raw = v2.add(player.pos, v2.mul(dir, retreatDist));
-            const biased = v2.lerp(0.15, raw, game.gas.posNew);
+            const biased = v2.lerp(0.22, raw, game.gas.posNew);
             return sanitizeGoal(biased);
         };
 

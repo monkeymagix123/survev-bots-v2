@@ -25,6 +25,20 @@ export class BotCombatMemory {
     lastDamagedTime = -Infinity;
 
     /**
+     * Short "damage dodge" reaction window after taking damage.
+     * Used to briefly strafe without committing to a full retreat.
+     */
+    damageDodgeUntil = -Infinity;
+    damageDodgeSign: -1 | 1 = 1;
+
+    /**
+     * Retreat movement sampling memory (stable for a short window).
+     */
+    evadePerpSign: -1 | 1 = 1;
+    evadeAwayFrac = 0.7;
+    evadeUntil = -Infinity;
+
+    /**
      * Movement intent derived from the combat state machine.
      * These are consumed by navigation/movement only.
      */
@@ -39,4 +53,3 @@ export class BotCombatMemory {
         this.stateReason = reason;
     }
 }
-

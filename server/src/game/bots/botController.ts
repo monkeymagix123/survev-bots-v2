@@ -8,17 +8,17 @@ import { Config } from "../../config";
 import type { Game } from "../game";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
+import { BotCombatMemory } from "./botCombat";
 import type { BotDifficulty } from "./botDifficulty";
 import type { BotBrain } from "./brains/botBrainLogic";
 import { CompetitiveBotBrain } from "./brains/competitiveBotBrain";
 import { PracticeBotBrain } from "./brains/practiceBotBrain";
 import { RealisticBotBrain } from "./brains/realisticBotBrain";
-import { BotCombatMemory } from "./botCombat";
+import { LegacyBotController } from "./legacy/legacyBotController";
 import { BotAimController } from "./systems/botAimController";
 import { BotNavigationLite } from "./systems/botNavigationLite";
 import { BotPerception } from "./systems/botPerception";
 import { BotWeaponLogic } from "./systems/botWeaponLogic";
-import { LegacyBotController } from "./legacy/legacyBotController";
 
 export class BotController {
     private _time = 0;
@@ -184,6 +184,12 @@ export class BotController {
 
         msg.toMouseLen = math.clamp(aimUpdate.aimLen, 0, net.Constants.MouseMaxDist);
 
+        const strafeSign =
+            this._combat.stateReason === "damage_dodge" &&
+            this._time < this._combat.damageDodgeUntil
+                ? this._combat.damageDodgeSign
+                : undefined;
+
         this._navigation.applyMovementInput({
             msg,
             player,
@@ -192,6 +198,7 @@ export class BotController {
             gasEmergency,
             distToTarget: validTarget ? aimUpdate.distToTarget : undefined,
             allowStrafe: this._combat.movementStyle === "strafe" && !gasEmergency,
+            strafeSign,
             anchor: this._combat.movementStyle === "anchor" && !gasEmergency,
             aimDir: aimUpdate.aimDir,
             dt,
@@ -273,7 +280,8 @@ export class BotController {
             profile,
         });
 
-        const movingThisTick = msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown;
+        const movingThisTick =
+            msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown;
         const noiseDeg = this._weaponLogic.computeShotNoiseDeg({
             willShootThisTick: shot.willShootThisTick,
             profile,
@@ -306,7 +314,10 @@ export class BotController {
 
         const angleNew = Math.atan2(msgNew.toMouseDir.y, msgNew.toMouseDir.x);
         const angleLegacy = Math.atan2(msgLegacy.toMouseDir.y, msgLegacy.toMouseDir.x);
-        const angleDiff = Math.atan2(Math.sin(angleLegacy - angleNew), Math.cos(angleLegacy - angleNew));
+        const angleDiff = Math.atan2(
+            Math.sin(angleLegacy - angleNew),
+            Math.cos(angleLegacy - angleNew),
+        );
 
         const inputsNew = msgNew.inputs;
         const inputsLegacy = msgLegacy.inputs;
