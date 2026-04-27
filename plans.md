@@ -1,6 +1,6 @@
 # Plans / Progress
 
-Last updated: 2026-04-25
+Last updated: 2026-04-26
 
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
@@ -21,6 +21,8 @@ Last updated: 2026-04-25
 - Wave map lifecycle: game starts with 1 connected human; match only ends when all humans are dead/disconnected (clearing a wave no longer ends the match).
 - Wave map UI/data: bots are always visible on minimap/big map; bots don’t consume human join slots (join cutoff still uses `gas.stage < 2`).
 - Added `GameMap.isFactionPvp` to keep faction teams without inheriting 50v50-only terrain + mechanics (special faction rivers/bridges, special airdrop, lone survivr).
+- Wave map: gas stops advancing at stage 2, and faction split spawns are clamped into the current safe region (prevents late-wave bots spawning/dying in red zone).
+- Phase 2: added a movement-only combat state machine (push/hold/back off/strafe/anchor) with chase-last-seen + retreat-to-heal/reload behavior (no aim/shoot tuning changes).
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress
@@ -28,7 +30,7 @@ Last updated: 2026-04-25
 - Phase 1 parity verification: enable `Config.bots.debugParity` and check for `[bots][parity]` mismatches (remove legacy comparator after).
 
 ## Next
-- Phase 2: range-based movement + reload/heal retreat + better LOS reacquire/angle seeking.
+- Phase 3: cover-lite (simple “safer direction” + angle-seeking) and more map-aware repositioning.
 - Explicit bot looting (waypointing toward nearby loot / weapon upgrades).
 - Duo/squad bot pairing (spawn in pairs and avoid friendly fire); coordination/shared targets later.
 - Players-vs-bots mode toggle + tuning of heal thresholds, strafing, and quickswitch behavior.
