@@ -1,6 +1,6 @@
 # Plans / Progress
 
-Last updated: 2026-04-26
+Last updated: 2026-04-27
 
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
@@ -23,6 +23,8 @@ Last updated: 2026-04-26
 - Added `GameMap.isFactionPvp` to keep faction teams without inheriting 50v50-only terrain + mechanics (special faction rivers/bridges, special airdrop, lone survivr).
 - Wave map: gas stops advancing at stage 2, and faction split spawns are clamped into the current safe region (prevents late-wave bots spawning/dying in red zone).
 - Phase 2: added a movement-only combat state machine (push/hold/back off/strafe/anchor) with chase-last-seen + retreat-to-heal/reload behavior (no aim/shoot tuning changes).
+- Phase 3: refined danger scoring + reduced panic retreat (short recent-damage panic, added brief damage-dodge strafe, diagonal/evasive retreat points).
+- Phase 4: cover-lite point selection for retreat-like states (sample nearby points, prefer enemy LOS-blocked, cache briefly; fallback to diagonal retreat).
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress
@@ -30,7 +32,8 @@ Last updated: 2026-04-26
 - Phase 1 parity verification: enable `Config.bots.debugParity` and check for `[bots][parity]` mismatches (remove legacy comparator after).
 
 ## Next
-- Phase 3: cover-lite (simple “safer direction” + angle-seeking) and more map-aware repositioning.
+- Phase 5: improve movement (weapon-range discipline + less bot-like pushing/holding).
+- Phase 6: basic navigation (blocked-goal detection + waypointing; no full pathfinding).
 - Explicit bot looting (waypointing toward nearby loot / weapon upgrades).
 - Duo/squad bot pairing (spawn in pairs and avoid friendly fire); coordination/shared targets later.
 - Players-vs-bots mode toggle + tuning of heal thresholds, strafing, and quickswitch behavior.

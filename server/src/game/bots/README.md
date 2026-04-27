@@ -1,6 +1,6 @@
 # Bots (Current Behavior)
 
-This describes how the **internal bots** currently behave on the server (as of 2026-04-26).
+This describes how the **internal bots** currently behave on the server (as of 2026-04-27).
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`, driven by `BotController`.
 
@@ -36,9 +36,12 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - `back_off`: target too close → create distance toward `idealMin`.
   - `hold_range` / `hold_position` (anchor): minimal movement in the usable band.
   - `strafe`: lateral movement in the usable band (direction flips every ~0.25–0.6s).
+  - `damage_dodge` (reason): after taking damage at high HP, bots briefly strafe/back off (~0.35s) instead of full-retreating.
   - `chase_last_seen`: briefly move to `lastSeenPos` after LOS loss.
-  - `retreat_heal` / `retreat_reload`: move away while healing/reloading under threat.
-  - `seek_cover`: Phase 2 stub (just moves away / toward a safer direction; no real cover sampling yet).
+  - `retreat_heal` / `retreat_reload`: retreat while healing/reloading under threat.
+    - Tries a **cover-lite** point first (nearby sampled point that blocks enemy LOS; cached ~0.75–1.5s).
+    - Falls back to a diagonal/evasive retreat vector when no cover point is found.
+  - `seek_cover`: same cover-lite selection, but is intentionally rare (only considered at high danger when low HP or needing reload).
 - When no target: roam to a random waypoint inside the safe zone (5–10s TTL), avoiding water.
 - Movement inputs are currently “grid-like” (up/down/left/right), not pathfinding.
 
@@ -70,6 +73,6 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 
 ## Known limitations (intentional for now)
 - No explicit looting/pathing toward items (bots only get a starting loadout).
-- No real cover selection yet (`seek_cover` is a stub in Phase 2).
+- Cover is **cover-lite only** (nearby point sampling + LOS check); no peeking, no pathfinding, and no multi-enemy evaluation yet.
 - No explicit reload input; bots rely on standard weapon behavior (shooting empty schedules reload) and retreat when reloading under threat.
 - No squad coordination or shared targeting.
