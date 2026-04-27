@@ -219,10 +219,16 @@ export class RealisticBotBrain implements BotBrain {
         const retreatPoint = (retreatDist: number) => {
             const away = v2.normalizeSafe(
                 v2.sub(player.pos, target.pos),
-                v2.randomUnit(),
+                v2.randomUnit()
             );
-            const raw = v2.add(player.pos, v2.mul(away, retreatDist));
-            const biased = v2.lerp(0.25, raw, game.gas.posNew);
+            const side = v2.mul(v2.perp(away), Math.random() < 0.5 ? 1 : -1);
+            const dir = v2.normalizeSafe(
+                v2.add(v2.mul(away, 0.7), v2.mul(side, 0.3)),
+                away,
+            );
+
+            const raw = v2.add(player.pos, v2.mul(dir, retreatDist));
+            const biased = v2.lerp(0.15, raw, game.gas.posNew);
             return sanitizeGoal(biased);
         };
 
