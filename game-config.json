@@ -9,8 +9,8 @@
             ],
             "outfit": "outfitBase",
             "backpack": "backpack00",
-            "helmet": "",
-            "chest": "",
+            "helmet": "helmet01",
+            "chest": "chest01",
             "scope": "4xscope",
             "perks": [{ "type": "endless_ammo", "droppable": false }, { "type": "leadership", "droppable": false }],
             "inventory": {
