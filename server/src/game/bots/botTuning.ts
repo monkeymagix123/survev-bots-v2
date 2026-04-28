@@ -19,5 +19,7 @@ export const BotTuning = {
         strafeFlipSecMax: 0.6,
         strafeEnableMaxDist: 18,
         strafePerpDist: 8,
+        enemyVeryCloseDist: 6,
+        enemyCloseDist: 10,
     },
 } as const;

@@ -279,6 +279,10 @@ export class BotController {
 
             const threat = this._perception.threat;
 
+            const enemyDist = validTarget ? aimUpdate.distToTarget : Infinity;
+            const enemyVeryClose = enemyDist < BotTuning.combat.enemyVeryCloseDist;
+            const enemyClose = enemyDist < BotTuning.combat.enemyCloseDist;
+
             const inRetreatState =
                 this._combat.state === "retreat_heal" ||
                 this._combat.state === "seek_cover";
@@ -288,7 +292,8 @@ export class BotController {
                 inRetreatState ||
                 (!threat.anyHostileVisible &&
                     danger < BotTuning.danger.healMax &&
-                    !recentlyDamaged);
+                    !recentlyDamaged &&
+                    !enemyClose);
 
             // ── Healing logic ──
             if (lowHp) {
@@ -315,12 +320,14 @@ export class BotController {
                 const safeToBoostQuick =
                     !threat.anyHostileVisible &&
                     danger < BotTuning.danger.boostQuickMax &&
-                    !recentlyDamaged;
+                    !recentlyDamaged &&
+                    !enemyVeryClose;
 
                 const safeToBoostLong =
                     !threat.anyHostileVisible &&
                     danger < BotTuning.danger.boostLongMax &&
-                    !recentlyDamaged;
+                    !recentlyDamaged &&
+                    !enemyClose;
 
                 if (veryLowBoost && player.inventory["painkiller"] > 0 && safeToBoostLong) {
                     msg.useItem = "painkiller";
