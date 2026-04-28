@@ -36,6 +36,11 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - Uses a **movement-only combat state machine** (no direct changes to aiming/shooting logic).
 - Gas emergency override:
   - If in gas / outside safe zone: move toward the safe-zone center (`gas.posNew`) and disable anchoring/strafe.
+- Navigation is still **lightweight** (not full pathfinding), but bots now:
+  - raycast movement goals for simple blockers,
+  - treat closed auto-open doors as passable,
+  - pick short-lived detour waypoints around rocks/walls,
+  - and fall back to a safe waypoint / `gas.posNew` if they stay stuck too long.
 - State-driven movement (when a target exists):
   - `push`: target too far → close toward weapon `idealMax`.
     - For `ar`/`lmg`/`precision`, bots only `push` when the target is outside `engageMax` (no “walk closer” once already in a shootable range).
@@ -49,7 +54,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - Falls back to a diagonal/evasive retreat vector when no cover point is found.
   - `seek_cover`: same cover-lite selection, but is intentionally rare (only considered at high danger when low HP or needing reload).
 - When no target: roam to a random waypoint inside the safe zone (5–10s TTL), avoiding water.
-- Movement inputs are currently “grid-like” (up/down/left/right), not pathfinding.
+- Movement inputs are still “grid-like” (up/down/left/right), with one-hop detours only (no A* / interior solver).
 
 ## Aim + Shooting
 - Aim updates are smoothed (deg/sec depends on difficulty) and can include simple lead prediction based on bullet speed.
@@ -88,6 +93,6 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 
 ## Known limitations (intentional for now)
 - No explicit looting/pathing toward items (bots only get a starting loadout).
-- Cover is **cover-lite only** (nearby point sampling + LOS check); no peeking, no pathfinding, and no multi-enemy evaluation yet.
+- Cover is **cover-lite only** (nearby point sampling + LOS check); no peeking, no multi-enemy evaluation, and no full pathfinding yet.
 - Bots can press reload explicitly when empty and it’s safe/out-of-range, but still rely on standard weapon behavior for most reload timing.
 - No squad coordination or shared targeting.

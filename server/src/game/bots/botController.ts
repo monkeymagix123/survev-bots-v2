@@ -227,6 +227,17 @@ export class BotController {
             this._aim.focusTime = 0;
         }
 
+        this._navigation.observeMovement({
+            dt,
+            game: this.game,
+            player,
+            goal,
+            moveLeft: msg.moveLeft,
+            moveRight: msg.moveRight,
+            moveUp: msg.moveUp,
+            moveDown: msg.moveDown,
+        });
+
         // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
         const activeWeapon = player.weapons[player.curWeapIdx];
         const ammoType = gunDef?.ammo;

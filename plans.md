@@ -28,6 +28,7 @@ Last updated: 2026-04-28
 - Phase 5: improved movement discipline (AR/LMG/precision stop auto-closing within `engageMax`; safer healing + explicit reload when safe/out-of-range).
 - Phase 5: added a `BotThreatSnapshot` (nearby hostile/friendly/ignored counts + nearest hostile distance + “recent enemy” flag) and refined healing/boosting safety gates (safe-to-heal/boost requires no hostile visible + danger below thresholds + no nearby hostiles, with thresholds centralized in `BotTuning`).
 - Phase 5: extracted common bot thresholds/durations into `BotTuning` (`server/src/game/bots/botTuning.ts`).
+- Phase 6: added lightweight anti-stuck navigation (blocked-goal raycasts, short detour waypoints, failed-waypoint memory, and safe fallback recovery that still respects auto-open doors).
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress
@@ -35,7 +36,6 @@ Last updated: 2026-04-28
 - Phase 1 parity verification: enable `Config.bots.debugParity` and check for `[bots][parity]` mismatches (remove legacy comparator after).
 
 ## Next
-- Phase 6: basic navigation (blocked-goal detection + waypointing; no full pathfinding).
 - Explicit bot looting (waypointing toward nearby loot / weapon upgrades).
 - Duo/squad bot pairing (spawn in pairs and avoid friendly fire); coordination/shared targets later.
 - Players-vs-bots mode toggle + tuning of heal thresholds, strafing, and quickswitch behavior.
