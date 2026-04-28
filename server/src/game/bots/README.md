@@ -67,11 +67,16 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 ## Item usage
 - If not busy with another action:
   - Heal when `health < 60` and it’s **safe to heal**:
-    - no nearby hostiles
-    - no hostile currently visible (LOS)
-    - and `danger < 0.35`
-    - (`healthkit` > `bandage`)
-  - Boost when `boost < 40`: `painkiller` > `soda`.
+    - always allowed during retreat-like states (`retreat_heal` / `seek_cover`)
+    - otherwise: no hostile currently visible (LOS), not recently damaged, and `danger < 0.35`
+    - item preference:
+      - `health < 35`: `healthkit` > `bandage`
+      - `35 ≤ health < 60`: `bandage` > `healthkit` (faster)
+  - Boost when `boost < 50` and it’s safe to boost (no hostile currently visible + not recently damaged):
+    - “quick” boost (usually `soda`) requires `danger < 0.5`
+    - “long” boost (`painkiller`) requires `danger < 0.3`
+    - if `boost < 25`, prefers `painkiller` when “long” boost is safe
+    - otherwise prefers `soda` when “quick” boost is safe
 
 ## Brains / Difficulty
 - `practice`, `realistic`, and `competitive` share the same perception + aim/shoot systems, but differ in **movement/state selection**:
