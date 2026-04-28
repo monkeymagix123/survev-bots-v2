@@ -255,7 +255,7 @@ export class BotController {
             const lowHp = player.health < BotTuning.heal.lowHp;
             const veryLowHp = player.health < BotTuning.heal.veryLowHp;
             const wantsBoost = player.boost < BotTuning.boost.threshold;
-            const veryLowBoost = player.boost < BotTuning.boost.veryLow;
+            const veryLowBoost = player.boost < BotTuning.boost.veryLowBoost;
 
             const recentlyDamaged =
                 this._time - this._combat.lastDamagedTime <
@@ -287,7 +287,7 @@ export class BotController {
             const safeToHeal =
                 inRetreatState ||
                 (!threat.anyHostileVisible &&
-                    danger < BotTuning.heal.safeDangerMax &&
+                    danger < BotTuning.danger.healMax &&
                     !recentlyDamaged);
 
             // ── Healing logic ──
@@ -314,12 +314,12 @@ export class BotController {
             else if (wantsBoost) {
                 const safeToBoostQuick =
                     !threat.anyHostileVisible &&
-                    danger < BotTuning.boost.safeDangerQuickMax &&
+                    danger < BotTuning.danger.boostQuickMax &&
                     !recentlyDamaged;
 
                 const safeToBoostLong =
                     !threat.anyHostileVisible &&
-                    danger < BotTuning.boost.safeDangerLongMax &&
+                    danger < BotTuning.danger.boostLongMax &&
                     !recentlyDamaged;
 
                 if (veryLowBoost && player.inventory["painkiller"] > 0 && safeToBoostLong) {

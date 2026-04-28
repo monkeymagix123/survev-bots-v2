@@ -2,13 +2,15 @@ export const BotTuning = {
     heal: {
         lowHp: 60,
         veryLowHp: 35,
-        safeDangerMax: 0.35,
     },
     boost: {
         threshold: 50,
-        veryLow: 25,
-        safeDangerQuickMax: 0.5,
-        safeDangerLongMax: 0.3,
+        veryLowBoost: 25,
+    },
+    danger: {
+        healMax: 0.35,
+        boostQuickMax: 0.5,
+        boostLongMax: 0.3,
     },
     combat: {
         recentlyDamagedWindowSec: 0.45,
