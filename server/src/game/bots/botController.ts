@@ -249,14 +249,17 @@ export class BotController {
 
         // Use items
         msg.useItem = "";
+
         if (!player.downed && player.actionType === GameConfig.Action.None) {
             const lowHp = player.health < 60;
+            const veryLowHp = player.health < 35;
             const recentlyDamaged = this._time - this._combat.lastDamagedTime < 0.45;
 
             const isReloading = player.isReloading();
             const needsReload =
                 isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
 
+            // ── Danger (same as before, OK) ──
             let danger = 0;
             if (validTarget && this._perception.targetVisible) danger += 0.38;
             if (validTarget) {
@@ -269,19 +272,52 @@ export class BotController {
             danger = math.clamp(danger, 0, 1);
 
             const threat = this._perception.threat;
-            const safeToHeal =
-                !threat.anyHostileVisible &&
-                threat.nearbyHostileCount === 0 &&
-                danger < 0.35;
 
-            if (player.health < 60) {
+            const inRetreatState =
+                this._combat.state === "retreat_heal" ||
+                this._combat.state === "seek_cover";
+
+            // ── Healing safety (less strict than before) ──
+            const safeToHeal =
+                inRetreatState ||
+                (!threat.anyHostileVisible &&
+                    danger < 0.35 &&
+                    !recentlyDamaged);
+
+            // ── Healing logic ──
+            if (lowHp) {
                 if (safeToHeal) {
-                    if (player.inventory["healthkit"] > 0) msg.useItem = "healthkit";
-                    else if (player.inventory["bandage"] > 0) msg.useItem = "bandage";
+                    if (veryLowHp) {
+                        // Prefer healthkit if very low
+                        if (player.inventory["healthkit"] > 0) {
+                            msg.useItem = "healthkit";
+                        } else if (player.inventory["bandage"] > 0) {
+                            msg.useItem = "bandage";
+                        }
+                    } else {
+                        // Prefer bandage for mid HP (faster)
+                        if (player.inventory["bandage"] > 0) {
+                            msg.useItem = "bandage";
+                        } else if (player.inventory["healthkit"] > 0) {
+                            msg.useItem = "healthkit";
+                        }
+                    }
                 }
-            } else if (player.boost < 40) {
-                if (player.inventory["painkiller"] > 0) msg.useItem = "painkiller";
-                else if (player.inventory["soda"] > 0) msg.useItem = "soda";
+            }
+            // ── Boost logic ──
+            else if (player.boost < 40) {
+                const safeToBoost =
+                    !threat.anyHostileVisible &&
+                    danger < 0.5 &&
+                    !recentlyDamaged;
+
+                if (safeToBoost) {
+                    if (player.inventory["painkiller"] > 0) {
+                        msg.useItem = "painkiller";
+                    } else if (player.inventory["soda"] > 0) {
+                        msg.useItem = "soda";
+                    }
+                }
             }
         }
 
