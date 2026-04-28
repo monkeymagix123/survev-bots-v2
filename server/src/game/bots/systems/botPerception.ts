@@ -8,12 +8,51 @@ import { Config } from "../../../config";
 import type { Game } from "../../game";
 import type { Player } from "../../objects/player";
 
+export type BotThreatSnapshot = {
+    /**
+     * Count of nearby enemies that are valid hostiles under current rules.
+     */
+    nearbyHostileCount: number;
+    /**
+     * True when at least one nearby hostile currently has line-of-sight (LOS).
+     */
+    anyHostileVisible: boolean;
+    /**
+     * Nearby players that are friendly (same group/team).
+     */
+    nearbyFriendlyCount: number;
+    /**
+     * Nearby players that are ignored (e.g. bot-vs-bot disabled).
+     */
+    nearbyIgnoredCount: number;
+    /**
+     * Most recent time we saw/heard/were damaged by an enemy (seconds timestamp).
+     */
+    recentEnemyTime: number;
+    /**
+     * True when we have seen/heard/been damaged by an enemy recently.
+     */
+    hasRecentEnemy: boolean;
+};
+
 export class BotPerception {
     targetId?: number;
     targetVisible = false;
     targetSeenTime = -Infinity;
     lastSeenPos?: Vec2;
     lastSeenTime = -Infinity;
+
+    threat: BotThreatSnapshot = {
+        nearbyHostileCount: 0,
+        anyHostileVisible: false,
+        nearbyFriendlyCount: 0,
+        nearbyIgnoredCount: 0,
+        recentEnemyTime: -Infinity,
+        hasRecentEnemy: false,
+    };
+
+    private _lastDamagedTime = -Infinity;
+    private _lastHeardEnemyTime = -Infinity;
 
     /**
      * True when bot has seen an enemy recently (used for retire priority).
@@ -32,20 +71,40 @@ export class BotPerception {
         this.lastSeenPos = v2.copy(pos);
     }
 
+    markDamaged(timeNow: number): void {
+        this._lastDamagedTime = timeNow;
+    }
+
+    markHeardEnemy(timeNow: number): void {
+        this._lastHeardEnemyTime = timeNow;
+    }
+
     /**
      * Finds the best target under the current rules.
      * Returns the chosen player + whether they are currently visible (LOS).
      */
-    scanForTarget(game: Game, player: Player): { target?: Player; visible: boolean } {
+    scanForTarget(
+        game: Game,
+        player: Player,
+        timeNow: number,
+    ): { target?: Player; visible: boolean } {
         const vision = player.zoom + 6;
+        const visionSqr = vision * vision;
         const rect = coldet.circleToAabb(player.pos, vision);
-        const objects = game.map.isWaveMap ? game.playerBarn.players : game.grid.intersectCollider(rect);
+        const objects = game.map.isWaveMap
+            ? game.playerBarn.players
+            : game.grid.intersectCollider(rect);
 
         let bestVisible: Player | undefined;
         let bestVisibleDist = Number.MAX_VALUE;
 
         let bestAny: Player | undefined;
         let bestAnyDist = Number.MAX_VALUE;
+
+        let nearbyHostileCount = 0;
+        let anyHostileVisible = false;
+        let nearbyFriendlyCount = 0;
+        let nearbyIgnoredCount = 0;
 
         for (let i = 0; i < objects.length; i++) {
             const obj = objects[i];
@@ -55,27 +114,62 @@ export class BotPerception {
             if (other.dead || other.disconnected) continue;
             if (!util.sameLayer(other.layer, player.layer)) continue;
 
-            // Ignore friendlies
-            if (other.groupId === player.groupId) continue;
-            if (game.map.factionMode && other.teamId === player.teamId) continue;
+            const distSqr = v2.lengthSqr(v2.sub(other.pos, player.pos));
+            const nearby = distSqr <= visionSqr;
+
+            const friendly =
+                other.groupId === player.groupId ||
+                (game.map.factionMode && other.teamId === player.teamId);
 
             // Optional bot-vs-bot suppression (internal + external websocket bots)
-            if (!Config.bots.allowBotVsBot && (other.isAi || other.bot)) continue;
+            const ignoredByBotVsBot =
+                !friendly && !Config.bots.allowBotVsBot && (other.isAi || other.bot);
 
-            const dist = v2.lengthSqr(v2.sub(other.pos, player.pos));
-            if (dist < bestAnyDist) {
-                bestAnyDist = dist;
+            if (nearby) {
+                if (friendly) nearbyFriendlyCount++;
+                else if (ignoredByBotVsBot) nearbyIgnoredCount++;
+                else nearbyHostileCount++;
+            }
+
+            // Ignore friendlies / ignored entities for targeting
+            if (friendly) continue;
+            if (ignoredByBotVsBot) continue;
+
+            if (distSqr < bestAnyDist) {
+                bestAnyDist = distSqr;
                 bestAny = other;
             }
 
-            if (dist >= bestVisibleDist) continue;
-            if (!this._hasLineOfSight(game, player, other)) continue;
-            bestVisibleDist = dist;
+            if (distSqr >= bestVisibleDist) continue;
+            const hasLos = this._hasLineOfSight(game, player, other);
+            if (!hasLos) continue;
+            bestVisibleDist = distSqr;
             bestVisible = other;
+            if (nearby) anyHostileVisible = true;
         }
 
         const chosen = bestVisible ?? bestAny;
-        return { target: chosen, visible: chosen !== undefined && chosen === bestVisible };
+
+        const recentEnemyTime = Math.max(
+            this.targetSeenTime,
+            this._lastDamagedTime,
+            this._lastHeardEnemyTime,
+        );
+        const hasRecentEnemy = timeNow - recentEnemyTime < 1.25;
+
+        this.threat = {
+            nearbyHostileCount,
+            anyHostileVisible,
+            nearbyFriendlyCount,
+            nearbyIgnoredCount,
+            recentEnemyTime,
+            hasRecentEnemy,
+        };
+
+        return {
+            target: chosen,
+            visible: chosen !== undefined && chosen === bestVisible,
+        };
     }
 
     private _hasLineOfSight(game: Game, player: Player, target: Player): boolean {

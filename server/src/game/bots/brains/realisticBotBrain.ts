@@ -64,7 +64,7 @@ export class RealisticBotBrain implements BotBrain {
             weaponLogic,
         } = ctx;
 
-        const scan = perception.scanForTarget(game, player);
+        const scan = perception.scanForTarget(game, player, timeNow);
 
         const prevTargetId = perception.targetId;
         const prevVisible = perception.targetVisible;

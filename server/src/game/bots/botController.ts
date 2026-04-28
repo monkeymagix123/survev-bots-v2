@@ -81,6 +81,7 @@ export class BotController {
 
         if (player.health < this._lastHealth - 0.001) {
             this._combat.lastDamagedTime = this._time;
+            this._perception.markDamaged(this._time);
         }
         this._lastHealth = player.health;
 
@@ -249,8 +250,32 @@ export class BotController {
         // Use items
         msg.useItem = "";
         if (!player.downed && player.actionType === GameConfig.Action.None) {
+            const lowHp = player.health < 60;
+            const recentlyDamaged = this._time - this._combat.lastDamagedTime < 0.45;
+
+            const isReloading = player.isReloading();
+            const needsReload =
+                isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
+
+            let danger = 0;
+            if (validTarget && this._perception.targetVisible) danger += 0.38;
+            if (validTarget) {
+                danger += math.clamp(1 - aimUpdate.distToTarget / 20, 0, 1) * 0.22;
+            }
+            if (lowHp) danger += 0.22;
+            if (needsReload) danger += isReloading ? 0.18 : 0.14;
+            if (recentlyDamaged) danger += 0.12;
+            if (gasEmergency) danger += 0.25;
+            danger = math.clamp(danger, 0, 1);
+
+            const threat = this._perception.threat;
+            const safeToHeal =
+                !threat.anyHostileVisible &&
+                threat.nearbyHostileCount === 0 &&
+                danger < 0.35;
+
             if (player.health < 60) {
-                if (!validTarget || this._perception.targetVisible === false) {
+                if (safeToHeal) {
                     if (player.inventory["healthkit"] > 0) msg.useItem = "healthkit";
                     else if (player.inventory["bandage"] > 0) msg.useItem = "bandage";
                 }
