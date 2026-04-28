@@ -27,6 +27,7 @@ Last updated: 2026-04-27
 - Phase 4: cover-lite point selection for retreat-like states (sample nearby points, prefer enemy LOS-blocked, cache briefly; fallback to diagonal retreat).
 - Phase 5: improved movement discipline (AR/LMG/precision stop auto-closing within `engageMax`; safer healing + explicit reload when safe/out-of-range).
 - Phase 5: added threat snapshot (`hostile`/`friendly`/`ignored`/`recent`) and refined healing/boosting safety gates (heal uses retreat-state override or `!anyHostileVisible && !recentlyDamaged && danger < 0.35`; boost uses `boost < 50` with danger thresholds for soda vs painkiller).
+- Phase 5: extracted common bot thresholds/durations into `BotTuning` (`server/src/game/bots/botTuning.ts`).
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress

@@ -14,6 +14,7 @@ import type { BotBrain } from "./brains/botBrainLogic";
 import { CompetitiveBotBrain } from "./brains/competitiveBotBrain";
 import { PracticeBotBrain } from "./brains/practiceBotBrain";
 import { RealisticBotBrain } from "./brains/realisticBotBrain";
+import { BotTuning } from "./botTuning";
 import { LegacyBotController } from "./legacy/legacyBotController";
 import { BotAimController } from "./systems/botAimController";
 import { BotNavigationLite } from "./systems/botNavigationLite";
@@ -251,12 +252,14 @@ export class BotController {
         msg.useItem = "";
 
         if (!player.downed && player.actionType === GameConfig.Action.None) {
-            const lowHp = player.health < 60;
-            const veryLowHp = player.health < 35;
-            const wantsBoost = player.boost < 50;
-            const veryLowBoost = player.boost < 25;
+            const lowHp = player.health < BotTuning.heal.lowHp;
+            const veryLowHp = player.health < BotTuning.heal.veryLowHp;
+            const wantsBoost = player.boost < BotTuning.boost.threshold;
+            const veryLowBoost = player.boost < BotTuning.boost.veryLow;
 
-            const recentlyDamaged = this._time - this._combat.lastDamagedTime < 0.45;
+            const recentlyDamaged =
+                this._time - this._combat.lastDamagedTime <
+                BotTuning.combat.recentlyDamagedWindowSec;
 
             const isReloading = player.isReloading();
             const needsReload =
@@ -284,7 +287,7 @@ export class BotController {
             const safeToHeal =
                 inRetreatState ||
                 (!threat.anyHostileVisible &&
-                    danger < 0.35 &&
+                    danger < BotTuning.heal.safeDangerMax &&
                     !recentlyDamaged);
 
             // ── Healing logic ──
@@ -311,12 +314,12 @@ export class BotController {
             else if (wantsBoost) {
                 const safeToBoostQuick =
                     !threat.anyHostileVisible &&
-                    danger < 0.5 &&
+                    danger < BotTuning.boost.safeDangerQuickMax &&
                     !recentlyDamaged;
 
                 const safeToBoostLong =
                     !threat.anyHostileVisible &&
-                    danger < 0.3 &&
+                    danger < BotTuning.boost.safeDangerLongMax &&
                     !recentlyDamaged;
 
                 if (veryLowBoost && player.inventory["painkiller"] > 0 && safeToBoostLong) {

@@ -3,6 +3,7 @@ import { util } from "../../../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../../../shared/utils/v2";
 import type { Game } from "../../game";
 import type { Player } from "../../objects/player";
+import { BotTuning } from "../botTuning";
 
 export class BotNavigationLite {
     waypoint?: Vec2;
@@ -89,18 +90,28 @@ export class BotNavigationLite {
         const dist = distToTarget ?? v2.length(toGoal);
 
         const dd = 1;
-        const strafe = allowStrafe && hasTarget && dist < 18 && !gasEmergency;
+        const strafe =
+            allowStrafe &&
+            hasTarget &&
+            dist < BotTuning.combat.strafeEnableMaxDist &&
+            !gasEmergency;
         if (strafe) {
             this._strafeTicker -= dt;
             if (strafeSign !== undefined) {
                 this._strafeSign = strafeSign;
             } else if (this._strafeTicker <= 0) {
-                this._strafeTicker = util.random(0.25, 0.6);
+                this._strafeTicker = util.random(
+                    BotTuning.combat.strafeFlipSecMin,
+                    BotTuning.combat.strafeFlipSecMax,
+                );
                 this._strafeSign = Math.random() < 0.5 ? -1 : 1;
             }
 
             const perp = v2.perp(aimDir);
-            const strafeGoal = v2.add(player.pos, v2.mul(perp, 8 * this._strafeSign));
+            const strafeGoal = v2.add(
+                player.pos,
+                v2.mul(perp, BotTuning.combat.strafePerpDist * this._strafeSign),
+            );
             if (strafeGoal.x > player.pos.x + dd) msg.moveRight = true;
             else if (strafeGoal.x < player.pos.x - dd) msg.moveLeft = true;
             if (strafeGoal.y > player.pos.y + dd) msg.moveUp = true;

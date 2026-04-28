@@ -41,8 +41,8 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - For `ar`/`lmg`/`precision`, bots only `push` when the target is outside `engageMax` (no “walk closer” once already in a shootable range).
   - `back_off`: target too close → create distance toward `idealMin`.
   - `hold_range` / `hold_position` (anchor): minimal movement in the usable band.
-  - `strafe`: lateral movement in the usable band (direction flips every ~0.25–0.6s).
-  - `damage_dodge` (reason): after taking damage at high HP, bots briefly strafe/back off (~0.35s) instead of full-retreating.
+  - `strafe`: lateral movement in the usable band (direction flips every ~0.25–0.6s; see `BotTuning`).
+  - `damage_dodge` (reason): after taking damage at high HP, bots briefly strafe/back off (~0.35s; see `BotTuning`) instead of full-retreating.
   - `chase_last_seen`: briefly move to `lastSeenPos` after LOS loss.
   - `retreat_heal` / `retreat_reload`: retreat while healing/reloading under threat.
     - Tries a **cover-lite** point first (nearby sampled point that blocks enemy LOS; cached ~0.75–1.5s).

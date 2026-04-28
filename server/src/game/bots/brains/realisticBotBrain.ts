@@ -8,6 +8,7 @@ import { v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { BotBrainType } from "../botBrain";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
+import { BotTuning } from "../botTuning";
 
 type BrainTuning = {
     rangeSlack: number;
@@ -127,7 +128,9 @@ export class RealisticBotBrain implements BotBrain {
                     hp: Math.round(player.health),
                     dist: undefined,
                     visible: false,
-                    recentlyDamaged: timeNow - combat.lastDamagedTime < 0.45,
+                    recentlyDamaged:
+                        timeNow - combat.lastDamagedTime <
+                        BotTuning.combat.recentlyDamagedWindowSec,
                     needsReload,
                     gasEmergency,
                     weaponClass,
@@ -150,8 +153,9 @@ export class RealisticBotBrain implements BotBrain {
         const engageMax = profile?.engageMax ?? idealMax;
         const rangeSlack = tuning.rangeSlack;
 
-        const lowHp = player.health < 60;
-        const recentlyDamaged = timeNow - combat.lastDamagedTime < 0.45;
+        const lowHp = player.health < BotTuning.heal.lowHp;
+        const recentlyDamaged =
+            timeNow - combat.lastDamagedTime < BotTuning.combat.recentlyDamagedWindowSec;
         const visible = perception.targetVisible;
 
         const activeWeapon = player.weapons[player.curWeapIdx];
@@ -184,10 +188,11 @@ export class RealisticBotBrain implements BotBrain {
         let reason = "default";
 
         const newDamageSinceLastDodge =
-            combat.lastDamagedTime > combat.damageDodgeUntil - 0.35;
+            combat.lastDamagedTime >
+            combat.damageDodgeUntil - BotTuning.combat.damageDodgeDurationSec;
         if (recentlyDamaged && newDamageSinceLastDodge) {
             const alreadyDodging = timeNow < combat.damageDodgeUntil;
-            combat.damageDodgeUntil = timeNow + 0.35;
+            combat.damageDodgeUntil = timeNow + BotTuning.combat.damageDodgeDurationSec;
             if (!alreadyDodging) {
                 combat.damageDodgeSign = Math.random() < 0.5 ? -1 : 1;
             }
