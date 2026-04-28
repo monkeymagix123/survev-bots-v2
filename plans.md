@@ -1,6 +1,6 @@
 # Plans / Progress
 
-Last updated: 2026-04-27
+Last updated: 2026-04-28
 
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
@@ -26,7 +26,7 @@ Last updated: 2026-04-27
 - Phase 3: refined danger scoring + reduced panic retreat (short recent-damage panic, added brief damage-dodge strafe, diagonal/evasive retreat points).
 - Phase 4: cover-lite point selection for retreat-like states (sample nearby points, prefer enemy LOS-blocked, cache briefly; fallback to diagonal retreat).
 - Phase 5: improved movement discipline (AR/LMG/precision stop auto-closing within `engageMax`; safer healing + explicit reload when safe/out-of-range).
-- Phase 5: added threat snapshot (`hostile`/`friendly`/`ignored`/`recent`) and refined healing/boosting safety gates (heal uses retreat-state override or `!anyHostileVisible && !recentlyDamaged && danger < 0.35`; boost uses `boost < 50` with danger thresholds for soda vs painkiller).
+- Phase 5: added a `BotThreatSnapshot` (nearby hostile/friendly/ignored counts + nearest hostile distance + “recent enemy” flag) and refined healing/boosting safety gates (safe-to-heal/boost requires no hostile visible + danger below thresholds + no nearby hostiles, with thresholds centralized in `BotTuning`).
 - Phase 5: extracted common bot thresholds/durations into `BotTuning` (`server/src/game/bots/botTuning.ts`).
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 

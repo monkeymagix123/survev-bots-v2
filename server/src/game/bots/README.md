@@ -1,6 +1,6 @@
 # Bots (Current Behavior)
 
-This describes how the **internal bots** currently behave on the server (as of 2026-04-27).
+This describes how the **internal bots** currently behave on the server (as of 2026-04-28).
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`, driven by `BotController`.
 
@@ -23,7 +23,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - **hostile**: enemy team/group, can attack/target.
   - **friendly**: same `groupId` (duos/squads) or same `teamId` in faction mode.
   - **ignored**: when `Config.bots.allowBotVsBot` is `false`, bots are treated as non-hostile for targeting.
-  - **recent/unknown**: enemy seen/heard/damaged recently (used as a “recent threat” signal, even if no hostile is currently nearby/visible).
+  - **recent/unknown**: enemy seen/damaged recently (used as a short “recent threat” signal even if no hostile is currently nearby/visible).
 - Ignores for targeting:
   - Self, dead, disconnected, different layers.
   - Same `groupId` (duos/squads).
@@ -68,13 +68,13 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - If not busy with another action:
   - Heal when `health < 60` and it’s **safe to heal**:
     - always allowed during retreat-like states (`retreat_heal` / `seek_cover`)
-    - otherwise: no hostile currently visible (LOS), not recently damaged, and `danger < 0.35`
+    - otherwise: no hostile currently visible (LOS), not recently damaged, no nearby hostile within ~10 units, and `danger < 0.35` (see `BotTuning`)
     - item preference:
       - `health < 35`: `healthkit` > `bandage`
       - `35 ≤ health < 60`: `bandage` > `healthkit` (faster)
   - Boost when `boost < 50` and it’s safe to boost (no hostile currently visible + not recently damaged):
-    - “quick” boost (usually `soda`) requires `danger < 0.5`
-    - “long” boost (`painkiller`) requires `danger < 0.3`
+    - “quick” boost (usually `soda`) requires `danger < 0.5` and no nearby hostile within ~6 units
+    - “long” boost (`painkiller`) requires `danger < 0.3` and no nearby hostile within ~10 units
     - if `boost < 25`, prefers `painkiller` when “long” boost is safe
     - otherwise prefers `soda` when “quick” boost is safe
 
