@@ -26,6 +26,15 @@ export type BotThreatSnapshot = {
      */
     nearbyIgnoredCount: number;
     /**
+     * Distance to nearest hostile (any distance; can be > vision on Wave maps).
+     */
+    nearestHostileDist: number;
+    /**
+     * Distance to nearest hostile within the scan radius (~`player.zoom + 6`).
+     * `Infinity` when no nearby hostile exists.
+     */
+    nearestNearbyHostileDist: number;
+    /**
      * Most recent time we saw/heard/were damaged by an enemy (seconds timestamp).
      */
     recentEnemyTime: number;
@@ -47,6 +56,8 @@ export class BotPerception {
         anyHostileVisible: false,
         nearbyFriendlyCount: 0,
         nearbyIgnoredCount: 0,
+        nearestHostileDist: Infinity,
+        nearestNearbyHostileDist: Infinity,
         recentEnemyTime: -Infinity,
         hasRecentEnemy: false,
     };
@@ -105,6 +116,8 @@ export class BotPerception {
         let anyHostileVisible = false;
         let nearbyFriendlyCount = 0;
         let nearbyIgnoredCount = 0;
+        let nearestHostileDistSqr = Infinity;
+        let nearestNearbyHostileDistSqr = Infinity;
 
         for (let i = 0; i < objects.length; i++) {
             const obj = objects[i];
@@ -135,6 +148,13 @@ export class BotPerception {
             if (friendly) continue;
             if (ignoredByBotVsBot) continue;
 
+            if (distSqr < nearestHostileDistSqr) {
+                nearestHostileDistSqr = distSqr;
+            }
+            if (nearby && distSqr < nearestNearbyHostileDistSqr) {
+                nearestNearbyHostileDistSqr = distSqr;
+            }
+
             if (distSqr < bestAnyDist) {
                 bestAnyDist = distSqr;
                 bestAny = other;
@@ -162,6 +182,8 @@ export class BotPerception {
             anyHostileVisible,
             nearbyFriendlyCount,
             nearbyIgnoredCount,
+            nearestHostileDist: Math.sqrt(nearestHostileDistSqr),
+            nearestNearbyHostileDist: Math.sqrt(nearestNearbyHostileDistSqr),
             recentEnemyTime,
             hasRecentEnemy,
         };

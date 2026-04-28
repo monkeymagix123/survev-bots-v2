@@ -279,7 +279,7 @@ export class BotController {
 
             const threat = this._perception.threat;
 
-            const enemyDist = validTarget ? aimUpdate.distToTarget : Infinity;
+            const enemyDist = threat.nearestNearbyHostileDist;
             const enemyVeryClose = enemyDist < BotTuning.combat.enemyVeryCloseDist;
             const enemyClose = enemyDist < BotTuning.combat.enemyCloseDist;
 
