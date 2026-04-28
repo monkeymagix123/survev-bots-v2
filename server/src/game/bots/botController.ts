@@ -253,6 +253,9 @@ export class BotController {
         if (!player.downed && player.actionType === GameConfig.Action.None) {
             const lowHp = player.health < 60;
             const veryLowHp = player.health < 35;
+            const wantsBoost = player.boost < 50;
+            const veryLowBoost = player.boost < 25;
+
             const recentlyDamaged = this._time - this._combat.lastDamagedTime < 0.45;
 
             const isReloading = player.isReloading();
@@ -305,18 +308,23 @@ export class BotController {
                 }
             }
             // ── Boost logic ──
-            else if (player.boost < 40) {
-                const safeToBoost =
+            else if (wantsBoost) {
+                const safeToBoostQuick =
                     !threat.anyHostileVisible &&
                     danger < 0.5 &&
                     !recentlyDamaged;
 
-                if (safeToBoost) {
-                    if (player.inventory["painkiller"] > 0) {
-                        msg.useItem = "painkiller";
-                    } else if (player.inventory["soda"] > 0) {
-                        msg.useItem = "soda";
-                    }
+                const safeToBoostLong =
+                    !threat.anyHostileVisible &&
+                    danger < 0.3 &&
+                    !recentlyDamaged;
+
+                if (veryLowBoost && player.inventory["painkiller"] > 0 && safeToBoostLong) {
+                    msg.useItem = "painkiller";
+                } else if (player.inventory["soda"] > 0 && safeToBoostQuick) {
+                    msg.useItem = "soda";
+                } else if (player.inventory["painkiller"] > 0 && safeToBoostLong) {
+                    msg.useItem = "painkiller";
                 }
             }
         }
