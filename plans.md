@@ -26,6 +26,7 @@ Last updated: 2026-04-27
 - Phase 3: refined danger scoring + reduced panic retreat (short recent-damage panic, added brief damage-dodge strafe, diagonal/evasive retreat points).
 - Phase 4: cover-lite point selection for retreat-like states (sample nearby points, prefer enemy LOS-blocked, cache briefly; fallback to diagonal retreat).
 - Phase 5: improved movement discipline (AR/LMG/precision stop auto-closing within `engageMax`; safer healing + explicit reload when safe/out-of-range).
+- Phase 5: added threat snapshot (`hostile`/`friendly`/`ignored`/`recent`) and tightened healing with `safeToHeal` gating (no nearby/visible hostiles + `danger < 0.35`).
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress

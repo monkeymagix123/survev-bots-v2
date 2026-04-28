@@ -19,7 +19,12 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 ## Targeting / Perception
 - On normal maps: scans nearby players within ~`player.zoom + 6`.
 - On Wave map: scans **all players** (global), so bots will walk toward humans even when they’re not locally visible yet.
-- Ignores:
+- Tracks nearby players as:
+  - **hostile**: enemy team/group, can attack/target.
+  - **friendly**: same `groupId` (duos/squads) or same `teamId` in faction mode.
+  - **ignored**: when `Config.bots.allowBotVsBot` is `false`, bots are treated as non-hostile for targeting.
+  - **recent/unknown**: enemy seen/heard/damaged recently (used as a “recent threat” signal, even if no hostile is currently nearby/visible).
+- Ignores for targeting:
   - Self, dead, disconnected, different layers.
   - Same `groupId` (duos/squads).
   - Same `teamId` in faction mode (Wave counts as faction teams).
@@ -61,7 +66,11 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 
 ## Item usage
 - If not busy with another action:
-  - Heal when `health < 60` and the target is not currently visible: `healthkit` > `bandage`.
+  - Heal when `health < 60` and it’s **safe to heal**:
+    - no nearby hostiles
+    - no hostile currently visible (LOS)
+    - and `danger < 0.35`
+    - (`healthkit` > `bandage`)
   - Boost when `boost < 40`: `painkiller` > `soda`.
 
 ## Brains / Difficulty
