@@ -182,7 +182,7 @@ export class BotLootScorer {
         const held = player.inventory[loot.type] ?? 0;
         if (bagSpace <= held) return undefined;
 
-        const desired = loot.type === "healthkit" ? (player.health < 40 ? 2 : 1) : 5;
+        const desired = this._getDesiredHealCount(player, loot.type);
         const shortage = Math.max(desired - held, 0);
         const capacityLeft = bagSpace - held;
         if (shortage <= 0 && capacityLeft < Math.min(loot.count, 2)) return undefined;
@@ -208,7 +208,7 @@ export class BotLootScorer {
         const held = player.inventory[loot.type] ?? 0;
         if (bagSpace <= held) return undefined;
 
-        const desired = loot.type === "painkiller" ? (player.boost < 25 ? 2 : 1) : 4;
+        const desired = this._getDesiredBoostCount(player, loot.type);
         const shortage = Math.max(desired - held, 0);
         const capacityLeft = bagSpace - held;
         if (shortage <= 0 && capacityLeft < Math.min(loot.count, 2)) return undefined;
@@ -340,18 +340,7 @@ export class BotLootScorer {
         const fireRate = 1 / Math.max(gunDef.fireDelay, 0.05);
         const clipFactor = Math.min(gunDef.maxClip, 60) * 0.18;
         const reloadPenalty = gunDef.reloadTime * 1.5;
-        const classBase =
-            weaponClass === "precision"
-                ? 34
-                : weaponClass === "lmg"
-                  ? 30
-                  : weaponClass === "ar"
-                    ? 26
-                    : weaponClass === "shotgun"
-                      ? 24
-                      : weaponClass === "smg"
-                        ? 20
-                        : 14;
+        const classBase = this._getWeaponClassBaseScore(weaponClass);
         const dualBonus = gunDef.isDual ? 5 : 0;
         const aimDelayBonus = gunDef.aimDelay ? 2 : 0;
 
@@ -369,5 +358,40 @@ export class BotLootScorer {
         const bag = player.bagSizes[itemType];
         if (!bag) return 0;
         return bag[player.getGearLevel(player.backpack)] ?? 0;
+    }
+
+    private _getDesiredHealCount(player: Player, lootType: string): number {
+        switch (lootType) {
+            case "healthkit":
+                return player.health < 40 ? 2 : 1;
+            default:
+                return 5;
+        }
+    }
+
+    private _getDesiredBoostCount(player: Player, lootType: string): number {
+        switch (lootType) {
+            case "painkiller":
+                return player.boost < 25 ? 2 : 1;
+            default:
+                return 4;
+        }
+    }
+
+    private _getWeaponClassBaseScore(weaponClass: ReturnType<typeof classifyWeapon>): number {
+        switch (weaponClass) {
+            case "precision":
+                return 34;
+            case "lmg":
+                return 30;
+            case "ar":
+                return 26;
+            case "shotgun":
+                return 24;
+            case "smg":
+                return 20;
+            default:
+                return 14;
+        }
     }
 }
