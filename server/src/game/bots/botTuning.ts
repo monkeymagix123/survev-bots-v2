@@ -37,4 +37,10 @@ export const BotTuning = {
         detourSideLongDist: 8,
         detourForwardBiasDist: 3,
     },
+    loot: {
+        idleSearchDist: 14,
+        opportunisticSearchDist: 7.5,
+        opportunisticDangerMax: 0.32,
+        weaponUpgradeMinScore: 7,
+    },
 } as const;

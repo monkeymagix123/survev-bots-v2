@@ -60,6 +60,7 @@ export class RealisticBotBrain implements BotBrain {
             timeNow,
             perception,
             navigation,
+            lootScorer,
             combat,
             aim,
             weaponLogic,
@@ -100,12 +101,58 @@ export class RealisticBotBrain implements BotBrain {
         }
 
         const prevState = combat.state;
+        const gas = game.gas;
+        const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
+
+        const sanitizeGoal = (pos: { x: number; y: number }) => {
+            let goal = v2.copy(pos);
+            game.map.clampToMapBounds(goal);
+
+            const delta = v2.sub(goal, gas.posNew);
+            const dist = v2.length(delta);
+            const maxDist = Math.max(gas.radNew - 2, 0);
+            if (dist > maxDist && maxDist > 0) {
+                const dir = v2.normalizeSafe(delta, v2.create(1, 0));
+                goal = v2.add(gas.posNew, v2.mul(dir, maxDist));
+                game.map.clampToMapBounds(goal);
+            }
+
+            if (game.map.isOnWater(goal, 0)) {
+                goal = v2.lerp(0.5, goal, game.gas.posNew);
+                game.map.clampToMapBounds(goal);
+            }
+
+            return goal;
+        };
 
         if (!perception.targetId) {
-            combat.setState("wander", timeNow, "no_target");
-            combat.goalPos = undefined;
-            combat.movementStyle = "direct";
-            navigation.ensureWaypoint(game, player);
+            const threat = perception.threat;
+            const idleLoot =
+                !gasEmergency &&
+                !threat.anyHostileVisible &&
+                !threat.hasRecentEnemy &&
+                threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
+                    ? lootScorer.chooseLoot({
+                          game,
+                          player,
+                          mode: "idle",
+                      })
+                    : undefined;
+
+            if (idleLoot) {
+                combat.setState("loot", timeNow, idleLoot.reason);
+                combat.goalPos = sanitizeGoal(idleLoot.pos);
+                combat.movementStyle = "direct";
+                combat.lootTargetId = idleLoot.lootId;
+                combat.lootWeaponSlot = idleLoot.weaponSlot;
+            } else {
+                combat.setState("wander", timeNow, "no_target");
+                combat.goalPos = undefined;
+                combat.movementStyle = "direct";
+                combat.lootTargetId = undefined;
+                combat.lootWeaponSlot = undefined;
+                navigation.ensureWaypoint(game, player);
+            }
 
             if (Config.bots.debugCombat && prevState !== combat.state) {
                 const { gunDef, weaponClass } = weaponLogic.getWeaponInfo(player);
@@ -115,10 +162,6 @@ export class RealisticBotBrain implements BotBrain {
                 const needsReload =
                     player.isReloading() ||
                     (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
-
-                const gas = game.gas;
-                const gasEmergency =
-                    gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
 
                 console.log("[botCombat]", {
                     brainType: this.type,
@@ -165,9 +208,6 @@ export class RealisticBotBrain implements BotBrain {
         const needsReload =
             isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
 
-        const gas = game.gas;
-        const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
-
         let danger = 0;
         if (visible) danger += 0.38;
         danger += clamp01(1 - distToTarget / 20) * 0.22;
@@ -181,6 +221,21 @@ export class RealisticBotBrain implements BotBrain {
             !visible &&
             !!perception.lastSeenPos &&
             timeNow - perception.lastSeenTime <= tuning.chaseTtlSec;
+        const threat = perception.threat;
+        const opportunisticLoot =
+            !visible &&
+            !gasEmergency &&
+            !lowHp &&
+            !needsReload &&
+            !recentlyDamaged &&
+            danger <= BotTuning.loot.opportunisticDangerMax &&
+            threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
+                ? lootScorer.chooseLoot({
+                      game,
+                      player,
+                      mode: "opportunistic",
+                  })
+                : undefined;
 
         type State = typeof combat.state;
 
@@ -224,6 +279,9 @@ export class RealisticBotBrain implements BotBrain {
         } else if ((lowHp || needsReload) && danger >= tuning.highDangerMin) {
             state = "seek_cover";
             reason = "high_danger";
+        } else if (opportunisticLoot) {
+            state = "loot";
+            reason = opportunisticLoot.reason;
         } else if (lastSeenFresh) {
             state = "chase_last_seen";
             reason = "lost_los";
@@ -287,28 +345,6 @@ export class RealisticBotBrain implements BotBrain {
                 weaponClass,
             });
         }
-
-        const sanitizeGoal = (pos: { x: number; y: number }) => {
-            let goal = v2.copy(pos);
-            game.map.clampToMapBounds(goal);
-
-            const gas = game.gas;
-            const delta = v2.sub(goal, gas.posNew);
-            const dist = v2.length(delta);
-            const maxDist = Math.max(gas.radNew - 2, 0);
-            if (dist > maxDist && maxDist > 0) {
-                const dir = v2.normalizeSafe(delta, v2.create(1, 0));
-                goal = v2.add(gas.posNew, v2.mul(dir, maxDist));
-                game.map.clampToMapBounds(goal);
-            }
-
-            if (game.map.isOnWater(goal, 0)) {
-                goal = v2.lerp(0.5, goal, game.gas.posNew);
-                game.map.clampToMapBounds(goal);
-            }
-
-            return goal;
-        };
 
         const rangePoint = (desiredDist: number) => {
             const dirFromTarget = v2.normalizeSafe(
@@ -486,8 +522,21 @@ export class RealisticBotBrain implements BotBrain {
 
         combat.goalPos = undefined;
         combat.movementStyle = "direct";
+        combat.lootTargetId = undefined;
+        combat.lootWeaponSlot = undefined;
 
         switch (state) {
+            case "loot":
+                if (opportunisticLoot) {
+                    combat.goalPos = sanitizeGoal(opportunisticLoot.pos);
+                    combat.movementStyle = "direct";
+                    combat.lootTargetId = opportunisticLoot.lootId;
+                    combat.lootWeaponSlot = opportunisticLoot.weaponSlot;
+                } else {
+                    combat.goalPos = v2.copy(player.pos);
+                    combat.movementStyle = "anchor";
+                }
+                break;
             case "push":
                 combat.goalPos = rangePoint(idealMax);
                 combat.movementStyle = "direct";

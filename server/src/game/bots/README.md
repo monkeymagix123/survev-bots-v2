@@ -83,6 +83,20 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - if `boost < 25`, prefers `painkiller` when “long” boost is safe
     - otherwise prefers `soda` when “quick” boost is safe
 
+## Looting
+- Bots still rely on mobile auto-pickup once they reach loot; Phase 7 adds **explicit nearby loot pathing**.
+- Loot detours are conservative:
+  - when no enemy is active: bots may path to nearby useful loot
+  - when LOS is lost: bots may take a **short** detour if danger is low
+  - bots do **not** abandon visible / close combat to chase loot
+- Priority order for explicit detours:
+  - armor / helmet upgrades
+  - backpack upgrades
+  - meds / boosts when reserves are low
+  - ammo for currently held guns
+  - clearly better guns (including safe fill of an empty gun slot)
+- Gun upgrades are intentionally coarse: bots only chase guns that are meaningfully better than what they already have, and will pre-equip the intended slot before pickup if they plan to replace a weapon.
+
 ## Brains / Difficulty
 - `practice`, `realistic`, and `competitive` share the same perception + aim/shoot systems, but differ in **movement/state selection**:
   - Range slack (how tightly they hold `idealMin..idealMax`)
@@ -92,7 +106,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - Difficulty still affects aim/shoot tuning (reaction time, tracking speed, base aim error, prediction/LOS grace, burst tuning).
 
 ## Known limitations (intentional for now)
-- No explicit looting/pathing toward items (bots only get a starting loadout).
 - Cover is **cover-lite only** (nearby point sampling + LOS check); no peeking, no multi-enemy evaluation, and no full pathfinding yet.
+- Looting is still nearby-only and heuristic-driven; bots do not clear buildings, plan multi-step routes, or manage a full inventory strategy yet.
 - Bots can press reload explicitly when empty and it’s safe/out-of-range, but still rely on standard weapon behavior for most reload timing.
 - No squad coordination or shared targeting.

@@ -6,6 +6,7 @@ import { util } from "../../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../../shared/utils/v2";
 import { Config } from "../../config";
 import type { Game } from "../game";
+import type { Loot } from "../objects/loot";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import { BotCombatMemory } from "./botCombat";
@@ -17,6 +18,7 @@ import { RealisticBotBrain } from "./brains/realisticBotBrain";
 import { BotTuning } from "./botTuning";
 import { LegacyBotController } from "./legacy/legacyBotController";
 import { BotAimController } from "./systems/botAimController";
+import { BotLootScorer } from "./systems/botLootScorer";
 import { BotNavigationLite } from "./systems/botNavigationLite";
 import { BotPerception } from "./systems/botPerception";
 import { BotWeaponLogic } from "./systems/botWeaponLogic";
@@ -30,6 +32,7 @@ export class BotController {
     private readonly _navigation = new BotNavigationLite();
     private readonly _combat = new BotCombatMemory();
     private readonly _aim: BotAimController;
+    private readonly _lootScorer = new BotLootScorer();
     private readonly _weaponLogic: BotWeaponLogic;
     private readonly _brain: BotBrain;
 
@@ -105,6 +108,7 @@ export class BotController {
                 timeNow: this._time,
                 perception: this._perception,
                 navigation: this._navigation,
+                lootScorer: this._lootScorer,
                 combat: this._combat,
                 aim: this._aim,
                 weaponLogic: this._weaponLogic,
@@ -237,6 +241,32 @@ export class BotController {
             moveUp: msg.moveUp,
             moveDown: msg.moveDown,
         });
+
+        const lootObj = this._combat.lootTargetId
+            ? this.game.objectRegister.getById(this._combat.lootTargetId)
+            : undefined;
+        const lootTarget =
+            lootObj &&
+            lootObj.__type === ObjectType.Loot &&
+            !lootObj.destroyed &&
+            util.sameLayer(lootObj.layer, player.layer)
+                ? (lootObj as Loot)
+                : undefined;
+
+        if (!lootTarget) {
+            this._combat.lootTargetId = undefined;
+            this._combat.lootWeaponSlot = undefined;
+        } else if (
+            this._combat.state === "loot" &&
+            this._combat.lootWeaponSlot !== undefined &&
+            player.curWeapIdx !== this._combat.lootWeaponSlot
+        ) {
+            msg.addInput(
+                this._combat.lootWeaponSlot === GameConfig.WeaponSlot.Primary
+                    ? GameConfig.Input.EquipPrimary
+                    : GameConfig.Input.EquipSecondary,
+            );
+        }
 
         // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
         const activeWeapon = player.weapons[player.curWeapIdx];
