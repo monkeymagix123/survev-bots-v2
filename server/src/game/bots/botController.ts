@@ -268,6 +268,15 @@ export class BotController {
             );
         }
 
+        if (
+            this._combat.state === "loot" &&
+            lootTarget &&
+            player.actionType === GameConfig.Action.None &&
+            player.getClosestLoot()?.__id === lootTarget.__id
+        ) {
+            msg.addInput(GameConfig.Input.Loot);
+        }
+
         // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
         const activeWeapon = player.weapons[player.curWeapIdx];
         const ammoType = gunDef?.ammo;
