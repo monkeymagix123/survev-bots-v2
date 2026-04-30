@@ -4,8 +4,9 @@ import type { GunDef } from "../../../../../shared/defs/gameObjects/gunDefs";
 import { math } from "../../../../../shared/utils/math";
 import { type Vec2, v2 } from "../../../../../shared/utils/v2";
 import type { Player } from "../../objects/player";
+import type { BotBrainType } from "../botBrain";
 import type { BotDifficulty } from "../botDifficulty";
-import { SkillProfiles } from "./botSkillProfiles";
+import { getBotSkillProfile } from "../botBrainProfiles";
 
 function wrapAngleRad(rad: number): number {
     return Math.atan2(Math.sin(rad), Math.cos(rad));
@@ -26,7 +27,11 @@ export class BotAimController {
     targetAngleRad = 0;
     focusTime = 0;
 
-    constructor(player: Player, readonly difficulty: BotDifficulty) {
+    constructor(
+        player: Player,
+        readonly difficulty: BotDifficulty,
+        readonly brainType: BotBrainType,
+    ) {
         this.aimAngleRad = Math.atan2(player.dir.y, player.dir.x);
     }
 
@@ -49,7 +54,7 @@ export class BotAimController {
         distToTarget: number;
     } {
         const { player, goal, target, gunDef } = params;
-        const skill = SkillProfiles[this.difficulty];
+        const skill = getBotSkillProfile(this.difficulty, this.brainType);
 
         let aimLen = 0;
         let distToTarget = Infinity;
@@ -93,4 +98,3 @@ export class BotAimController {
         return v2.create(Math.cos(shotAngleRad), Math.sin(shotAngleRad));
     }
 }
-

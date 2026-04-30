@@ -1,4 +1,5 @@
 import type { BotBrainType } from "../botBrain";
+import type { BotBrainProfile } from "../botBrainProfiles";
 import type { BotDifficulty } from "../botDifficulty";
 import type { Game } from "../../game";
 import type { Player } from "../../objects/player";
@@ -10,6 +11,8 @@ import type { BotWeaponLogic } from "../systems/botWeaponLogic";
 import type { BotCombatMemory } from "../botCombat";
 
 export type BotBrainContext = {
+    brainType: BotBrainType;
+    brainProfile: BotBrainProfile;
     game: Game;
     player: Player;
     difficulty: BotDifficulty;

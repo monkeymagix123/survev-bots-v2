@@ -10,38 +10,6 @@ import type { BotBrainType } from "../botBrain";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
 import { BotTuning } from "../botTuning";
 
-type BrainTuning = {
-    rangeSlack: number;
-    retreatDangerMin: number;
-    highDangerMin: number;
-    chaseTtlSec: number;
-    mistakeChance: number;
-};
-
-const BrainTunings: Record<BotBrainType, BrainTuning> = {
-    practice: {
-        rangeSlack: 3,
-        retreatDangerMin: 0.7,
-        highDangerMin: 0.85,
-        chaseTtlSec: 0.8,
-        mistakeChance: 0.1,
-    },
-    realistic: {
-        rangeSlack: 2,
-        retreatDangerMin: 0.55,
-        highDangerMin: 0.75,
-        chaseTtlSec: 1.6,
-        mistakeChance: 0.05,
-    },
-    competitive: {
-        rangeSlack: 1,
-        retreatDangerMin: 0.45,
-        highDangerMin: 0.65,
-        chaseTtlSec: 2.5,
-        mistakeChance: 0.0,
-    },
-};
-
 function clamp01(x: number): number {
     return math.clamp(x, 0, 1);
 }
@@ -58,6 +26,7 @@ export class RealisticBotBrain implements BotBrain {
             game,
             player,
             timeNow,
+            brainProfile,
             perception,
             navigation,
             lootScorer,
@@ -66,7 +35,7 @@ export class RealisticBotBrain implements BotBrain {
             weaponLogic,
         } = ctx;
 
-        const scan = perception.scanForTarget(game, player, timeNow);
+        const scan = perception.scanForTarget(game, player, timeNow, this.type);
 
         const prevTargetId = perception.targetId;
         const prevVisible = perception.targetVisible;
@@ -136,6 +105,7 @@ export class RealisticBotBrain implements BotBrain {
                           game,
                           player,
                           mode: "idle",
+                          brainType: this.type,
                       })
                     : undefined;
 
@@ -184,8 +154,6 @@ export class RealisticBotBrain implements BotBrain {
 
         // ── Combat state selection (movement-only) ──
 
-        const tuning = BrainTunings[this.type];
-
         const target = scan.target!;
         const distToTarget = v2.distance(player.pos, target.pos);
 
@@ -194,7 +162,7 @@ export class RealisticBotBrain implements BotBrain {
         const idealMin = profile?.idealMin ?? 0;
         const idealMax = profile?.idealMax ?? 18;
         const engageMax = profile?.engageMax ?? idealMax;
-        const rangeSlack = tuning.rangeSlack;
+        const rangeSlack = brainProfile.rangeSlack;
 
         const lowHp = player.health < BotTuning.heal.lowHp;
         const recentlyDamaged =
@@ -220,7 +188,7 @@ export class RealisticBotBrain implements BotBrain {
         const lastSeenFresh =
             !visible &&
             !!perception.lastSeenPos &&
-            timeNow - perception.lastSeenTime <= tuning.chaseTtlSec;
+            timeNow - perception.lastSeenTime <= brainProfile.chaseTtlSec;
         const threat = perception.threat;
         const opportunisticLoot =
             !visible &&
@@ -234,6 +202,7 @@ export class RealisticBotBrain implements BotBrain {
                       game,
                       player,
                       mode: "opportunistic",
+                      brainType: this.type,
                   })
                 : undefined;
 
@@ -254,14 +223,14 @@ export class RealisticBotBrain implements BotBrain {
         }
         const damageDodging = timeNow < combat.damageDodgeUntil;
 
-        if (lowHp && danger >= tuning.retreatDangerMin) {
+        if (lowHp && danger >= brainProfile.retreatDangerMin) {
             state = "retreat_heal";
             reason = "low_hp";
-        } else if (needsReload && danger >= tuning.retreatDangerMin) {
+        } else if (needsReload && danger >= brainProfile.retreatDangerMin) {
             state = "retreat_reload";
             reason = "reload_under_threat";
         } else if (needsReload) {
-            if (distToTarget < idealMin - rangeSlack) {
+            if (distToTarget < idealMin - rangeSlack + brainProfile.backOffExtraDist) {
                 state = "back_off";
                 reason = "reload_too_close";
             } else {
@@ -269,14 +238,14 @@ export class RealisticBotBrain implements BotBrain {
                 reason = "reload_hold";
             }
         } else if (damageDodging && !lowHp && !needsReload && !gasEmergency) {
-            if (distToTarget < idealMin - rangeSlack) {
+            if (distToTarget < idealMin - rangeSlack + brainProfile.backOffExtraDist) {
                 state = "back_off";
                 reason = "too_close";
             } else {
                 state = "strafe";
                 reason = "damage_dodge";
             }
-        } else if ((lowHp || needsReload) && danger >= tuning.highDangerMin) {
+        } else if ((lowHp || needsReload) && danger >= brainProfile.highDangerMin) {
             state = "seek_cover";
             reason = "high_danger";
         } else if (opportunisticLoot) {
@@ -285,7 +254,10 @@ export class RealisticBotBrain implements BotBrain {
         } else if (lastSeenFresh) {
             state = "chase_last_seen";
             reason = "lost_los";
-        } else if (distToTarget < idealMin - rangeSlack) {
+        } else if (
+            distToTarget <
+            idealMin - rangeSlack + brainProfile.backOffExtraDist
+        ) {
             state = "back_off";
             reason = "too_close";
         } else if (
@@ -293,7 +265,8 @@ export class RealisticBotBrain implements BotBrain {
             (weaponClass === "ar" || weaponClass === "lmg" || weaponClass === "precision"
                 ? engageMax
                 : idealMax) +
-                rangeSlack
+                rangeSlack +
+                brainProfile.pushExtraDist
         ) {
             state = "push";
             reason = "too_far";
@@ -321,7 +294,10 @@ export class RealisticBotBrain implements BotBrain {
             }
 
             // Practice/realistic can occasionally pick a weaker in-band choice.
-            if (tuning.mistakeChance > 0 && Math.random() < tuning.mistakeChance) {
+            if (
+                brainProfile.mistakeChance > 0 &&
+                Math.random() < brainProfile.mistakeChance
+            ) {
                 state = "hold_range";
                 reason = "mistake_hold_range";
             }
@@ -440,6 +416,8 @@ export class RealisticBotBrain implements BotBrain {
                 if (isCoverPosValid(combat.coverPos)) return combat.coverPos;
             }
 
+            const candidates: Array<{ pos: { x: number; y: number }; score: number }> = [];
+
             const considerCandidate = (candidate: { x: number; y: number }) => {
                 game.map.clampToMapBounds(candidate);
 
@@ -458,7 +436,7 @@ export class RealisticBotBrain implements BotBrain {
 
                 const safeEdgeDist = gas.radNew - 2;
                 const gasPenalty =
-                    Math.max(0, v2.distance(candidate, gas.posNew) - safeEdgeDist) * 10;
+                    Math.max(0, v2.distance(candidate, gas.posNew) - safeEdgeDist);
 
                 const reachable = segmentHasLineOfSight(
                     player.pos,
@@ -466,27 +444,25 @@ export class RealisticBotBrain implements BotBrain {
                     0.0,
                     false,
                 );
-                const reachPenalty = reachable ? 0 : 200;
+                const reachPenalty = reachable ? 0 : brainProfile.coverReachPenalty;
 
                 const score =
                     1000 -
-                    distFromBot * 2 +
-                    distFromEnemy * 0.5 -
-                    gasPenalty -
+                    distFromBot * brainProfile.coverBotDistWeight +
+                    distFromEnemy * brainProfile.coverEnemyDistWeight -
+                    gasPenalty * brainProfile.coverGasPenalty -
                     reachPenalty;
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestPos = v2.copy(candidate);
-                }
+                candidates.push({ pos: v2.copy(candidate), score });
             };
 
-            let bestPos: { x: number; y: number } | undefined;
-            let bestScore = -Infinity;
-
-            const sampleCount = util.randomInt(12, 16);
-            const ringCount = Math.max(1, Math.floor(sampleCount * 0.4));
-            const randomCount = sampleCount - ringCount;
+            const ringCount = util.randomInt(
+                brainProfile.coverRingSamplesMin,
+                brainProfile.coverRingSamplesMax,
+            );
+            const randomCount = util.randomInt(
+                brainProfile.coverRandomSamplesMin,
+                brainProfile.coverRandomSamplesMax,
+            );
 
             const away = v2.normalizeSafe(
                 v2.sub(player.pos, target.pos),
@@ -508,12 +484,26 @@ export class RealisticBotBrain implements BotBrain {
                 considerCandidate(v2.add(player.pos, v2.mul(dir, radius)));
             }
 
+            candidates.sort((a, b) => b.score - a.score);
+
             combat.coverTargetId = targetId;
             combat.coverUntil = timeNow + util.random(0.75, 1.5);
 
-            if (bestPos) {
-                combat.coverPos = bestPos;
-                return bestPos;
+            if (candidates.length > 0) {
+                if (Math.random() < brainProfile.coverFallbackChance) {
+                    combat.coverPos = undefined;
+                    return undefined;
+                }
+
+                const choiceIdx =
+                    candidates.length > 1 &&
+                    brainProfile.coverImperfectChoiceChance > 0 &&
+                    Math.random() < brainProfile.coverImperfectChoiceChance
+                        ? 1
+                        : 0;
+
+                combat.coverPos = candidates[choiceIdx].pos;
+                return combat.coverPos;
             }
 
             combat.coverPos = undefined;

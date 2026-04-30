@@ -29,6 +29,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - Same `groupId` (duos/squads).
   - Same `teamId` in faction mode (Wave counts as faction teams).
 - Chooses the **nearest visible (LOS)** enemy if one exists; otherwise the nearest enemy even if currently not visible.
+- `competitive` bots upgrade this slightly: they still prefer visible nearby enemies, but also bias toward low-health / reloading targets and keep a bit more target stickiness.
 - Tracks `lastSeenPos/lastSeenTime` when a target is visible, used for short “chase last seen” behavior after LOS is lost.
 - If `Config.bots.allowBotVsBot` is `false`, bots will not target other bots (`isAi` or external `joinMsg.bot`).
 
@@ -55,9 +56,14 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - `seek_cover`: same cover-lite selection, but is intentionally rare (only considered at high danger when low HP or needing reload).
 - When no target: roam to a random waypoint inside the safe zone (5–10s TTL), avoiding water.
 - Movement inputs are still “grid-like” (up/down/left/right), with one-hop detours only (no A* / interior solver).
+- Cover quality now varies by brain type: `practice` samples less and falls back more often, `realistic` is imperfect on purpose, and `competitive` gets the strongest cover-lite scoring.
 
 ## Aim + Shooting
-- Aim updates are smoothed (deg/sec depends on difficulty) and can include simple lead prediction based on bullet speed.
+- Aim updates are smoothed and can include simple lead prediction based on bullet speed.
+- Mechanical aim still starts from `difficulty`, but `brainType` now layers on modifiers too:
+  - `practice`: slower reaction/tracking, more error, weaker lead
+  - `realistic`: close to the base difficulty, with a little human-like delay/imprecision
+  - `competitive`: slightly faster/tighter than the same base difficulty alone
 - Shooting is gated by:
   - Reaction time after target acquisition.
   - Aim error threshold (`aimGateDeg`) and distance thresholds (`engageMax` / `idealMin` / `idealMax`) by weapon class.
@@ -90,6 +96,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - when no enemy is active: bots may path to nearby useful loot
   - when LOS is lost: bots may take a **short** detour if danger is low
   - bots do **not** abandon visible / close combat to chase loot
+- Brain type now affects loot willingness too: `practice` takes the shortest/simplest loot detours, `realistic` uses the baseline behavior, and `competitive` is a bit less willing to drift for loot during combat-adjacent situations.
 - Priority order for explicit detours:
   - armor / helmet upgrades
   - backpack upgrades
@@ -99,12 +106,19 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - Gun upgrades are intentionally coarse: bots only chase guns that are meaningfully better than what they already have, and will pre-equip the intended slot before pickup if they plan to replace a weapon.
 
 ## Brains / Difficulty
-- `practice`, `realistic`, and `competitive` share the same perception + aim/shoot systems, but differ in **movement/state selection**:
-  - Range slack (how tightly they hold `idealMin..idealMax`)
-  - Danger thresholds (when to retreat for heal/reload)
-  - Chase TTL after LOS loss
-  - Random “mistakes” (practice/realistic only)
-- Difficulty still affects aim/shoot tuning (reaction time, tracking speed, base aim error, prediction/LOS grace, burst tuning).
+- `difficulty` is still the **base mechanical skill** layer: reaction time, tracking speed, base aim error, prediction/LOS grace, and burst tuning.
+- `brainType` is now a second-layer **behavior/personality overlay**:
+  - decision delay / responsiveness,
+  - target selection style,
+  - range control / aggression,
+  - cover-lite quality,
+  - heal/reload/boost discipline,
+  - loot willingness,
+  - and small aim-skill modifiers on top of the base difficulty.
+- Practical feel:
+  - `practice`: slower, weaker, simpler, and less disciplined
+  - `realistic`: lobby-sim baseline with small delays and occasional state-choice mistakes
+  - `competitive`: fastest and most disciplined within the current lightweight systems
 
 ## Known limitations (intentional for now)
 - Cover is **cover-lite only** (nearby point sampling + LOS check); no peeking, no multi-enemy evaluation, and no full pathfinding yet.

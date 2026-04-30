@@ -30,6 +30,7 @@ Last updated: 2026-04-28
 - Phase 5: extracted common bot thresholds/durations into `BotTuning` (`server/src/game/bots/botTuning.ts`).
 - Phase 6: added lightweight anti-stuck navigation (blocked-goal raycasts, short detour waypoints, failed-waypoint memory, and safe fallback recovery that still respects auto-open doors).
 - Phase 7: added conservative explicit looting (nearby safe-ish detours for armor/backpack/meds/ammo/clear gun upgrades, while keeping combat priority and relying on mobile auto-pickup once in range).
+- Phase 8: made `practice` / `realistic` / `competitive` meaningfully distinct across decision timing, target choice, cover-lite quality, range control, loot willingness, item discipline, and aim-skill modifiers layered on top of base difficulty.
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress

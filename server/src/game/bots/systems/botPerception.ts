@@ -7,6 +7,8 @@ import { type Vec2, v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { Game } from "../../game";
 import type { Player } from "../../objects/player";
+import type { BotBrainType } from "../botBrain";
+import { getBotBrainProfile } from "../botBrainProfiles";
 
 export type BotThreatSnapshot = {
     /**
@@ -98,7 +100,9 @@ export class BotPerception {
         game: Game,
         player: Player,
         timeNow: number,
+        brainType: BotBrainType,
     ): { target?: Player; visible: boolean } {
+        const profile = getBotBrainProfile(brainType);
         const vision = player.zoom + 6;
         const visionSqr = vision * vision;
         const rect = coldet.circleToAabb(player.pos, vision);
@@ -108,9 +112,11 @@ export class BotPerception {
 
         let bestVisible: Player | undefined;
         let bestVisibleDist = Number.MAX_VALUE;
+        let bestVisibleScore = -Infinity;
 
         let bestAny: Player | undefined;
         let bestAnyDist = Number.MAX_VALUE;
+        let bestAnyScore = -Infinity;
 
         let nearbyHostileCount = 0;
         let anyHostileVisible = false;
@@ -160,11 +166,46 @@ export class BotPerception {
                 bestAny = other;
             }
 
-            if (distSqr >= bestVisibleDist) continue;
+            if (profile.targetSelection === "threat_score") {
+                const anyScore = this._scoreTargetChoice(
+                    player,
+                    other,
+                    false,
+                    distSqr,
+                    profile,
+                );
+                if (anyScore > bestAnyScore) {
+                    bestAnyScore = anyScore;
+                    bestAnyDist = distSqr;
+                    bestAny = other;
+                }
+            }
+
+            if (profile.targetSelection !== "threat_score" && distSqr >= bestVisibleDist) {
+                continue;
+            }
             const hasLos = this._hasLineOfSight(game, player, other);
             if (!hasLos) continue;
-            bestVisibleDist = distSqr;
-            bestVisible = other;
+            if (profile.targetSelection === "threat_score") {
+                const visibleScore = this._scoreTargetChoice(
+                    player,
+                    other,
+                    true,
+                    distSqr,
+                    profile,
+                );
+                if (
+                    visibleScore > bestVisibleScore ||
+                    (visibleScore === bestVisibleScore && distSqr < bestVisibleDist)
+                ) {
+                    bestVisibleScore = visibleScore;
+                    bestVisibleDist = distSqr;
+                    bestVisible = other;
+                }
+            } else {
+                bestVisibleDist = distSqr;
+                bestVisible = other;
+            }
             if (nearby) anyHostileVisible = true;
         }
 
@@ -216,5 +257,24 @@ export class BotPerception {
         );
 
         return dist >= len - 0.05;
+    }
+
+    private _scoreTargetChoice(
+        player: Player,
+        target: Player,
+        visible: boolean,
+        distSqr: number,
+        profile: ReturnType<typeof getBotBrainProfile>,
+    ): number {
+        const dist = Math.sqrt(distSqr);
+        let score = -dist * 1.6;
+
+        if (visible) score += profile.targetVisibleBonus;
+        if (dist <= player.zoom + 6) score += 10;
+        if (target.__id === this.targetId) score += profile.targetStickinessBonus;
+        score += Math.max(0, 100 - target.health) * profile.targetLowHealthWeight;
+        if (target.isReloading()) score += profile.targetReloadBonus;
+
+        return score;
     }
 }

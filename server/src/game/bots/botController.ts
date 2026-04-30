@@ -9,6 +9,11 @@ import type { Game } from "../game";
 import type { Loot } from "../objects/loot";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
+import {
+    getBotBrainProfile,
+    getDecisionDelaySec,
+    type BotBrainProfile,
+} from "./botBrainProfiles";
 import { BotCombatMemory } from "./botCombat";
 import type { BotDifficulty } from "./botDifficulty";
 import type { BotBrain } from "./brains/botBrainLogic";
@@ -27,6 +32,7 @@ export class BotController {
     private _time = 0;
     private _seq = 0;
     private _decisionTicker = 0;
+    private _nextDecisionDelaySec = 0;
 
     private readonly _perception = new BotPerception();
     private readonly _navigation = new BotNavigationLite();
@@ -35,6 +41,7 @@ export class BotController {
     private readonly _lootScorer = new BotLootScorer();
     private readonly _weaponLogic: BotWeaponLogic;
     private readonly _brain: BotBrain;
+    private readonly _brainProfile: BotBrainProfile;
 
     // TEMP (Phase 1 parity verification)
     private readonly _legacy?: LegacyBotController;
@@ -52,9 +59,11 @@ export class BotController {
     ) {
         this._lastPos = v2.copy(player.pos);
         this._lastHealth = player.health;
-        this._aim = new BotAimController(player, difficulty);
-        this._weaponLogic = new BotWeaponLogic(difficulty);
+        this._brainProfile = getBotBrainProfile(brainType);
+        this._aim = new BotAimController(player, difficulty, brainType);
+        this._weaponLogic = new BotWeaponLogic(difficulty, brainType);
         this._brain = this._createBrain(brainType);
+        this._nextDecisionDelaySec = getDecisionDelaySec(brainType);
 
         if (Config.bots.debugParity) {
             this._legacy = new LegacyBotController(game, player, difficulty);
@@ -99,9 +108,12 @@ export class BotController {
 
         const decisionInterval = 1 / math.max(Config.bots.decisionTps, 1);
         this._decisionTicker += dt;
-        if (this._decisionTicker >= decisionInterval) {
-            this._decisionTicker %= decisionInterval;
+        if (this._decisionTicker >= decisionInterval + this._nextDecisionDelaySec) {
+            this._decisionTicker = 0;
+            this._nextDecisionDelaySec = getDecisionDelaySec(this.brainType);
             this._brain.decide({
+                brainType: this.brainType,
+                brainProfile: this._brainProfile,
                 game: this.game,
                 player: this.player,
                 difficulty: this.difficulty,
@@ -317,14 +329,19 @@ export class BotController {
             const remaining = Math.max(player.action.duration - player.action.time, 0);
             const finishWindow =
                 player.actionItem === "bandage"
-                    ? BotTuning.itemCancel.bandageFinishWindowSec
-                    : BotTuning.itemCancel.healthkitFinishWindowSec;
+                    ? BotTuning.itemCancel.bandageFinishWindowSec *
+                      this._brainProfile.healCancelBandageFinishScale
+                    : BotTuning.itemCancel.healthkitFinishWindowSec *
+                      this._brainProfile.healCancelHealthkitFinishScale;
             const almostDone = remaining <= finishWindow;
             const shouldCancelHeal =
                 !almostDone &&
                 (threat.anyHostileVisible ||
                     enemyVeryClose ||
-                    (danger >= BotTuning.danger.healCancelMin && enemyClose));
+                    (danger >=
+                        BotTuning.danger.healCancelMin *
+                            this._brainProfile.healCancelDangerScale &&
+                        enemyClose));
 
             if (shouldCancelHeal) {
                 msg.addInput(GameConfig.Input.Cancel);
@@ -340,9 +357,10 @@ export class BotController {
             const outOfEngage = !!profile && aimUpdate.distToTarget > profile.engageMax;
             if (
                 this._combat.state === "retreat_reload" ||
-                !validTarget ||
-                this._perception.targetVisible === false ||
-                outOfEngage
+                ((!validTarget ||
+                    this._perception.targetVisible === false ||
+                    outOfEngage) &&
+                    danger <= this._brainProfile.reloadDangerMax)
             ) {
                 msg.addInput(GameConfig.Input.Reload);
             }
@@ -358,14 +376,16 @@ export class BotController {
 
             const safeToHealNormally =
                 !threat.anyHostileVisible &&
-                danger < BotTuning.danger.healMax &&
+                danger < BotTuning.danger.healMax * this._brainProfile.healDangerScale &&
                 !recentlyDamaged &&
                 !enemyClose;
 
             const safeToHealWhileRetreating =
                 inRetreatState &&
                 !threat.anyHostileVisible &&
-                danger < BotTuning.danger.retreatHealMax &&
+                danger <
+                    BotTuning.danger.retreatHealMax *
+                        this._brainProfile.retreatHealDangerScale &&
                 !recentlyDamaged &&
                 !enemyVeryClose;
 
@@ -395,13 +415,17 @@ export class BotController {
             else if (wantsBoost) {
                 const safeToBoostQuick =
                     !threat.anyHostileVisible &&
-                    danger < BotTuning.danger.boostQuickMax &&
+                    danger <
+                        BotTuning.danger.boostQuickMax *
+                            this._brainProfile.boostQuickDangerScale &&
                     !recentlyDamaged &&
                     !enemyVeryClose;
 
                 const safeToBoostLong =
                     !threat.anyHostileVisible &&
-                    danger < BotTuning.danger.boostLongMax &&
+                    danger <
+                        BotTuning.danger.boostLongMax *
+                            this._brainProfile.boostLongDangerScale &&
                     !recentlyDamaged &&
                     !enemyClose;
 

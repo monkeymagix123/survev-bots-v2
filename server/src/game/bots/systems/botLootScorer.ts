@@ -16,6 +16,8 @@ import { type Vec2, v2 } from "../../../../../shared/utils/v2";
 import type { Game } from "../../game";
 import type { Loot } from "../../objects/loot";
 import type { Player } from "../../objects/player";
+import type { BotBrainType } from "../botBrain";
+import { getBotBrainProfile } from "../botBrainProfiles";
 import { BotTuning } from "../botTuning";
 import { classifyWeapon } from "./botWeaponProfiles";
 
@@ -40,12 +42,11 @@ export class BotLootScorer {
         game: Game;
         player: Player;
         mode: BotLootMode;
+        brainType: BotBrainType;
     }): BotLootChoice | undefined {
-        const { game, player, mode } = params;
-        const maxDist =
-            mode === "idle"
-                ? BotTuning.loot.idleSearchDist
-                : BotTuning.loot.opportunisticSearchDist;
+        const { game, player, mode, brainType } = params;
+        const profile = getBotBrainProfile(brainType);
+        const maxDist = this._getSearchDistance(mode, profile);
         const nearby = game.grid.intersectCollider(
             collider.createCircle(player.pos, maxDist + 1.5),
         );
@@ -80,6 +81,21 @@ export class BotLootScorer {
         }
 
         return best;
+    }
+
+    private _getSearchDistance(
+        mode: BotLootMode,
+        profile: ReturnType<typeof getBotBrainProfile>,
+    ): number {
+        switch (mode) {
+            case "idle":
+                return BotTuning.loot.idleSearchDist * profile.lootIdleDistScale;
+            case "opportunistic":
+                return (
+                    BotTuning.loot.opportunisticSearchDist *
+                    profile.lootOpportunisticDistScale
+                );
+        }
     }
 
     private _scoreLoot(player: Player, loot: Loot, dist: number): LootScore | undefined {

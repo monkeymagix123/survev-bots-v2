@@ -6,8 +6,9 @@ import { math } from "../../../../../shared/utils/math";
 import { util } from "../../../../../shared/utils/util";
 import { Config } from "../../../config";
 import type { Player } from "../../objects/player";
+import type { BotBrainType } from "../botBrain";
 import type { BotDifficulty } from "../botDifficulty";
-import { SkillProfiles } from "./botSkillProfiles";
+import { getBotBrainProfile, getBotSkillProfile } from "../botBrainProfiles";
 import {
     type WeaponClass,
     type WeaponProfile,
@@ -27,15 +28,22 @@ function randomNormal(mean: number, stdDev: number): number {
     return mean + z * stdDev;
 }
 
-function movingAimPenaltyDeg(difficulty: BotDifficulty): number {
+function movingAimPenaltyDeg(difficulty: BotDifficulty, brainType: BotBrainType): number {
+    const profile = getBotBrainProfile(brainType);
+    let penalty: number;
     switch (difficulty) {
         case "normal":
-            return 1.5;
+            penalty = 1.5;
+            break;
         case "hard":
-            return 0.9;
+            penalty = 0.9;
+            break;
         case "pro":
-            return 0.4;
+            penalty = 0.4;
+            break;
     }
+
+    return penalty * profile.skill.movingAimPenaltyScale;
 }
 
 export class BotWeaponLogic {
@@ -47,7 +55,10 @@ export class BotWeaponLogic {
     lostLosTime = -Infinity;
     private _lastVisible = false;
 
-    constructor(readonly difficulty: BotDifficulty) {}
+    constructor(
+        readonly difficulty: BotDifficulty,
+        readonly brainType: BotBrainType,
+    ) {}
 
     getWeaponInfo(player: Player): {
         gunDef?: GunDef;
@@ -62,7 +73,7 @@ export class BotWeaponLogic {
     }
 
     onTargetChanged(timeNow: number, visibleNow: boolean): void {
-        const skill = SkillProfiles[this.difficulty];
+        const skill = getBotSkillProfile(this.difficulty, this.brainType);
         this.nextShootTime = timeNow + util.random(skill.reactionMinSec, skill.reactionMaxSec);
         this.burstHoldT = 0;
         this.burstPauseT = 0;
@@ -159,7 +170,7 @@ export class BotWeaponLogic {
             return false;
         }
 
-        const skill = SkillProfiles[this.difficulty];
+        const skill = getBotSkillProfile(this.difficulty, this.brainType);
 
         const inRange = distToTarget <= profile.engageMax;
         const reactionReady = timeNow >= this.nextShootTime;
@@ -283,11 +294,11 @@ export class BotWeaponLogic {
         const { willShootThisTick, profile, weaponClass, movingThisTick } = params;
         if (!willShootThisTick || !profile) return 0;
 
-        const skill = SkillProfiles[this.difficulty];
+        const skill = getBotSkillProfile(this.difficulty, this.brainType);
         let spreadDeg = skill.baseAimErrorDeg + this.bloomDeg;
 
         if (movingThisTick) {
-            let movePenalty = movingAimPenaltyDeg(this.difficulty);
+            let movePenalty = movingAimPenaltyDeg(this.difficulty, this.brainType);
             if (weaponClass === "precision") {
                 movePenalty *= 0.5;
             }
@@ -341,4 +352,3 @@ export class BotWeaponLogic {
         );
     }
 }
-
