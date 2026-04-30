@@ -273,11 +273,17 @@ export class BotController {
             this._combat.lootWeaponSlot !== undefined &&
             player.curWeapIdx !== this._combat.lootWeaponSlot
         ) {
-            msg.addInput(
-                this._combat.lootWeaponSlot === GameConfig.WeaponSlot.Primary
-                    ? GameConfig.Input.EquipPrimary
-                    : GameConfig.Input.EquipSecondary,
-            );
+            let equipInput: number;
+            switch (this._combat.lootWeaponSlot) {
+                case GameConfig.WeaponSlot.Primary:
+                    equipInput = GameConfig.Input.EquipPrimary;
+                    break;
+                case GameConfig.WeaponSlot.Secondary:
+                default:
+                    equipInput = GameConfig.Input.EquipSecondary;
+                    break;
+            }
+            msg.addInput(equipInput);
         }
 
         if (
@@ -327,12 +333,20 @@ export class BotController {
             (player.actionItem === "bandage" || player.actionItem === "healthkit")
         ) {
             const remaining = Math.max(player.action.duration - player.action.time, 0);
-            const finishWindow =
-                player.actionItem === "bandage"
-                    ? BotTuning.itemCancel.bandageFinishWindowSec *
-                      this._brainProfile.healCancelBandageFinishScale
-                    : BotTuning.itemCancel.healthkitFinishWindowSec *
-                      this._brainProfile.healCancelHealthkitFinishScale;
+            let finishWindow: number;
+            switch (player.actionItem) {
+                case "bandage":
+                    finishWindow =
+                        BotTuning.itemCancel.bandageFinishWindowSec *
+                        this._brainProfile.healCancelBandageFinishScale;
+                    break;
+                case "healthkit":
+                default:
+                    finishWindow =
+                        BotTuning.itemCancel.healthkitFinishWindowSec *
+                        this._brainProfile.healCancelHealthkitFinishScale;
+                    break;
+            }
             const almostDone = remaining <= finishWindow;
             const shouldCancelHeal =
                 !almostDone &&
