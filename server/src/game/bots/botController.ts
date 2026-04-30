@@ -356,13 +356,20 @@ export class BotController {
                 this._combat.state === "retreat_heal" ||
                 this._combat.state === "seek_cover";
 
-            // ── Healing safety (less strict than before) ──
-            const safeToHeal =
-                inRetreatState ||
-                (!threat.anyHostileVisible &&
-                    danger < BotTuning.danger.healMax &&
-                    !recentlyDamaged &&
-                    !enemyClose);
+            const safeToHealNormally =
+                !threat.anyHostileVisible &&
+                danger < BotTuning.danger.healMax &&
+                !recentlyDamaged &&
+                !enemyClose;
+
+            const safeToHealWhileRetreating =
+                inRetreatState &&
+                !threat.anyHostileVisible &&
+                danger < BotTuning.danger.retreatHealMax &&
+                !recentlyDamaged &&
+                !enemyVeryClose;
+
+            const safeToHeal = safeToHealNormally || safeToHealWhileRetreating;
 
             // ── Healing logic ──
             if (lowHp) {

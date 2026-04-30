@@ -72,8 +72,8 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 ## Item usage
 - If not busy with another action:
   - Heal when `health < 60` and it’s **safe to heal**:
-    - always allowed during retreat-like states (`retreat_heal` / `seek_cover`)
-    - otherwise: no hostile currently visible (LOS), not recently damaged, no nearby hostile within ~10 units, and `danger < 0.35` (see `BotTuning`)
+    - normal heal gate: no hostile currently visible (LOS), not recently damaged, no nearby hostile within ~10 units, and `danger < 0.35` (see `BotTuning`)
+    - retreat-like states (`retreat_heal` / `seek_cover`) are only a relaxed gate, not automatic safety: still requires no hostile currently visible, not recently damaged, no very close hostile within ~6 units, and `danger < 0.45`
     - if healing has already started and a hostile becomes visible / very close, bots will usually cancel the heal; if the item is almost finished, they try to keep moving toward safety and let it complete
     - item preference:
       - `health < 35`: `healthkit` > `bandage`

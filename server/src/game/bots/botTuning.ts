@@ -9,6 +9,7 @@ export const BotTuning = {
     },
     danger: {
         healMax: 0.35,
+        retreatHealMax: 0.45,
         healCancelMin: 0.55,
         boostQuickMax: 0.5,
         boostLongMax: 0.3,
