@@ -281,6 +281,56 @@ export class BotController {
         const activeWeapon = player.weapons[player.curWeapIdx];
         const ammoType = gunDef?.ammo;
         const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+        const lowHp = player.health < BotTuning.heal.lowHp;
+        const veryLowHp = player.health < BotTuning.heal.veryLowHp;
+        const wantsBoost = player.boost < BotTuning.boost.threshold;
+        const veryLowBoost = player.boost < BotTuning.boost.veryLowBoost;
+
+        const recentlyDamaged =
+            this._time - this._combat.lastDamagedTime <
+            BotTuning.combat.recentlyDamagedWindowSec;
+
+        const isReloading = player.isReloading();
+        const needsReload =
+            isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
+
+        let danger = 0;
+        if (validTarget && this._perception.targetVisible) danger += 0.38;
+        if (validTarget) {
+            danger += math.clamp(1 - aimUpdate.distToTarget / 20, 0, 1) * 0.22;
+        }
+        if (lowHp) danger += 0.22;
+        if (needsReload) danger += isReloading ? 0.18 : 0.14;
+        if (recentlyDamaged) danger += 0.12;
+        if (gasEmergency) danger += 0.25;
+        danger = math.clamp(danger, 0, 1);
+
+        const threat = this._perception.threat;
+        const enemyDist = threat.nearestNearbyHostileDist;
+        const enemyVeryClose = enemyDist < BotTuning.combat.enemyVeryCloseDist;
+        const enemyClose = enemyDist < BotTuning.combat.enemyCloseDist;
+
+        if (
+            player.actionType === GameConfig.Action.UseItem &&
+            (player.actionItem === "bandage" || player.actionItem === "healthkit")
+        ) {
+            const remaining = Math.max(player.action.duration - player.action.time, 0);
+            const finishWindow =
+                player.actionItem === "bandage"
+                    ? BotTuning.itemCancel.bandageFinishWindowSec
+                    : BotTuning.itemCancel.healthkitFinishWindowSec;
+            const almostDone = remaining <= finishWindow;
+            const shouldCancelHeal =
+                !almostDone &&
+                (threat.anyHostileVisible ||
+                    enemyVeryClose ||
+                    (danger >= BotTuning.danger.healCancelMin && enemyClose));
+
+            if (shouldCancelHeal) {
+                msg.addInput(GameConfig.Input.Cancel);
+            }
+        }
+
         const wantsReload =
             !!gunDef &&
             player.actionType === GameConfig.Action.None &&
@@ -302,37 +352,6 @@ export class BotController {
         msg.useItem = "";
 
         if (!player.downed && player.actionType === GameConfig.Action.None) {
-            const lowHp = player.health < BotTuning.heal.lowHp;
-            const veryLowHp = player.health < BotTuning.heal.veryLowHp;
-            const wantsBoost = player.boost < BotTuning.boost.threshold;
-            const veryLowBoost = player.boost < BotTuning.boost.veryLowBoost;
-
-            const recentlyDamaged =
-                this._time - this._combat.lastDamagedTime <
-                BotTuning.combat.recentlyDamagedWindowSec;
-
-            const isReloading = player.isReloading();
-            const needsReload =
-                isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
-
-            // ── Danger (same as before, OK) ──
-            let danger = 0;
-            if (validTarget && this._perception.targetVisible) danger += 0.38;
-            if (validTarget) {
-                danger += math.clamp(1 - aimUpdate.distToTarget / 20, 0, 1) * 0.22;
-            }
-            if (lowHp) danger += 0.22;
-            if (needsReload) danger += isReloading ? 0.18 : 0.14;
-            if (recentlyDamaged) danger += 0.12;
-            if (gasEmergency) danger += 0.25;
-            danger = math.clamp(danger, 0, 1);
-
-            const threat = this._perception.threat;
-
-            const enemyDist = threat.nearestNearbyHostileDist;
-            const enemyVeryClose = enemyDist < BotTuning.combat.enemyVeryCloseDist;
-            const enemyClose = enemyDist < BotTuning.combat.enemyCloseDist;
-
             const inRetreatState =
                 this._combat.state === "retreat_heal" ||
                 this._combat.state === "seek_cover";

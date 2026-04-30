@@ -9,6 +9,7 @@ export const BotTuning = {
     },
     danger: {
         healMax: 0.35,
+        healCancelMin: 0.55,
         boostQuickMax: 0.5,
         boostLongMax: 0.3,
     },
@@ -42,5 +43,9 @@ export const BotTuning = {
         opportunisticSearchDist: 7.5,
         opportunisticDangerMax: 0.32,
         weaponUpgradeMinScore: 7,
+    },
+    itemCancel: {
+        bandageFinishWindowSec: 0.6,
+        healthkitFinishWindowSec: 0.9,
     },
 } as const;
