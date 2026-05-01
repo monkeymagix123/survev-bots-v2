@@ -163,6 +163,7 @@ export class RealisticBotBrain implements BotBrain {
         const idealMax = profile?.idealMax ?? 18;
         const engageMax = profile?.engageMax ?? idealMax;
         const rangeSlack = brainProfile.rangeSlack;
+        const rangeHysteresis = BotTuning.combat.stateHysteresisDist;
 
         const lowHp = player.health < BotTuning.heal.lowHp;
         const recentlyDamaged =
@@ -222,6 +223,22 @@ export class RealisticBotBrain implements BotBrain {
             }
         }
         const damageDodging = timeNow < combat.damageDodgeUntil;
+        const backOffThreshold =
+            idealMin - rangeSlack + brainProfile.backOffExtraDist;
+        const pushThreshold =
+            (weaponClass === "ar" || weaponClass === "lmg" || weaponClass === "precision"
+                ? engageMax
+                : idealMax) +
+            rangeSlack +
+            brainProfile.pushExtraDist;
+        const shouldBackOff =
+            distToTarget <
+            backOffThreshold +
+                (prevState === "back_off" ? rangeHysteresis : 0);
+        const shouldPush =
+            distToTarget >
+            pushThreshold -
+                (prevState === "push" ? rangeHysteresis : 0);
 
         if (lowHp && danger >= brainProfile.retreatDangerMin) {
             state = "retreat_heal";
@@ -230,7 +247,7 @@ export class RealisticBotBrain implements BotBrain {
             state = "retreat_reload";
             reason = "reload_under_threat";
         } else if (needsReload) {
-            if (distToTarget < idealMin - rangeSlack + brainProfile.backOffExtraDist) {
+            if (shouldBackOff) {
                 state = "back_off";
                 reason = "reload_too_close";
             } else {
@@ -238,7 +255,7 @@ export class RealisticBotBrain implements BotBrain {
                 reason = "reload_hold";
             }
         } else if (damageDodging && !lowHp && !needsReload && !gasEmergency) {
-            if (distToTarget < idealMin - rangeSlack + brainProfile.backOffExtraDist) {
+            if (shouldBackOff) {
                 state = "back_off";
                 reason = "too_close";
             } else {
@@ -254,20 +271,10 @@ export class RealisticBotBrain implements BotBrain {
         } else if (lastSeenFresh) {
             state = "chase_last_seen";
             reason = "lost_los";
-        } else if (
-            distToTarget <
-            idealMin - rangeSlack + brainProfile.backOffExtraDist
-        ) {
+        } else if (shouldBackOff) {
             state = "back_off";
             reason = "too_close";
-        } else if (
-            distToTarget >
-            (weaponClass === "ar" || weaponClass === "lmg" || weaponClass === "precision"
-                ? engageMax
-                : idealMax) +
-                rangeSlack +
-                brainProfile.pushExtraDist
-        ) {
+        } else if (shouldPush) {
             state = "push";
             reason = "too_far";
         } else {
@@ -303,8 +310,70 @@ export class RealisticBotBrain implements BotBrain {
             }
         }
 
+        const retreatState =
+            state === "seek_cover" ||
+            state === "retreat_reload" ||
+            state === "retreat_heal";
+        const prevRetreatState =
+            prevState === "seek_cover" ||
+            prevState === "retreat_reload" ||
+            prevState === "retreat_heal";
+        const stateLocked = timeNow < combat.stateLockUntil;
+
+        if (stateLocked) {
+            if (
+                prevRetreatState &&
+                !retreatState &&
+                !gasEmergency &&
+                perception.targetId !== undefined
+            ) {
+                state = prevState;
+                reason = combat.stateReason;
+            } else if (
+                prevState === "chase_last_seen" &&
+                !visible &&
+                state !== "loot" &&
+                !retreatState
+            ) {
+                state = prevState;
+                reason = combat.stateReason;
+            } else if (
+                prevState === "loot" &&
+                !visible &&
+                !threat.anyHostileVisible &&
+                combat.lootTargetId !== undefined &&
+                state !== "seek_cover" &&
+                state !== "retreat_reload" &&
+                state !== "retreat_heal"
+            ) {
+                state = prevState;
+                reason = combat.stateReason;
+            }
+        }
+
         const stateChanged = prevState !== state;
         combat.setState(state, timeNow, reason);
+        if (stateChanged) {
+            switch (state) {
+                case "seek_cover":
+                case "retreat_reload":
+                case "retreat_heal":
+                    combat.stateLockUntil =
+                        timeNow + BotTuning.combat.retreatStateCommitSec;
+                    break;
+                case "chase_last_seen":
+                    combat.stateLockUntil =
+                        timeNow + BotTuning.combat.chaseStateCommitSec;
+                    break;
+                case "loot":
+                    combat.stateLockUntil =
+                        timeNow + BotTuning.combat.lootStateCommitSec;
+                    break;
+                default:
+                    combat.stateLockUntil = timeNow;
+                    break;
+            }
+        }
 
         if (Config.bots.debugCombat && stateChanged) {
             console.log("[botCombat]", {

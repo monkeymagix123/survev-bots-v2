@@ -17,6 +17,10 @@ export const BotTuning = {
     combat: {
         recentlyDamagedWindowSec: 0.45,
         damageDodgeDurationSec: 0.35,
+        stateHysteresisDist: 1.25,
+        retreatStateCommitSec: 0.55,
+        chaseStateCommitSec: 0.45,
+        lootStateCommitSec: 0.6,
         strafeFlipSecMin: 0.25,
         strafeFlipSecMax: 0.6,
         strafeEnableMaxDist: 18,

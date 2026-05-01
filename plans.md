@@ -31,6 +31,7 @@ Last updated: 2026-04-28
 - Phase 6: added lightweight anti-stuck navigation (blocked-goal raycasts, short detour waypoints, failed-waypoint memory, and safe fallback recovery that still respects auto-open doors).
 - Phase 7: added conservative explicit looting (nearby safe-ish detours for armor/backpack/meds/ammo/clear gun upgrades, while keeping combat priority and relying on mobile auto-pickup once in range).
 - Phase 8: made `practice` / `realistic` / `competitive` meaningfully distinct across decision timing, target choice, cover-lite quality, range control, loot willingness, item discipline, and aim-skill modifiers layered on top of base difficulty.
+- Phase 9: added a stability pass for bot state selection (brief retreat/chase/loot commitment windows plus range hysteresis) so bots thrash less and retreat/cover behavior is more consistent before any future tuning/search work.
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress

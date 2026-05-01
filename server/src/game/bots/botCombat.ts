@@ -19,6 +19,7 @@ export class BotCombatMemory {
     state: BotCombatState = "wander";
     stateSince = 0;
     stateReason = "";
+    stateLockUntil = -Infinity;
 
     /**
      * Seconds timestamp of the last time this bot took health damage.

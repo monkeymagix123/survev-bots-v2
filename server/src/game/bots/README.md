@@ -54,6 +54,10 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - Tries a **cover-lite** point first (nearby sampled point that blocks enemy LOS; cached ~0.75–1.5s).
     - Falls back to a diagonal/evasive retreat vector when no cover point is found.
   - `seek_cover`: same cover-lite selection, but is intentionally rare (only considered at high danger when low HP or needing reload).
+- Phase 9 stability pass:
+  - small range hysteresis reduces `push`/`back_off` oscillation near distance thresholds,
+  - retreat / chase-last-seen / loot states now briefly commit so bots do not thrash between states every re-decision,
+  - cover-lite stays cached during that short commitment window, which makes retreat behavior look more deliberate.
 - When no target: roam to a random waypoint inside the safe zone (5–10s TTL), avoiding water.
 - Movement inputs are still “grid-like” (up/down/left/right), with one-hop detours only (no A* / interior solver).
 - Cover quality now varies by brain type: `practice` samples less and falls back more often, `realistic` is imperfect on purpose, and `competitive` gets the strongest cover-lite scoring.
