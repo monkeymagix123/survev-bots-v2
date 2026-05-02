@@ -63,6 +63,7 @@ export const Config = {
                 competitive: 0.05,
             },
         },
+        giveStartingWeapons: true,
         debugParity: false,
         debugCombat: false,
         debugBotStability: false,
@@ -244,6 +245,11 @@ export interface ConfigType {
          */
         proChance: number;
         brainMix: BrainMixConfig;
+        /**
+         * Whether internal bots spawn with an immediate random gun loadout.
+         * When false, bots start with normal empty gun slots and must loot first.
+         */
+        giveStartingWeapons: boolean;
         /**
          * TEMP (Phase 1 parity verification): compares refactored bots vs legacy.
          * Logs mismatches to console. Remove once validated.

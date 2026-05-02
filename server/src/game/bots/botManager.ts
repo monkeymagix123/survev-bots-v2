@@ -698,6 +698,7 @@ export class BotManager {
     private _applyStartingLoadout(bot: Player): void {
         // Perk mode roles grant their own loadouts; keep internal bots neutral here for now.
         if (this.game.map.perkMode) return;
+        if (!Config.bots.giveStartingWeapons) return;
 
         const exclude = new Set<string>();
         const primary = this._pickLootGun(exclude);
