@@ -465,6 +465,9 @@ export class BotController {
             }
         }
 
+        const usingItemThisTick =
+            player.actionType === GameConfig.Action.UseItem || msg.useItem !== "";
+
         const burst = this._weaponLogic.updateBurstTimers({
             dt,
             hasTarget: !!validTarget,
@@ -472,18 +475,20 @@ export class BotController {
             profile,
         });
 
-        const allowShooting = this._weaponLogic.allowShooting({
-            timeNow: this._time,
-            hasTarget: !!validTarget,
-            targetVisible: this._perception.targetVisible,
-            gasEmergency,
-            distToTarget: aimUpdate.distToTarget,
-            angleDeltaDeg: aimUpdate.angleDeltaDeg,
-            focusTime: this._aim.focusTime,
-            weaponClass,
-            profile,
-            burstGateOk: burst.burstGateOk,
-        });
+        const allowShooting =
+            !usingItemThisTick &&
+            this._weaponLogic.allowShooting({
+                timeNow: this._time,
+                hasTarget: !!validTarget,
+                targetVisible: this._perception.targetVisible,
+                gasEmergency,
+                distToTarget: aimUpdate.distToTarget,
+                angleDeltaDeg: aimUpdate.angleDeltaDeg,
+                focusTime: this._aim.focusTime,
+                weaponClass,
+                profile,
+                burstGateOk: burst.burstGateOk,
+            });
 
         this._weaponLogic.applyShootInputs({
             msg,
