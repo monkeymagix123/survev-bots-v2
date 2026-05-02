@@ -35,6 +35,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - Same `teamId` in faction mode (Wave counts as faction teams).
 - Chooses the **nearest visible (LOS)** enemy if one exists; otherwise the nearest enemy even if currently not visible.
 - `competitive` bots upgrade this slightly: they still prefer visible nearby enemies, but also bias toward low-health / reloading targets and keep a bit more target stickiness.
+- When bots are **unarmed** (no gun in primary/secondary), unseen fallback targets are suppressed unless the hostile is extremely close or the bot was just damaged; this keeps unarmed bots in loot-first behavior instead of passive anchor states.
 - Tracks `lastSeenPos/lastSeenTime` when a target is visible, used for short “chase last seen” behavior after LOS is lost.
 - If `Config.bots.allowBotVsBot` is `false`, bots will not target other bots (`isAi` or external `joinMsg.bot`).
 
@@ -129,6 +130,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - no general puzzle solving, no sequence inference, and no room-clearing behavior yet.
 - Brain type now affects loot willingness too: `practice` takes the shortest/simplest loot detours, `realistic` uses the baseline behavior, and `competitive` is a bit less willing to drift for loot during combat-adjacent situations.
 - Priority order for explicit detours:
+  - if unarmed, nearby loose guns get a strong temporary priority boost so bots arm up before over-valuing armor/meds
   - armor / helmet upgrades
   - backpack upgrades
   - meds / boosts when reserves are low

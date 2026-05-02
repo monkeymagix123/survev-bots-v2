@@ -55,6 +55,8 @@ export const BotTuning = {
         idleSearchDist: 14,
         opportunisticSearchDist: 7.5,
         opportunisticDangerMax: 0.32,
+        unarmedQuickGrabDist: 3.5,
+        unarmedGunBonus: 520,
         weaponUpgradeMinScore: 7,
     },
     objectInteract: {

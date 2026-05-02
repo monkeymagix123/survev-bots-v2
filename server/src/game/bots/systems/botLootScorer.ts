@@ -17,6 +17,7 @@ import type { Game } from "../../game";
 import type { Loot } from "../../objects/loot";
 import type { Player } from "../../objects/player";
 import type { BotBrainType } from "../botBrain";
+import { isBotUnarmed } from "../botDecisionSupport";
 import { getBotBrainProfile } from "../botBrainProfiles";
 import { BotTuning } from "../botTuning";
 import { classifyWeapon } from "./botWeaponProfiles";
@@ -272,6 +273,7 @@ export class BotLootScorer {
         def: GunDef,
         dist: number,
     ): LootScore | undefined {
+        const unarmed = isBotUnarmed(player);
         const candidateBaseScore = this._scoreGunDef(def);
         let bestSlot: number | undefined;
         let bestImprovement = -Infinity;
@@ -324,6 +326,7 @@ export class BotLootScorer {
         return {
             score:
                 (hasEmptySlot ? 650 : 600) +
+                (unarmed ? BotTuning.loot.unarmedGunBonus : 0) +
                 bestCandidateScore * 2 +
                 (hasEmptySlot ? 0 : bestImprovement * 18) -
                 dist * 6,

@@ -1,3 +1,5 @@
+import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
+import { GameConfig } from "../../../../shared/gameConfig";
 import type { GunDef } from "../../../../shared/defs/gameObjects/gunDefs";
 import { math } from "../../../../shared/utils/math";
 import type { Player } from "../objects/player";
@@ -30,6 +32,23 @@ export function getBotReloadSnapshot(
         isReloading,
         needsReload,
     };
+}
+
+export function isBotUnarmed(player: Player): boolean {
+    for (const slot of [
+        GameConfig.WeaponSlot.Primary,
+        GameConfig.WeaponSlot.Secondary,
+    ] as const) {
+        const type = player.weapons[slot].type;
+        if (!type) continue;
+
+        const def = GameObjectDefs[type];
+        if (def?.type === "gun") {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 export function computeBotDanger(params: {

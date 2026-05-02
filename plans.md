@@ -1,6 +1,6 @@
 # Plans / Progress
 
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
@@ -36,6 +36,7 @@ Last updated: 2026-05-01
 - Follow-up polish after Phase 9: removed bot precision stop-to-focus, added structured bot stability file logging (`debugBotStability`), blocked bot gunfire inputs while starting/channeling heal or boost items, and softened passive anchor into light strafe when LOS is weak or the bot is not yet ready to fire.
 - Added practical loot-object interaction: bots can now melee-break nearby worthwhile loot obstacles, explicitly use nearby manual doors/buttons that unblock route or local loot access, and back off that behavior quickly when danger rises.
 - Practical interaction scope stays intentionally narrow: no broad puzzle solving, no sequence inference, and no general room-clearing/object-farming behavior yet.
+- Fixed the unarmed-bot stall when `Config.bots.giveStartingWeapons=false`: unarmed bots now suppress unseen fallback targets, prioritize arming up nearby, and briefly disengage instead of anchoring if they take damage before finding a gun.
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress
