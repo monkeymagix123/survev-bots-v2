@@ -1,6 +1,6 @@
 # Bots (Current Behavior)
 
-This describes how the **internal bots** currently behave on the server (as of 2026-04-28).
+This describes how the **internal bots** currently behave on the server (as of 2026-05-01).
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`, driven by `BotController`.
 
@@ -58,7 +58,8 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - Phase 9 stability pass:
   - small range hysteresis reduces `push`/`back_off` oscillation near distance thresholds,
   - retreat / chase-last-seen / loot states now briefly commit so bots do not thrash between states every re-decision,
-  - cover-lite stays cached during that short commitment window, which makes retreat behavior look more deliberate.
+  - cover-lite stays cached during that short commitment window, which makes retreat behavior look more deliberate,
+  - and passive anchor states can soften into light strafe when LOS is weak or the bot is not yet ready to fire.
 - When no target: roam to a random waypoint inside the safe zone (5–10s TTL), avoiding water.
 - Movement inputs are still “grid-like” (up/down/left/right), with one-hop detours only (no A* / interior solver).
 - Cover quality now varies by brain type: `practice` samples less and falls back more often, `realistic` is imperfect on purpose, and `competitive` gets the strongest cover-lite scoring.
@@ -92,6 +93,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - retreat-like states (`retreat_heal` / `seek_cover`) are only a relaxed gate, not automatic safety: still requires no hostile currently visible, not recently damaged, no very close hostile within ~6 units, and `danger < 0.45`
     - if healing has already started and a hostile becomes visible / very close, bots will usually cancel the heal; if the item is almost finished, they try to keep moving toward safety and let it complete
     - bots no longer send gunfire inputs while starting or channeling heal/boost item use
+    - player gunfire still cancels item actions through the normal weapon fire path; the bot-specific fix is that bots no longer request gunfire while using items
     - item preference:
       - `health < 35`: `healthkit` > `bandage`
       - `35 ≤ health < 60`: `bandage` > `healthkit` (faster)

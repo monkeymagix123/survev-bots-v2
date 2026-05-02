@@ -1,6 +1,6 @@
 # Plans / Progress
 
-Last updated: 2026-04-28
+Last updated: 2026-05-01
 
 ## Done
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
@@ -32,6 +32,7 @@ Last updated: 2026-04-28
 - Phase 7: added conservative explicit looting (nearby safe-ish detours for armor/backpack/meds/ammo/clear gun upgrades, while keeping combat priority and relying on mobile auto-pickup once in range).
 - Phase 8: made `practice` / `realistic` / `competitive` meaningfully distinct across decision timing, target choice, cover-lite quality, range control, loot willingness, item discipline, and aim-skill modifiers layered on top of base difficulty.
 - Phase 9: added a stability pass for bot state selection (brief retreat/chase/loot commitment windows plus range hysteresis) so bots thrash less and retreat/cover behavior is more consistent before any future tuning/search work.
+- Follow-up polish after Phase 9: removed bot precision stop-to-focus, added structured bot stability file logging (`debugBotStability`), blocked bot gunfire inputs while starting/channeling heal or boost items, and softened passive anchor into light strafe when LOS is weak or the bot is not yet ready to fire.
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress
@@ -41,3 +42,4 @@ Last updated: 2026-04-28
 ## Next
 - Duo/squad bot pairing (spawn in pairs and avoid friendly fire); coordination/shared targets later.
 - Players-vs-bots mode toggle + tuning of heal thresholds, strafing, and quickswitch behavior.
+- Additional bot stability instrumentation / events as needed (`stuck_repath`, fallback, loot commit) if manual spectate debugging still feels too opaque.
