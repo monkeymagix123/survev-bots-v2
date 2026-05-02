@@ -7,6 +7,7 @@ import { util } from "../../../../../shared/utils/util";
 import { v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { BotBrainType } from "../botBrain";
+import { logBotStability } from "../botStabilityLogger";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
 import { BotTuning } from "../botTuning";
 
@@ -386,6 +387,22 @@ export class RealisticBotBrain implements BotBrain {
                 visible,
                 recentlyDamaged,
                 needsReload,
+                gasEmergency,
+                weaponClass,
+            });
+        }
+
+        if (stateChanged) {
+            logBotStability("state_change", {
+                brainType: this.type,
+                botId: player.__id,
+                state,
+                reason,
+                previousState: prevState,
+                hp: Math.round(player.health),
+                danger: Number(danger.toFixed(3)),
+                distToTarget: Number(distToTarget.toFixed(2)),
+                visible,
                 gasEmergency,
                 weaponClass,
             });

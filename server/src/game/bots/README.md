@@ -74,10 +74,15 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - Line-of-sight, with a short grace window for automatic weapons when LOS is lost.
 - Weapon handling:
   - SMGs/ARs use short burst/pause patterns at longer ranges.
-  - “Precision” weapons will pause movement briefly (“stop to shoot”) to build focus before firing.
+  - “Precision” weapons no longer stop in place to build focus; bots keep moving while taking the shot opportunity.
   - Pistols are tap-fired (`shootStart`) instead of held.
   - Optional quick-switching is enabled for higher difficulties when `Config.bots.enableQuickSwitch` is true.
 - Spread/bloom is simulated and capped to prevent rare outlier “spray everywhere” behavior.
+
+## Debugging
+- Optional bot stability logging can be enabled in config `debugBotStability=true`.
+- Log output in `server/logs/bot-stability.log`.
+- Current events include combat `state_change` and mid-heal `heal_cancel`.
 
 ## Item usage
 - If not busy with another action:

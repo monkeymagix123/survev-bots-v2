@@ -65,6 +65,7 @@ export const Config = {
         },
         debugParity: false,
         debugCombat: false,
+        debugBotStability: false,
         enableQuickSwitch: true,
         allowBotVsBot: true,
     },
@@ -252,6 +253,10 @@ export interface ConfigType {
          * Logs bot combat state transitions (movement/state only).
          */
         debugCombat: boolean;
+        /**
+         * Logs bot combat state transitions and healing state
+         */
+        debugBotStability: boolean;
         enableQuickSwitch: boolean;
         allowBotVsBot: boolean;
     };

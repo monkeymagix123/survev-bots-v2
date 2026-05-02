@@ -112,8 +112,6 @@ export function getWeaponProfile(
             };
         case "precision": {
             const aimGateDeg = difficulty === "pro" ? 0.6 : difficulty === "hard" ? 1.2 : 2.5;
-            const minFocusTimeSec =
-                difficulty === "pro" ? 0.12 : difficulty === "hard" ? 0.25 : 0.45;
             return {
                 idealMin: 18,
                 idealMax: 60,
@@ -121,8 +119,8 @@ export function getWeaponProfile(
                 aimGateDeg,
                 bloomPerShotDeg: 0.8,
                 bloomDecayDegPerSec: 3.5,
-                minFocusTimeSec,
-                stopToShoot: true,
+                minFocusTimeSec: 0,
+                stopToShoot: false,
             };
         }
         case "pistol":
@@ -137,4 +135,3 @@ export function getWeaponProfile(
             };
     }
 }
-

@@ -14,6 +14,7 @@ import {
     getDecisionDelaySec,
     type BotBrainProfile,
 } from "./botBrainProfiles";
+import { logBotStability } from "./botStabilityLogger";
 import { BotCombatMemory } from "./botCombat";
 import type { BotDifficulty } from "./botDifficulty";
 import type { BotBrain } from "./brains/botBrainLogic";
@@ -358,6 +359,17 @@ export class BotController {
                         enemyClose));
 
             if (shouldCancelHeal) {
+                logBotStability("heal_cancel", {
+                    brainType: this.brainType,
+                    botId: player.__id,
+                    item: player.actionItem,
+                    hp: Math.round(player.health),
+                    danger: Number(danger.toFixed(3)),
+                    enemyClose,
+                    enemyVeryClose,
+                    hostileVisible: threat.anyHostileVisible,
+                    remaining: Number(remaining.toFixed(3)),
+                });
                 msg.addInput(GameConfig.Input.Cancel);
             }
         }
