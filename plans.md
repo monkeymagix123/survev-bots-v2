@@ -34,6 +34,7 @@ Last updated: 2026-05-01
 - Phase 9: added a stability pass for bot state selection (brief retreat/chase/loot commitment windows plus range hysteresis) so bots thrash less and retreat/cover behavior is more consistent before any future tuning/search work.
 - Follow-up polish after Phase 9: removed bot precision stop-to-focus, added structured bot stability file logging (`debugBotStability`), blocked bot gunfire inputs while starting/channeling heal or boost items, and softened passive anchor into light strafe when LOS is weak or the bot is not yet ready to fire.
 - Added practical loot-object interaction: bots can now melee-break nearby worthwhile loot obstacles, explicitly use nearby manual doors/buttons that unblock route or local loot access, and back off that behavior quickly when danger rises.
+- Practical interaction scope stays intentionally narrow: no broad puzzle solving, no sequence inference, and no general room-clearing/object-farming behavior yet.
 - Fixed a strict TypeScript issue in client zoom radius handling (`Object.values` typing).
 
 ## In Progress

@@ -44,6 +44,9 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - pick short-lived detour waypoints around rocks/walls,
   - and fall back to a safe waypoint / `gas.posNew` if they stay stuck too long.
 - State-driven movement (when a target exists):
+  - `interact_object`: short nearby object-interaction goal for either:
+    - melee-breaking a worthwhile loot obstacle, or
+    - using a manual door/button that directly helps route or immediate loot access.
   - `push`: target too far → close toward weapon `idealMax`.
     - For `ar`/`lmg`/`precision`, bots only `push` when the target is outside `engageMax` (no “walk closer” once already in a shootable range).
   - `back_off`: target too close → create distance toward `idealMin`.
@@ -115,6 +118,10 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - break nearby destructible crates/loot props with melee when safe-ish and worthwhile,
   - use nearby manual doors/buttons when they directly unblock movement or immediate loot access,
   - and drop that behavior quickly if danger rises, a target becomes visible, or the bot is damaged.
+- Practical limits for this phase:
+  - manual doors only when they are actually closed/usable,
+  - buttons only when they appear to unlock a nearby relevant door,
+  - no general puzzle solving, no sequence inference, and no room-clearing behavior yet.
 - Brain type now affects loot willingness too: `practice` takes the shortest/simplest loot detours, `realistic` uses the baseline behavior, and `competitive` is a bit less willing to drift for loot during combat-adjacent situations.
 - Priority order for explicit detours:
   - armor / helmet upgrades
@@ -143,5 +150,6 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 ## Known limitations (intentional for now)
 - Cover is **cover-lite only** (nearby point sampling + LOS check); no peeking, no multi-enemy evaluation, and no full pathfinding yet.
 - Looting is still nearby-only and heuristic-driven; bots do not clear buildings, plan multi-step routes, or manage a full inventory strategy yet.
+- Object interaction is still local and heuristic-driven; bots do not solve multi-step puzzles or broadly explore interactables yet.
 - Bots can press reload explicitly when empty and it’s safe/out-of-range, but still rely on standard weapon behavior for most reload timing.
 - No squad coordination or shared targeting.
