@@ -7,13 +7,10 @@ import { util } from "../../../../../shared/utils/util";
 import { v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { BotBrainType } from "../botBrain";
+import { computeBotDanger, getBotReloadSnapshot } from "../botDecisionSupport";
 import { logBotStability } from "../botStabilityLogger";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
 import { BotTuning } from "../botTuning";
-
-function clamp01(x: number): number {
-    return math.clamp(x, 0, 1);
-}
 
 /**
  * Phase 1: behavior-preserving brain that matches the current bot logic.
@@ -171,21 +168,17 @@ export class RealisticBotBrain implements BotBrain {
             timeNow - combat.lastDamagedTime < BotTuning.combat.recentlyDamagedWindowSec;
         const visible = perception.targetVisible;
 
-        const activeWeapon = player.weapons[player.curWeapIdx];
-        const ammoType = gunDef?.ammo;
-        const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
-        const isReloading = player.isReloading();
-        const needsReload =
-            isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
-
-        let danger = 0;
-        if (visible) danger += 0.38;
-        danger += clamp01(1 - distToTarget / 20) * 0.22;
-        if (lowHp) danger += 0.22;
-        if (needsReload) danger += isReloading ? 0.18 : 0.14;
-        if (recentlyDamaged) danger += 0.12;
-        if (gasEmergency) danger += 0.25;
-        danger = clamp01(danger);
+        const { isReloading, needsReload } = getBotReloadSnapshot(player, gunDef);
+        const danger = computeBotDanger({
+            targetVisible: visible,
+            hasTarget: true,
+            distToTarget,
+            lowHp,
+            needsReload,
+            isReloading,
+            recentlyDamaged,
+            gasEmergency,
+        });
 
         const lastSeenFresh =
             !visible &&

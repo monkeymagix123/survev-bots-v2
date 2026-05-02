@@ -10,6 +10,14 @@ import type { Loot } from "../objects/loot";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import {
+    chooseBotBoostItem,
+    chooseBotHealItem,
+    computeBotDanger,
+    getBotReloadSnapshot,
+    getBotThreatBands,
+    isBotSafeToHeal,
+} from "./botDecisionSupport";
+import {
     getBotBrainProfile,
     getDecisionDelaySec,
     type BotBrainProfile,
@@ -192,9 +200,10 @@ export class BotController {
         );
 
         const { gunDef, weaponClass, profile } = this._weaponLogic.getWeaponInfo(player);
-        const activeWeapon = player.weapons[player.curWeapIdx];
-        const ammoType = gunDef?.ammo;
-        const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+        const { activeWeapon, spareAmmo, isReloading, needsReload } = getBotReloadSnapshot(
+            player,
+            gunDef,
+        );
         const lowHp = player.health < BotTuning.heal.lowHp;
         const veryLowHp = player.health < BotTuning.heal.veryLowHp;
         const wantsBoost = player.boost < BotTuning.boost.threshold;
@@ -202,9 +211,6 @@ export class BotController {
         const recentlyDamaged =
             this._time - this._combat.lastDamagedTime <
             BotTuning.combat.recentlyDamagedWindowSec;
-        const isReloading = player.isReloading();
-        const needsReload =
-            isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
         const reactionReady = this._time >= this._weaponLogic.nextShootTime;
         const weakLosAnchor =
             !!validTarget &&
@@ -321,21 +327,20 @@ export class BotController {
         }
 
         // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
-        let danger = 0;
-        if (validTarget && this._perception.targetVisible) danger += 0.38;
-        if (validTarget) {
-            danger += math.clamp(1 - aimUpdate.distToTarget / 20, 0, 1) * 0.22;
-        }
-        if (lowHp) danger += 0.22;
-        if (needsReload) danger += isReloading ? 0.18 : 0.14;
-        if (recentlyDamaged) danger += 0.12;
-        if (gasEmergency) danger += 0.25;
-        danger = math.clamp(danger, 0, 1);
+        const danger = computeBotDanger({
+            targetVisible: !!validTarget && this._perception.targetVisible,
+            hasTarget: !!validTarget,
+            distToTarget: aimUpdate.distToTarget,
+            lowHp,
+            needsReload,
+            isReloading,
+            recentlyDamaged,
+            gasEmergency,
+        });
 
         const threat = this._perception.threat;
         const enemyDist = threat.nearestNearbyHostileDist;
-        const enemyVeryClose = enemyDist < BotTuning.combat.enemyVeryCloseDist;
-        const enemyClose = enemyDist < BotTuning.combat.enemyCloseDist;
+        const { enemyVeryClose, enemyClose } = getBotThreatBands(enemyDist);
 
         if (
             player.actionType === GameConfig.Action.UseItem &&
@@ -407,42 +412,20 @@ export class BotController {
             const inRetreatState =
                 this._combat.state === "retreat_heal" ||
                 this._combat.state === "seek_cover";
-
-            const safeToHealNormally =
-                !threat.anyHostileVisible &&
-                danger < BotTuning.danger.healMax * this._brainProfile.healDangerScale &&
-                !recentlyDamaged &&
-                !enemyClose;
-
-            const safeToHealWhileRetreating =
-                inRetreatState &&
-                !threat.anyHostileVisible &&
-                danger <
-                    BotTuning.danger.retreatHealMax *
-                        this._brainProfile.retreatHealDangerScale &&
-                !recentlyDamaged &&
-                !enemyVeryClose;
-
-            const safeToHeal = safeToHealNormally || safeToHealWhileRetreating;
+            const safeToHeal = isBotSafeToHeal({
+                anyHostileVisible: threat.anyHostileVisible,
+                danger,
+                recentlyDamaged,
+                enemyClose,
+                enemyVeryClose,
+                inRetreatState,
+                brainProfile: this._brainProfile,
+            });
 
             // ── Healing logic ──
             if (lowHp) {
                 if (safeToHeal) {
-                    if (veryLowHp) {
-                        // Prefer healthkit if very low
-                        if (player.inventory["healthkit"] > 0) {
-                            msg.useItem = "healthkit";
-                        } else if (player.inventory["bandage"] > 0) {
-                            msg.useItem = "bandage";
-                        }
-                    } else {
-                        // Prefer bandage for mid HP (faster)
-                        if (player.inventory["bandage"] > 0) {
-                            msg.useItem = "bandage";
-                        } else if (player.inventory["healthkit"] > 0) {
-                            msg.useItem = "healthkit";
-                        }
-                    }
+                    msg.useItem = chooseBotHealItem(player, veryLowHp);
                 }
             }
             // ── Boost logic ──
@@ -463,13 +446,12 @@ export class BotController {
                     !recentlyDamaged &&
                     !enemyClose;
 
-                if (veryLowBoost && player.inventory["painkiller"] > 0 && safeToBoostLong) {
-                    msg.useItem = "painkiller";
-                } else if (player.inventory["soda"] > 0 && safeToBoostQuick) {
-                    msg.useItem = "soda";
-                } else if (player.inventory["painkiller"] > 0 && safeToBoostLong) {
-                    msg.useItem = "painkiller";
-                }
+                msg.useItem = chooseBotBoostItem({
+                    player,
+                    veryLowBoost,
+                    quickSafe: safeToBoostQuick,
+                    longSafe: safeToBoostLong,
+                });
             }
         }
 

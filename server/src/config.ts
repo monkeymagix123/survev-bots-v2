@@ -254,7 +254,8 @@ export interface ConfigType {
          */
         debugCombat: boolean;
         /**
-         * Logs bot combat state transitions and mid-heal cancel
+         * Logs bot combat state transitions and stability events as JSON lines
+         * with an extra human-readable `summary` field.
          */
         debugBotStability: boolean;
         enableQuickSwitch: boolean;

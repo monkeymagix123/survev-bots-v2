@@ -5,12 +5,61 @@ import { Config } from "../../config";
 const enabled = Config.bots.debugBotStability;
 const logPath = path.join(process.cwd(), "logs/bot-stability.log");
 
+function toPrintable(value: unknown): string {
+    if (typeof value === "number") return Number.isFinite(value) ? String(value) : "nan";
+    if (typeof value === "boolean") return value ? "yes" : "no";
+    if (value === undefined) return "-";
+    if (value === null) return "null";
+    return String(value);
+}
+
+function buildSummary(event: string, fields: Record<string, unknown>): string {
+    switch (event) {
+        case "state_change":
+            return [
+                `bot=${toPrintable(fields.botId)}`,
+                `brain=${toPrintable(fields.brainType)}`,
+                `${toPrintable(fields.previousState)}->${toPrintable(fields.state)}`,
+                `why=${toPrintable(fields.reason)}`,
+                `hp=${toPrintable(fields.hp)}`,
+                `danger=${toPrintable(fields.danger)}`,
+                `dist=${toPrintable(fields.distToTarget)}`,
+                `visible=${toPrintable(fields.visible)}`,
+            ].join(" ");
+        case "heal_cancel":
+            return [
+                `bot=${toPrintable(fields.botId)}`,
+                `brain=${toPrintable(fields.brainType)}`,
+                `item=${toPrintable(fields.item)}`,
+                `hp=${toPrintable(fields.hp)}`,
+                `danger=${toPrintable(fields.danger)}`,
+                `remaining=${toPrintable(fields.remaining)}`,
+                `visible=${toPrintable(fields.hostileVisible)}`,
+                `close=${toPrintable(fields.enemyClose)}`,
+                `veryClose=${toPrintable(fields.enemyVeryClose)}`,
+            ].join(" ");
+        case "idle_reason":
+            return [
+                `bot=${toPrintable(fields.botId)}`,
+                `brain=${toPrintable(fields.brainType)}`,
+                `idle=${toPrintable(fields.reason)}`,
+                `state=${toPrintable(fields.state)}`,
+                `why=${toPrintable(fields.stateReason)}`,
+            ].join(" ");
+        default:
+            return Object.entries(fields)
+                .map(([key, value]) => `${key}=${toPrintable(value)}`)
+                .join(" ");
+    }
+}
+
 export function logBotStability(event: string, fields: Record<string, unknown>): void {
     if (!enabled) return;
 
     const payload = {
         time: new Date().toISOString(),
         event,
+        summary: buildSummary(event, fields),
         ...fields,
     };
 

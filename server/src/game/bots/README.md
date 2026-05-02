@@ -84,6 +84,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 ## Debugging
 - Optional bot stability logging can be enabled in config `debugBotStability=true`.
 - Log output in `server/logs/bot-stability.log`.
+- Each log line stays structured JSON, but now also includes a short `summary` field for easier tailing.
 - Current events include combat `state_change`, mid-heal `heal_cancel`, and passive `idle_reason` entries such as `no_goal`, `idle_anchor`, and `weak_los_anchor`.
 
 ## Item usage
