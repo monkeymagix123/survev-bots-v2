@@ -4,6 +4,11 @@ This describes how the **internal bots** currently behave on the server (as of 2
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`, driven by `BotController`.
 
+## Config Notes
+- `Config.bots.giveStartingWeapons` / `survev-config.json -> bots.giveStartingWeapons` controls whether internal bots spawn with the current random starting gun loadout.
+- When `true`, bots can fight immediately after spawning.
+- When `false`, bots start with normal empty gun slots and must loot/find weapons first.
+
 ## Modes
 
 ### Fill mode (normal maps)

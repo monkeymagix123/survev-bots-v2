@@ -6,6 +6,7 @@ Last updated: 2026-05-01
 - Replaced the old `PlayerBarn.addPlayer()` bot-injection hack with a first-class internal bot system (`BotManager` + `BotController`).
 - Added `Config.bots` (fill/retire + difficulty tiers) with overrides via `survev-config.json`.
 - Added `Config.bots.brainMix` (practice/realistic/competitive) and per-bot brain sampling (Phase 1, behavior-preserving).
+- Added `Config.bots.giveStartingWeapons` so internal bots can optionally spawn without the random starting gun loadout.
 - Added `Player.isAi` + `Player.hasClient` and updated server loops to avoid sending/closing sockets for internal bots.
 - Implemented lobby bot fill/retire that accounts for pending join tokens + avoids retiring bots in a way that would instantly end the match.
 - Fixed mobile auto-pickup free-slot logic (helps bots/players pick up first gun correctly).
