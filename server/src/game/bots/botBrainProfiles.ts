@@ -16,6 +16,8 @@ export type BotBrainProfile = {
     mistakeChance: number;
     lootIdleDistScale: number;
     lootOpportunisticDistScale: number;
+    objectInteractDistScale: number;
+    objectLootWillingness: number;
     healDangerScale: number;
     retreatHealDangerScale: number;
     healCancelDangerScale: number;
@@ -63,6 +65,8 @@ export const BotBrainProfiles: Record<BotBrainType, BotBrainProfile> = {
         mistakeChance: 0.12,
         lootIdleDistScale: 0.8,
         lootOpportunisticDistScale: 0.65,
+        objectInteractDistScale: 0.85,
+        objectLootWillingness: 0.95,
         healDangerScale: 1.12,
         retreatHealDangerScale: 1.08,
         healCancelDangerScale: 1.08,
@@ -108,6 +112,8 @@ export const BotBrainProfiles: Record<BotBrainType, BotBrainProfile> = {
         mistakeChance: 0.07,
         lootIdleDistScale: 1,
         lootOpportunisticDistScale: 1,
+        objectInteractDistScale: 1,
+        objectLootWillingness: 1,
         healDangerScale: 1,
         retreatHealDangerScale: 1,
         healCancelDangerScale: 1,
@@ -153,6 +159,8 @@ export const BotBrainProfiles: Record<BotBrainType, BotBrainProfile> = {
         mistakeChance: 0,
         lootIdleDistScale: 0.9,
         lootOpportunisticDistScale: 0.75,
+        objectInteractDistScale: 0.9,
+        objectLootWillingness: 0.8,
         healDangerScale: 0.82,
         retreatHealDangerScale: 0.88,
         healCancelDangerScale: 0.85,

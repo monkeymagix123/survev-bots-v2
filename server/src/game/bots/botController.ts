@@ -1,6 +1,7 @@
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import { ObjectType } from "../../../../shared/net/objectSerializeFns";
+import { collider } from "../../../../shared/utils/collider";
 import { math } from "../../../../shared/utils/math";
 import { util } from "../../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../../shared/utils/v2";
@@ -34,8 +35,10 @@ import { LegacyBotController } from "./legacy/legacyBotController";
 import { BotAimController } from "./systems/botAimController";
 import { BotLootScorer } from "./systems/botLootScorer";
 import { BotNavigationLite } from "./systems/botNavigationLite";
+import { BotObjectInteractionScorer } from "./systems/botObjectInteractionScorer";
 import { BotPerception } from "./systems/botPerception";
 import { BotWeaponLogic } from "./systems/botWeaponLogic";
+import type { Obstacle } from "../objects/obstacle";
 
 export class BotController {
     private _time = 0;
@@ -48,6 +51,7 @@ export class BotController {
     private readonly _combat = new BotCombatMemory();
     private readonly _aim: BotAimController;
     private readonly _lootScorer = new BotLootScorer();
+    private readonly _objectInteractionScorer = new BotObjectInteractionScorer();
     private readonly _weaponLogic: BotWeaponLogic;
     private readonly _brain: BotBrain;
     private readonly _brainProfile: BotBrainProfile;
@@ -131,6 +135,7 @@ export class BotController {
                 perception: this._perception,
                 navigation: this._navigation,
                 lootScorer: this._lootScorer,
+                objectInteractionScorer: this._objectInteractionScorer,
                 combat: this._combat,
                 aim: this._aim,
                 weaponLogic: this._weaponLogic,
@@ -190,6 +195,17 @@ export class BotController {
 
         const gas = this.game.gas;
         const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
+
+        let objectTarget = this._getObjectTarget();
+        if (
+            objectTarget &&
+            (!util.sameLayer(objectTarget.layer, player.layer) ||
+                objectTarget.dead ||
+                !this._isObjectTargetStillValid(objectTarget))
+        ) {
+            this._clearObjectInteraction();
+            objectTarget = undefined;
+        }
 
         const goal = this._navigation.getGoal(
             this.game,
@@ -341,6 +357,17 @@ export class BotController {
         const threat = this._perception.threat;
         const enemyDist = threat.nearestNearbyHostileDist;
         const { enemyVeryClose, enemyClose } = getBotThreatBands(enemyDist);
+        const shouldAbortObjectInteraction =
+            this._combat.state === "interact_object" &&
+            (threat.anyHostileVisible ||
+                recentlyDamaged ||
+                danger >= BotTuning.objectInteract.breakAbortDangerMin);
+        if (shouldAbortObjectInteraction) {
+            this._clearObjectInteraction();
+            objectTarget = undefined;
+        }
+        const objectInteractionActive =
+            this._combat.state === "interact_object" && !!objectTarget;
 
         if (
             player.actionType === GameConfig.Action.UseItem &&
@@ -402,6 +429,22 @@ export class BotController {
                     danger <= this._brainProfile.reloadDangerMax)
             ) {
                 msg.addInput(GameConfig.Input.Reload);
+            }
+        }
+
+        if (objectInteractionActive) {
+            if (!objectTarget) {
+                this._clearObjectInteraction();
+            } else if (this._combat.objectInteractionMode === "use") {
+                if (
+                    player.actionType === GameConfig.Action.None &&
+                    player
+                        .getInteractableObstacles()
+                        .some((obstacle) => obstacle.__id === objectTarget?.__id)
+                ) {
+                    msg.addInput(GameConfig.Input.Use);
+                    this._clearObjectInteraction();
+                }
             }
         }
 
@@ -467,6 +510,7 @@ export class BotController {
 
         const allowShooting =
             !usingItemThisTick &&
+            !objectInteractionActive &&
             this._weaponLogic.allowShooting({
                 timeNow: this._time,
                 hasTarget: !!validTarget,
@@ -498,6 +542,19 @@ export class BotController {
             profile,
         });
 
+        if (
+            objectInteractionActive &&
+            objectTarget &&
+            this._combat.objectInteractionMode === "melee_break"
+        ) {
+            if (player.curWeapIdx !== GameConfig.WeaponSlot.Melee) {
+                msg.addInput(GameConfig.Input.EquipMelee);
+            } else if (this._isInMeleeRange(player, objectTarget)) {
+                msg.shootHold = false;
+                msg.shootStart = true;
+            }
+        }
+
         const shot = this._weaponLogic.computeWillShootThisTick({
             dt,
             msg,
@@ -525,17 +582,70 @@ export class BotController {
 
         msg.toMouseDir = this._aim.getDirWithNoiseDeg(noiseDeg);
 
-        this._weaponLogic.applyQuickswitch({
-            msg,
-            player,
-            difficulty: this.difficulty,
-            burstHoldT: this._weaponLogic.burstHoldT,
-        });
+        if (!objectInteractionActive) {
+            this._weaponLogic.applyQuickswitch({
+                msg,
+                player,
+                difficulty: this.difficulty,
+                burstHoldT: this._weaponLogic.burstHoldT,
+            });
+        }
 
         // Ensure internal bots behave like mobile for auto doors/pickup
         msg.touchMoveActive = false;
 
         return msg;
+    }
+
+    private _getObjectTarget(): Obstacle | undefined {
+        if (this._combat.objectTargetId === undefined) return undefined;
+        const object = this.game.objectRegister.getById(this._combat.objectTargetId);
+        if (
+            object &&
+            object.__type === ObjectType.Obstacle &&
+            !object.destroyed
+        ) {
+            return object as Obstacle;
+        }
+        return undefined;
+    }
+
+    private _clearObjectInteraction(): void {
+        this._combat.objectTargetId = undefined;
+        this._combat.objectInteractionMode = undefined;
+        if (this._combat.state === "interact_object") {
+            this._combat.goalPos = undefined;
+        }
+    }
+
+    private _isObjectTargetStillValid(obstacle: Obstacle): boolean {
+        switch (this._combat.objectInteractionMode) {
+            case "use":
+                if (obstacle.isDoor && obstacle.door) {
+                    return (
+                        !obstacle.door.autoOpen &&
+                        !obstacle.door.open &&
+                        obstacle.door.canUse &&
+                        !obstacle.door.locked
+                    );
+                }
+                if (obstacle.isButton) {
+                    return obstacle.button.canUse;
+                }
+                return false;
+            case "melee_break":
+                return obstacle.destructible && obstacle.health > 0;
+            default:
+                return false;
+        }
+    }
+
+    private _isInMeleeRange(player: Player, obstacle: Obstacle): boolean {
+        return !!collider.intersectCircle(
+            obstacle.collider,
+            player.pos,
+            BotTuning.objectInteract.meleeReach,
+        );
     }
 
     private _logIdleReason(params: {

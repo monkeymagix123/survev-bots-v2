@@ -40,6 +40,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - Navigation is still **lightweight** (not full pathfinding), but bots now:
   - raycast movement goals for simple blockers,
   - treat closed auto-open doors as passable,
+  - explicitly use nearby manual doors/buttons when they directly unblock the current route or immediate loot access,
   - pick short-lived detour waypoints around rocks/walls,
   - and fall back to a safe waypoint / `gas.posNew` if they stay stuck too long.
 - State-driven movement (when a target exists):
@@ -110,6 +111,10 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - when no enemy is active: bots may path to nearby useful loot
   - when LOS is lost: bots may take a **short** detour if danger is low
   - bots do **not** abandon visible / close combat to chase loot
+- Bots can also opportunistically interact with nearby **loot-bearing obstacles**:
+  - break nearby destructible crates/loot props with melee when safe-ish and worthwhile,
+  - use nearby manual doors/buttons when they directly unblock movement or immediate loot access,
+  - and drop that behavior quickly if danger rises, a target becomes visible, or the bot is damaged.
 - Brain type now affects loot willingness too: `practice` takes the shortest/simplest loot detours, `realistic` uses the baseline behavior, and `competitive` is a bit less willing to drift for loot during combat-adjacent situations.
 - Priority order for explicit detours:
   - armor / helmet upgrades
@@ -117,6 +122,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - meds / boosts when reserves are low
   - ammo for currently held guns
   - clearly better guns (including safe fill of an empty gun slot)
+- Breakable-object looting is intentionally weaker than loose-loot looting, and it scales down as the bot already has stronger weapons, better armor/backpack, and healthier reserves.
 - Gun upgrades are intentionally coarse: bots only chase guns that are meaningfully better than what they already have, and will pre-equip the intended slot before pickup if they plan to replace a weapon.
 
 ## Brains / Difficulty

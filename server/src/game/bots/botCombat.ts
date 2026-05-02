@@ -3,6 +3,7 @@ import type { Vec2 } from "../../../../shared/utils/v2";
 export type BotCombatState =
     | "wander"
     | "loot"
+    | "interact_object"
     | "push"
     | "hold_range"
     | "hold_position"
@@ -14,6 +15,7 @@ export type BotCombatState =
     | "retreat_heal";
 
 export type BotMovementStyle = "direct" | "strafe" | "anchor";
+export type BotObjectInteractionMode = "melee_break" | "use";
 
 export class BotCombatMemory {
     state: BotCombatState = "wander";
@@ -55,6 +57,8 @@ export class BotCombatMemory {
     movementStyle: BotMovementStyle = "direct";
     lootTargetId?: number;
     lootWeaponSlot?: number;
+    objectTargetId?: number;
+    objectInteractionMode?: BotObjectInteractionMode;
 
     setState(state: BotCombatState, timeNow: number, reason: string): void {
         if (this.state !== state) {

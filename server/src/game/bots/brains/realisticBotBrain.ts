@@ -28,6 +28,7 @@ export class RealisticBotBrain implements BotBrain {
             perception,
             navigation,
             lootScorer,
+            objectInteractionScorer,
             combat,
             aim,
             weaponLogic,
@@ -68,6 +69,9 @@ export class RealisticBotBrain implements BotBrain {
         }
 
         const prevState = combat.state;
+        const prevObjectTargetId = combat.objectTargetId;
+        const prevObjectInteractionMode = combat.objectInteractionMode;
+        const prevObjectGoal = combat.goalPos ? v2.copy(combat.goalPos) : undefined;
         const gas = game.gas;
         const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
 
@@ -94,6 +98,7 @@ export class RealisticBotBrain implements BotBrain {
 
         if (!perception.targetId) {
             const threat = perception.threat;
+            navigation.ensureWaypoint(game, player);
             const idleLoot =
                 !gasEmergency &&
                 !threat.anyHostileVisible &&
@@ -106,20 +111,49 @@ export class RealisticBotBrain implements BotBrain {
                           brainType: this.type,
                       })
                     : undefined;
+            const idleObject =
+                !gasEmergency &&
+                !threat.anyHostileVisible &&
+                !threat.hasRecentEnemy &&
+                threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
+                    ? objectInteractionScorer.chooseObject({
+                          game,
+                          player,
+                          mode: "idle",
+                          brainType: this.type,
+                          state: combat.state,
+                          baseGoal: idleLoot?.pos ?? navigation.waypoint,
+                      })
+                    : undefined;
 
-            if (idleLoot) {
+            if (idleObject && (idleObject.mode === "use" || !idleLoot)) {
+                combat.setState("interact_object", timeNow, idleObject.reason);
+                if (prevState !== combat.state) {
+                    combat.stateLockUntil =
+                        timeNow + BotTuning.objectInteract.stateCommitSec;
+                }
+                combat.goalPos = sanitizeGoal(idleObject.pos);
+                combat.movementStyle = "direct";
+                combat.lootTargetId = undefined;
+                combat.lootWeaponSlot = undefined;
+                combat.objectTargetId = idleObject.obstacleId;
+                combat.objectInteractionMode = idleObject.mode;
+            } else if (idleLoot) {
                 combat.setState("loot", timeNow, idleLoot.reason);
                 combat.goalPos = sanitizeGoal(idleLoot.pos);
                 combat.movementStyle = "direct";
                 combat.lootTargetId = idleLoot.lootId;
                 combat.lootWeaponSlot = idleLoot.weaponSlot;
+                combat.objectTargetId = undefined;
+                combat.objectInteractionMode = undefined;
             } else {
                 combat.setState("wander", timeNow, "no_target");
                 combat.goalPos = undefined;
                 combat.movementStyle = "direct";
                 combat.lootTargetId = undefined;
                 combat.lootWeaponSlot = undefined;
-                navigation.ensureWaypoint(game, player);
+                combat.objectTargetId = undefined;
+                combat.objectInteractionMode = undefined;
             }
 
             if (Config.bots.debugCombat && prevState !== combat.state) {
@@ -200,6 +234,23 @@ export class RealisticBotBrain implements BotBrain {
                       brainType: this.type,
                   })
                 : undefined;
+        const opportunisticObject =
+            !visible &&
+            !gasEmergency &&
+            !lowHp &&
+            !needsReload &&
+            !recentlyDamaged &&
+            danger <= BotTuning.objectInteract.opportunisticDangerMax &&
+            threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
+                ? objectInteractionScorer.chooseObject({
+                      game,
+                      player,
+                      mode: "opportunistic",
+                      brainType: this.type,
+                      state: combat.state,
+                      baseGoal: opportunisticLoot?.pos ?? perception.lastSeenPos,
+                  })
+                : undefined;
 
         type State = typeof combat.state;
 
@@ -259,6 +310,9 @@ export class RealisticBotBrain implements BotBrain {
         } else if ((lowHp || needsReload) && danger >= brainProfile.highDangerMin) {
             state = "seek_cover";
             reason = "high_danger";
+        } else if (opportunisticObject && (opportunisticObject.mode === "use" || !opportunisticLoot)) {
+            state = "interact_object";
+            reason = opportunisticObject.reason;
         } else if (opportunisticLoot) {
             state = "loot";
             reason = opportunisticLoot.reason;
@@ -342,6 +396,17 @@ export class RealisticBotBrain implements BotBrain {
             ) {
                 state = prevState;
                 reason = combat.stateReason;
+            } else if (
+                prevState === "interact_object" &&
+                !visible &&
+                !threat.anyHostileVisible &&
+                combat.objectTargetId !== undefined &&
+                state !== "seek_cover" &&
+                state !== "retreat_reload" &&
+                state !== "retreat_heal"
+            ) {
+                state = prevState;
+                reason = combat.stateReason;
             }
         }
 
@@ -362,6 +427,10 @@ export class RealisticBotBrain implements BotBrain {
                 case "loot":
                     combat.stateLockUntil =
                         timeNow + BotTuning.combat.lootStateCommitSec;
+                    break;
+                case "interact_object":
+                    combat.stateLockUntil =
+                        timeNow + BotTuning.objectInteract.stateCommitSec;
                     break;
                 default:
                     combat.stateLockUntil = timeNow;
@@ -593,8 +662,32 @@ export class RealisticBotBrain implements BotBrain {
         combat.movementStyle = "direct";
         combat.lootTargetId = undefined;
         combat.lootWeaponSlot = undefined;
+        combat.objectTargetId = undefined;
+        combat.objectInteractionMode = undefined;
 
         switch (state) {
+            case "interact_object":
+                if (opportunisticObject) {
+                    combat.goalPos = sanitizeGoal(opportunisticObject.pos);
+                    combat.objectTargetId = opportunisticObject.obstacleId;
+                    combat.objectInteractionMode = opportunisticObject.mode;
+                } else if (
+                    prevState === "interact_object" &&
+                    prevObjectTargetId !== undefined &&
+                    prevObjectGoal &&
+                    prevObjectInteractionMode !== undefined
+                ) {
+                    combat.goalPos = sanitizeGoal(prevObjectGoal);
+                    combat.objectTargetId = prevObjectTargetId;
+                    combat.objectInteractionMode = prevObjectInteractionMode;
+                } else {
+                    combat.goalPos = v2.copy(player.pos);
+                    combat.movementStyle = "anchor";
+                }
+                if (combat.goalPos) {
+                    combat.movementStyle = "direct";
+                }
+                break;
             case "loot":
                 if (opportunisticLoot) {
                     combat.goalPos = sanitizeGoal(opportunisticLoot.pos);
