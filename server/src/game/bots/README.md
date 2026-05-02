@@ -47,6 +47,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - For `ar`/`lmg`/`precision`, bots only `push` when the target is outside `engageMax` (no “walk closer” once already in a shootable range).
   - `back_off`: target too close → create distance toward `idealMin`.
   - `hold_range` / `hold_position` (anchor): minimal movement in the usable band.
+    - If LOS is weak or the bot is not ready to fire yet, anchor can soften into light strafe instead of pure standing still.
   - `strafe`: lateral movement in the usable band (direction flips every ~0.25–0.6s; see `BotTuning`).
   - `damage_dodge` (reason): after taking damage at high HP, bots briefly strafe/back off (~0.35s; see `BotTuning`) instead of full-retreating.
   - `chase_last_seen`: briefly move to `lastSeenPos` after LOS loss.
@@ -82,7 +83,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 ## Debugging
 - Optional bot stability logging can be enabled in config `debugBotStability=true`.
 - Log output in `server/logs/bot-stability.log`.
-- Current events include combat `state_change` and mid-heal `heal_cancel`.
+- Current events include combat `state_change`, mid-heal `heal_cancel`, and passive `idle_reason` entries such as `no_goal`, `idle_anchor`, and `weak_los_anchor`.
 
 ## Item usage
 - If not busy with another action:

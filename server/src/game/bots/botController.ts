@@ -51,6 +51,7 @@ export class BotController {
     private _lastPos: Vec2;
     private _lastMovedTime = 0;
     private _lastHealth = 0;
+    private _lastIdleReason?: string;
 
     constructor(
         readonly game: Game,
@@ -191,6 +192,24 @@ export class BotController {
         );
 
         const { gunDef, weaponClass, profile } = this._weaponLogic.getWeaponInfo(player);
+        const activeWeapon = player.weapons[player.curWeapIdx];
+        const ammoType = gunDef?.ammo;
+        const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+        const lowHp = player.health < BotTuning.heal.lowHp;
+        const veryLowHp = player.health < BotTuning.heal.veryLowHp;
+        const wantsBoost = player.boost < BotTuning.boost.threshold;
+        const veryLowBoost = player.boost < BotTuning.boost.veryLowBoost;
+        const recentlyDamaged =
+            this._time - this._combat.lastDamagedTime <
+            BotTuning.combat.recentlyDamagedWindowSec;
+        const isReloading = player.isReloading();
+        const needsReload =
+            isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
+        const reactionReady = this._time >= this._weaponLogic.nextShootTime;
+        const weakLosAnchor =
+            !!validTarget &&
+            this._combat.movementStyle === "anchor" &&
+            (!this._perception.targetVisible || !reactionReady || needsReload);
 
         this._weaponLogic.decrementTimers(dt);
 
@@ -216,9 +235,14 @@ export class BotController {
             hasTarget: !!validTarget,
             gasEmergency,
             distToTarget: validTarget ? aimUpdate.distToTarget : undefined,
-            allowStrafe: this._combat.movementStyle === "strafe" && !gasEmergency,
+            allowStrafe:
+                (this._combat.movementStyle === "strafe" || weakLosAnchor) &&
+                !gasEmergency,
             strafeSign,
-            anchor: this._combat.movementStyle === "anchor" && !gasEmergency,
+            anchor:
+                this._combat.movementStyle === "anchor" &&
+                !gasEmergency &&
+                !weakLosAnchor,
             aimDir: aimUpdate.aimDir,
             dt,
         });
@@ -297,22 +321,6 @@ export class BotController {
         }
 
         // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
-        const activeWeapon = player.weapons[player.curWeapIdx];
-        const ammoType = gunDef?.ammo;
-        const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
-        const lowHp = player.health < BotTuning.heal.lowHp;
-        const veryLowHp = player.health < BotTuning.heal.veryLowHp;
-        const wantsBoost = player.boost < BotTuning.boost.threshold;
-        const veryLowBoost = player.boost < BotTuning.boost.veryLowBoost;
-
-        const recentlyDamaged =
-            this._time - this._combat.lastDamagedTime <
-            BotTuning.combat.recentlyDamagedWindowSec;
-
-        const isReloading = player.isReloading();
-        const needsReload =
-            isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
-
         let danger = 0;
         if (validTarget && this._perception.targetVisible) danger += 0.38;
         if (validTarget) {
@@ -490,6 +498,17 @@ export class BotController {
                 burstGateOk: burst.burstGateOk,
             });
 
+        this._logIdleReason({
+            player,
+            goal,
+            allowShooting,
+            weakLosAnchor,
+            moveLeft: msg.moveLeft,
+            moveRight: msg.moveRight,
+            moveUp: msg.moveUp,
+            moveDown: msg.moveDown,
+        });
+
         this._weaponLogic.applyShootInputs({
             msg,
             allowShooting,
@@ -535,6 +554,48 @@ export class BotController {
         msg.touchMoveActive = false;
 
         return msg;
+    }
+
+    private _logIdleReason(params: {
+        player: Player;
+        goal?: Vec2;
+        allowShooting: boolean;
+        weakLosAnchor: boolean;
+        moveLeft: boolean;
+        moveRight: boolean;
+        moveUp: boolean;
+        moveDown: boolean;
+    }): void {
+        const {
+            player,
+            goal,
+            allowShooting,
+            weakLosAnchor,
+            moveLeft,
+            moveRight,
+            moveUp,
+            moveDown,
+        } = params;
+
+        let reason: string | undefined;
+        if (!goal) {
+            reason = "no_goal";
+        } else if (!moveLeft && !moveRight && !moveUp && !moveDown && !allowShooting) {
+            reason = weakLosAnchor ? "weak_los_anchor" : "idle_anchor";
+        }
+
+        if (reason === this._lastIdleReason) return;
+        this._lastIdleReason = reason;
+
+        if (!reason) return;
+
+        logBotStability("idle_reason", {
+            brainType: this.brainType,
+            botId: player.__id,
+            reason,
+            state: this._combat.state,
+            stateReason: this._combat.stateReason,
+        });
     }
 
     private _compareParity(
