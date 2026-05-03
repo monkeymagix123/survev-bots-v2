@@ -130,14 +130,15 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - When bots are **unarmed** (no gun in primary/secondary), they use a dedicated internal unarmed brain:
   - loose guns get first priority,
   - otherwise they prefer nearby loot-dropping obstacles / practical interactions over passive wandering,
-  - visible armed hostiles make them cautious, but visible unarmed hostiles or distracted armed hostiles still allow more crate-breaking than the normal armed brain would.
+  - visible armed hostiles make them cautious,
+  - visible unarmed hostiles or distracted armed hostiles allow more crate-breaking than the normal armed brain would.
 - Practical limits for this phase:
   - manual doors only when they are actually closed/usable,
   - buttons only when they appear to unlock a nearby relevant door,
   - no general puzzle solving, no sequence inference, and no room-clearing behavior yet.
 - Brain type now affects loot willingness too: `practice` takes the shortest/simplest loot detours, `realistic` uses the baseline behavior, and `competitive` is a bit less willing to drift for loot during combat-adjacent situations.
 - Priority order for explicit detours:
-  - if unarmed, nearby loose guns get a strong temporary priority boost so bots arm up before over-valuing armor/meds
+  - if unarmed, nearby loose guns get first priority
   - armor / helmet upgrades
   - backpack upgrades
   - meds / boosts when reserves are low
