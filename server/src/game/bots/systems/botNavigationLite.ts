@@ -72,6 +72,7 @@ export class BotNavigationLite {
         gasEmergency: boolean,
         targetPos?: Vec2,
         overrideGoal?: Vec2,
+        arriveDist: number = BotTuning.navigation.arriveDist,
     ): Vec2 | undefined {
         const desiredGoal = this._getDesiredGoal(
             game,
@@ -83,16 +84,22 @@ export class BotNavigationLite {
             return undefined;
         }
 
-        if (v2.distance(player.pos, desiredGoal) <= BotTuning.navigation.arriveDist) {
+        if (v2.distance(player.pos, desiredGoal) <= arriveDist) {
             this._clearDetour();
             this._clearFallback();
             this._clearForcedDetour();
         }
 
-        if (this._detourWaypoint && this._reachedPoint(player.pos, this._detourWaypoint)) {
+        if (
+            this._detourWaypoint &&
+            this._reachedPoint(player.pos, this._detourWaypoint, arriveDist)
+        ) {
             this._clearDetour();
         }
-        if (this._fallbackGoal && this._reachedPoint(player.pos, this._fallbackGoal)) {
+        if (
+            this._fallbackGoal &&
+            this._reachedPoint(player.pos, this._fallbackGoal, arriveDist)
+        ) {
             this._clearFallback();
         }
 
@@ -145,15 +152,26 @@ export class BotNavigationLite {
         game: Game;
         player: Player;
         goal?: Vec2;
+        arriveDist?: number;
         moveLeft: boolean;
         moveRight: boolean;
         moveUp: boolean;
         moveDown: boolean;
     }): void {
-        const { dt, game, player, goal, moveLeft, moveRight, moveUp, moveDown } = params;
+        const {
+            dt,
+            game,
+            player,
+            goal,
+            arriveDist = BotTuning.navigation.arriveDist,
+            moveLeft,
+            moveRight,
+            moveUp,
+            moveDown,
+        } = params;
         const attemptedMove = moveLeft || moveRight || moveUp || moveDown;
         const intentionalStationary =
-            !goal || v2.distance(player.pos, goal) <= BotTuning.navigation.arriveDist;
+            !goal || v2.distance(player.pos, goal) <= arriveDist;
 
         if (!attemptedMove) {
             this._progressPos = v2.copy(player.pos);
@@ -238,6 +256,7 @@ export class BotNavigationLite {
         anchor: boolean;
         aimDir: Vec2;
         dt: number;
+        moveDeadzone?: number;
     }): void {
         const {
             msg,
@@ -251,6 +270,7 @@ export class BotNavigationLite {
             anchor,
             aimDir,
             dt,
+            moveDeadzone = 1,
         } = params;
 
         msg.moveLeft = false;
@@ -263,7 +283,7 @@ export class BotNavigationLite {
         const toGoal = v2.sub(goal, player.pos);
         const dist = distToTarget ?? v2.length(toGoal);
 
-        const dd = 1;
+        const dd = moveDeadzone;
         const strafe =
             allowStrafe &&
             hasTarget &&
@@ -529,8 +549,12 @@ export class BotNavigationLite {
         return v2.distance(a, b) <= BotTuning.navigation.sameGoalDist;
     }
 
-    private _reachedPoint(pos: Vec2, point: Vec2): boolean {
-        return v2.distance(pos, point) <= BotTuning.navigation.arriveDist;
+    private _reachedPoint(
+        pos: Vec2,
+        point: Vec2,
+        arriveDist: number = BotTuning.navigation.arriveDist,
+    ): boolean {
+        return v2.distance(pos, point) <= arriveDist;
     }
 
     private _clearDetour(): void {

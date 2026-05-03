@@ -93,6 +93,7 @@ Priority:
 - Break nearby loot objects (melee)
 - Use nearby doors/buttons if useful
 - Interaction is **short-lived and interruptible**
+- `melee_break` approaches obstacle edges with its own tighter arrival distance instead of the normal nav stop radius
 
 ### Unarmed behavior
 - Treat unseen enemies as background danger

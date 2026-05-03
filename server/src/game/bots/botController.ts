@@ -1,6 +1,7 @@
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import { ObjectType } from "../../../../shared/net/objectSerializeFns";
+import { coldet } from "../../../../shared/utils/coldet";
 import { collider } from "../../../../shared/utils/collider";
 import { math } from "../../../../shared/utils/math";
 import { util } from "../../../../shared/utils/util";
@@ -213,12 +214,25 @@ export class BotController {
             objectTarget = undefined;
         }
 
+        const meleeBreakActive =
+            this._combat.state === "interact_object" &&
+            this._combat.objectInteractionMode === "melee_break" &&
+            !!objectTarget;
+        const meleeApproachGoal =
+            meleeBreakActive && objectTarget
+                ? this._getMeleeApproachGoal(player, objectTarget)
+                : undefined;
+        const goalArriveDist = meleeBreakActive
+            ? BotTuning.objectInteract.meleeArriveDist
+            : BotTuning.navigation.arriveDist;
+
         const goal = this._navigation.getGoal(
             this.game,
             player,
             gasEmergency,
             validTarget?.pos,
-            this._combat.goalPos,
+            meleeApproachGoal ?? this._combat.goalPos,
+            goalArriveDist,
         );
 
         const { gunDef, weaponClass, profile } = this._weaponLogic.getWeaponInfo(player);
@@ -279,6 +293,9 @@ export class BotController {
                 !weakLosAnchor,
             aimDir: aimUpdate.aimDir,
             dt,
+            moveDeadzone: meleeBreakActive
+                ? BotTuning.objectInteract.meleeMoveDeadzone
+                : undefined,
         });
 
         // Precision "stop to shoot" focus time
@@ -307,6 +324,7 @@ export class BotController {
             game: this.game,
             player,
             goal,
+            arriveDist: goalArriveDist,
             moveLeft: msg.moveLeft,
             moveRight: msg.moveRight,
             moveUp: msg.moveUp,
@@ -669,6 +687,84 @@ export class BotController {
             obstacle.collider,
             player.pos,
             BotTuning.objectInteract.meleeReach,
+        );
+    }
+
+    private _getMeleeApproachGoal(player: Player, obstacle: Obstacle): Vec2 {
+        const boundaryPoint = this._getObstacleBoundaryPointTowardPlayer(player, obstacle);
+        let awayDir = v2.sub(player.pos, boundaryPoint);
+        if (v2.lengthSqr(awayDir) <= 0.0001) {
+            awayDir = v2.sub(player.pos, obstacle.pos);
+        }
+        if (v2.lengthSqr(awayDir) <= 0.0001) {
+            awayDir = v2.copy(player.dir);
+        }
+        const outward = v2.normalizeSafe(awayDir, v2.create(1, 0));
+        const standOff = Math.max(
+            BotTuning.objectInteract.meleeReach -
+                BotTuning.objectInteract.meleeApproachInset,
+            0.2,
+        );
+        const approach = v2.add(boundaryPoint, v2.mul(outward, standOff));
+        this.game.map.clampToMapBounds(approach, player.rad);
+        return approach;
+    }
+
+    private _getObstacleBoundaryPointTowardPlayer(
+        player: Player,
+        obstacle: Obstacle,
+    ): Vec2 {
+        if (obstacle.collider.type === collider.Type.Circle) {
+            let towardPlayer = v2.sub(player.pos, obstacle.collider.pos);
+            if (v2.lengthSqr(towardPlayer) <= 0.0001) {
+                towardPlayer = v2.copy(player.dir);
+            }
+            const dir = v2.normalizeSafe(towardPlayer, v2.create(1, 0));
+            return v2.add(obstacle.collider.pos, v2.mul(dir, obstacle.collider.rad));
+        }
+
+        const point = coldet.clampPosToAabb(player.pos, obstacle.collider);
+        const insideAabb = coldet.testPointAabb(
+            player.pos,
+            obstacle.collider.min,
+            obstacle.collider.max,
+        );
+        if (!insideAabb) {
+            return point;
+        }
+
+        const center = v2.mul(
+            v2.add(obstacle.collider.min, obstacle.collider.max),
+            0.5,
+        );
+        let away = v2.sub(player.pos, center);
+        if (v2.lengthSqr(away) <= 0.0001) {
+            away = v2.copy(player.dir);
+        }
+
+        const dir = v2.normalizeSafe(away, v2.create(1, 0));
+        const dxMin = Math.abs(player.pos.x - obstacle.collider.min.x);
+        const dxMax = Math.abs(obstacle.collider.max.x - player.pos.x);
+        const dyMin = Math.abs(player.pos.y - obstacle.collider.min.y);
+        const dyMax = Math.abs(obstacle.collider.max.y - player.pos.y);
+
+        if (Math.abs(dir.x) >= Math.abs(dir.y)) {
+            return v2.create(
+                dir.x >= 0 ? obstacle.collider.max.x : obstacle.collider.min.x,
+                math.clamp(player.pos.y, obstacle.collider.min.y, obstacle.collider.max.y),
+            );
+        }
+
+        if (Math.min(dyMin, dyMax) <= Math.min(dxMin, dxMax)) {
+            return v2.create(
+                math.clamp(player.pos.x, obstacle.collider.min.x, obstacle.collider.max.x),
+                dir.y >= 0 ? obstacle.collider.max.y : obstacle.collider.min.y,
+            );
+        }
+
+        return v2.create(
+            dir.x >= 0 ? obstacle.collider.max.x : obstacle.collider.min.x,
+            math.clamp(player.pos.y, obstacle.collider.min.y, obstacle.collider.max.y),
         );
     }
 
