@@ -241,9 +241,15 @@ export class BotController {
 
         this._weaponLogic.decrementTimers(dt);
 
+        const objectInteractionActive =
+            this._combat.state === "interact_object" && !!objectTarget;
+        const objectAimGoal = objectInteractionActive && objectTarget
+            ? objectTarget.pos
+            : undefined;
+
         const aimUpdate = this._aim.update(dt, {
             player,
-            goal,
+            goal: objectAimGoal ?? goal,
             target: validTarget,
             gunDef,
         });
@@ -386,8 +392,6 @@ export class BotController {
             this._clearObjectInteraction();
             objectTarget = undefined;
         }
-        const objectInteractionActive =
-            this._combat.state === "interact_object" && !!objectTarget;
 
         if (
             player.actionType === GameConfig.Action.UseItem &&
