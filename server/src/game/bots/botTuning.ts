@@ -79,7 +79,6 @@ export const BotTuning = {
         breakAbortDangerMin: 0.4,
         maxDetourDist: 8,
         useReachSlack: 0.5,
-        meleeReach: 3.1,
         meleeApproachInset: 0.75,
         meleeArriveDist: 0.2,
         meleeMoveDeadzone: 0.2,

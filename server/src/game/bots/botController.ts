@@ -1,3 +1,5 @@
+import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
+import type { MeleeDef } from "../../../../shared/defs/gameObjects/meleeDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import { ObjectType } from "../../../../shared/net/objectSerializeFns";
@@ -683,10 +685,11 @@ export class BotController {
     }
 
     private _isInMeleeRange(player: Player, obstacle: Obstacle): boolean {
+        const meleeCollider = this._getBotMeleeCollider(player);
         return !!collider.intersectCircle(
             obstacle.collider,
-            player.pos,
-            BotTuning.objectInteract.meleeReach,
+            meleeCollider.pos,
+            meleeCollider.rad,
         );
     }
 
@@ -701,13 +704,39 @@ export class BotController {
         }
         const outward = v2.normalizeSafe(awayDir, v2.create(1, 0));
         const standOff = Math.max(
-            BotTuning.objectInteract.meleeReach -
-                BotTuning.objectInteract.meleeApproachInset,
+            this._getBotMeleeReach(player) - BotTuning.objectInteract.meleeApproachInset,
             0.2,
         );
         const approach = v2.add(boundaryPoint, v2.mul(outward, standOff));
         this.game.map.clampToMapBounds(approach, player.rad);
         return approach;
+    }
+
+    private _getBotMeleeCollider(player: Player): { pos: Vec2; rad: number } {
+        const meleeDef = this._getBotMeleeDef(player);
+        const rot = Math.atan2(player.dir.y, player.dir.x);
+        const offset = v2.add(
+            meleeDef.attack.offset,
+            v2.mul(v2.create(1, 0), player.scale - 1),
+        );
+        return {
+            pos: v2.add(player.pos, v2.rotate(offset, rot)),
+            rad: meleeDef.attack.rad,
+        };
+    }
+
+    private _getBotMeleeReach(player: Player): number {
+        const meleeDef = this._getBotMeleeDef(player);
+        const offset = v2.add(
+            meleeDef.attack.offset,
+            v2.mul(v2.create(1, 0), player.scale - 1),
+        );
+        return v2.length(offset) + meleeDef.attack.rad;
+    }
+
+    private _getBotMeleeDef(player: Player): MeleeDef {
+        const meleeType = player.weapons[GameConfig.WeaponSlot.Melee].type || "fists";
+        return GameObjectDefs[meleeType] as MeleeDef;
     }
 
     private _getObstacleBoundaryPointTowardPlayer(
