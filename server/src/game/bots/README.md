@@ -42,6 +42,36 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
 - Tracks `lastSeenPos/lastSeenTime` when a target is visible, used for short “chase last seen” behavior after LOS is lost.
 - If `Config.bots.allowBotVsBot` is `false`, bots will not target other bots (`isAi` or external `joinMsg.bot`).
 
+## Looting / Unarmed
+- Bots still rely on mobile auto-pickup once they reach loot; explicit bot logic mainly decides **what to walk toward**.
+- Loot detours are conservative:
+  - when no enemy is active: bots may path to nearby useful loot
+  - when LOS is lost: bots may take a **short** detour if danger is low
+  - bots do **not** abandon visible / close combat to chase loot
+- Priority order for explicit detours:
+  - if unarmed, nearby loose guns get first priority
+  - armor / helmet upgrades
+  - backpack upgrades
+  - meds / boosts when reserves are low
+  - ammo for currently held guns
+  - clearly better guns (including safe fill of an empty gun slot)
+- Bots can also opportunistically interact with nearby **loot-bearing obstacles**:
+  - break nearby destructible crates/loot props with melee when safe-ish and worthwhile,
+  - use nearby manual doors/buttons when they directly unblock movement or immediate loot access,
+  - and drop that behavior quickly if danger rises, a target becomes visible, or the bot is damaged.
+- When bots are **unarmed** (no gun in primary/secondary), they use a dedicated internal unarmed brain:
+  - loose guns get first priority,
+  - otherwise they prefer nearby loot-dropping obstacles / practical interactions over passive wandering,
+  - visible armed hostiles make them cautious,
+  - visible unarmed hostiles or distracted armed hostiles allow more crate-breaking than the normal armed brain would.
+- Practical limits for this phase:
+  - manual doors only when they are actually closed/usable,
+  - buttons only when they appear to unlock a nearby relevant door,
+  - no general puzzle solving, no sequence inference, and no room-clearing behavior yet.
+- Brain type now affects loot willingness too: `practice` takes the shortest/simplest loot detours, `realistic` uses the baseline behavior, and `competitive` is a bit less willing to drift for loot during combat-adjacent situations.
+- Breakable-object looting is intentionally weaker than loose-loot looting, and it scales down as the bot already has stronger weapons, better armor/backpack, and healthier reserves.
+- Gun upgrades are intentionally coarse: bots only chase guns that are meaningfully better than what they already have, and will pre-equip the intended slot before pickup if they plan to replace a weapon.
+
 ## Movement
 - Uses a **movement-only combat state machine** (no direct changes to aiming/shooting logic).
 - Gas emergency override:
@@ -68,6 +98,7 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - Tries a **cover-lite** point first (nearby sampled point that blocks enemy LOS; cached ~0.75–1.5s).
     - Falls back to a diagonal/evasive retreat vector when no cover point is found.
   - `seek_cover`: same cover-lite selection, but is intentionally rare (only considered at high danger when low HP or needing reload).
+  - unarmed bots do **not** use passive `hold_range` / `hold_position`; they either arm up, farm nearby loot objects, or disengage.
 - Phase 9 stability pass:
   - small range hysteresis reduces `push`/`back_off` oscillation near distance thresholds,
   - retreat / chase-last-seen / loot states now briefly commit so bots do not thrash between states every re-decision,
@@ -116,36 +147,6 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
     - “long” boost (`painkiller`) requires `danger < 0.3` and no nearby hostile within ~10 units
     - if `boost < 25`, prefers `painkiller` when “long” boost is safe
     - otherwise prefers `soda` when “quick” boost is safe
-
-## Looting
-- Bots still rely on mobile auto-pickup once they reach loot; Phase 7 adds **explicit nearby loot pathing**.
-- Loot detours are conservative:
-  - when no enemy is active: bots may path to nearby useful loot
-  - when LOS is lost: bots may take a **short** detour if danger is low
-  - bots do **not** abandon visible / close combat to chase loot
-- Bots can also opportunistically interact with nearby **loot-bearing obstacles**:
-  - break nearby destructible crates/loot props with melee when safe-ish and worthwhile,
-  - use nearby manual doors/buttons when they directly unblock movement or immediate loot access,
-  - and drop that behavior quickly if danger rises, a target becomes visible, or the bot is damaged.
-- When bots are **unarmed** (no gun in primary/secondary), they use a dedicated internal unarmed brain:
-  - loose guns get first priority,
-  - otherwise they prefer nearby loot-dropping obstacles / practical interactions over passive wandering,
-  - visible armed hostiles make them cautious,
-  - visible unarmed hostiles or distracted armed hostiles allow more crate-breaking than the normal armed brain would.
-- Practical limits for this phase:
-  - manual doors only when they are actually closed/usable,
-  - buttons only when they appear to unlock a nearby relevant door,
-  - no general puzzle solving, no sequence inference, and no room-clearing behavior yet.
-- Brain type now affects loot willingness too: `practice` takes the shortest/simplest loot detours, `realistic` uses the baseline behavior, and `competitive` is a bit less willing to drift for loot during combat-adjacent situations.
-- Priority order for explicit detours:
-  - if unarmed, nearby loose guns get first priority
-  - armor / helmet upgrades
-  - backpack upgrades
-  - meds / boosts when reserves are low
-  - ammo for currently held guns
-  - clearly better guns (including safe fill of an empty gun slot)
-- Breakable-object looting is intentionally weaker than loose-loot looting, and it scales down as the bot already has stronger weapons, better armor/backpack, and healthier reserves.
-- Gun upgrades are intentionally coarse: bots only chase guns that are meaningfully better than what they already have, and will pre-equip the intended slot before pickup if they plan to replace a weapon.
 
 ## Brains / Difficulty
 - `difficulty` is still the **base mechanical skill** layer: reaction time, tracking speed, base aim error, prediction/LOS grace, and burst tuning.
