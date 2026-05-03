@@ -2,12 +2,14 @@ import { MapObjectDefs } from "../../../../../shared/defs/mapObjectDefs";
 import type { ObstacleDef } from "../../../../../shared/defs/mapObjectsTyping";
 import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
 import { collider } from "../../../../../shared/utils/collider";
+import { math } from "../../../../../shared/utils/math";
 import { util } from "../../../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../../../shared/utils/v2";
 import type { Game } from "../../game";
 import type { Obstacle } from "../../objects/obstacle";
 import type { Player } from "../../objects/player";
 import type { BotBrainType } from "../botBrain";
+import type { BotUnarmedThreatContext } from "../botDecisionSupport";
 import { getBotBrainProfile } from "../botBrainProfiles";
 import type { BotCombatState, BotObjectInteractionMode } from "../botCombat";
 import { BotTuning } from "../botTuning";
@@ -33,8 +35,9 @@ export class BotObjectInteractionScorer {
         brainType: BotBrainType;
         state: BotCombatState;
         baseGoal?: Vec2;
+        unarmedThreat?: BotUnarmedThreatContext;
     }): BotObjectInteractionChoice | undefined {
-        const { game, player, mode, brainType, state, baseGoal } = params;
+        const { game, player, mode, brainType, state, baseGoal, unarmedThreat } = params;
         const profile = getBotBrainProfile(brainType);
         const maxDist = this._getSearchDistance(mode, profile);
         const nearby = game.grid.intersectCollider(
@@ -58,6 +61,7 @@ export class BotObjectInteractionScorer {
                 state,
                 baseGoal,
                 profile.objectLootWillingness,
+                unarmedThreat,
             );
             if (!score) continue;
 
@@ -103,6 +107,7 @@ export class BotObjectInteractionScorer {
         state: BotCombatState,
         baseGoal: Vec2 | undefined,
         willingness: number,
+        unarmedThreat?: BotUnarmedThreatContext,
     ): { score: number; reason: string; mode: BotObjectInteractionMode } | undefined {
         const def = MapObjectDefs[obstacle.type];
         if (def.type !== "obstacle") return undefined;
@@ -139,12 +144,17 @@ export class BotObjectInteractionScorer {
 
         const loadoutValue = this._estimateLoadoutValue(player);
         const lootRichness = this._estimateObstacleLootValue(obstacle, def);
-        const score =
+        let score =
             lootRichness * willingness -
             dist * 18 -
             detour * 22 -
             statePenalty -
             loadoutValue * BotTuning.objectInteract.loadoutValuePenalty;
+
+        if (unarmedThreat) {
+            score += BotTuning.unarmed.objectBaseBonus;
+            score += this._scoreUnarmedThreatAdjustment(obstacle, unarmedThreat);
+        }
 
         if (score <= 0) return undefined;
 
@@ -336,6 +346,42 @@ export class BotObjectInteractionScorer {
         value += Math.min(player.inventory.painkiller ?? 0, 3) * 1;
 
         return value;
+    }
+
+    private _scoreUnarmedThreatAdjustment(
+        obstacle: Obstacle,
+        unarmedThreat: BotUnarmedThreatContext,
+    ): number {
+        if (!unarmedThreat.visibleHostile) {
+            return 0;
+        }
+
+        const proximityFactor = unarmedThreat.hostilePos
+            ? math.clamp(
+                  1 -
+                      v2.distance(obstacle.pos, unarmedThreat.hostilePos) /
+                          BotTuning.unarmed.hostileProximityRef,
+                  0,
+                  1,
+              )
+            : 0;
+
+        if (unarmedThreat.hostileHasShownGun) {
+            let penalty = BotTuning.unarmed.shownGunObjectPenalty;
+            if (unarmedThreat.hostileDistracted) {
+                penalty -= BotTuning.unarmed.distractedShownGunObjectRelief;
+            }
+            return -penalty * (0.4 + proximityFactor * 0.6);
+        }
+
+        if (unarmedThreat.hostileAppearsUnarmed) {
+            return (
+                BotTuning.unarmed.unarmedHostileObjectBonus *
+                (0.35 + proximityFactor * 0.65)
+            );
+        }
+
+        return 0;
     }
 
     private _getDetourDistance(

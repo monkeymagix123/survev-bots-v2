@@ -10,7 +10,6 @@ import type { BotBrainType } from "../botBrain";
 import {
     computeBotDanger,
     getBotReloadSnapshot,
-    isBotUnarmed,
 } from "../botDecisionSupport";
 import { logBotStability } from "../botStabilityLogger";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
@@ -41,21 +40,11 @@ export class RealisticBotBrain implements BotBrain {
         const scan = perception.scanForTarget(game, player, timeNow, this.type);
         const recentlyDamaged =
             timeNow - combat.lastDamagedTime < BotTuning.combat.recentlyDamagedWindowSec;
-        const unarmed = isBotUnarmed(player);
-        const enemyVeryClose =
-            perception.threat.nearestNearbyHostileDist <
-            BotTuning.combat.enemyVeryCloseDist;
-        const suppressFallbackTarget =
-            unarmed &&
-            !!scan.target &&
-            !scan.visible &&
-            !enemyVeryClose &&
-            !recentlyDamaged;
 
         const prevTargetId = perception.targetId;
         const prevVisible = perception.targetVisible;
 
-        const chosen = suppressFallbackTarget ? undefined : scan.target;
+        const chosen = scan.target;
         if (chosen) {
             const newTargetId = chosen.__id;
             const newVisible = scan.visible;
@@ -115,27 +104,11 @@ export class RealisticBotBrain implements BotBrain {
         if (!perception.targetId) {
             const threat = perception.threat;
             navigation.ensureWaypoint(game, player);
-            const canLootWhileUnarmed =
-                unarmed &&
-                !recentlyDamaged &&
-                !threat.anyHostileVisible &&
-                threat.nearestNearbyHostileDist > BotTuning.combat.enemyVeryCloseDist;
-            const canQuickGrabWhileUnarmed =
-                unarmed &&
-                recentlyDamaged &&
-                !gasEmergency &&
-                !threat.anyHostileVisible &&
-                threat.nearestNearbyHostileDist > BotTuning.combat.enemyVeryCloseDist;
-            const safeIdleLootWindow =
-                !gasEmergency &&
-                !threat.anyHostileVisible &&
-                threat.nearestNearbyHostileDist >
-                    (canLootWhileUnarmed
-                        ? BotTuning.combat.enemyVeryCloseDist
-                        : BotTuning.combat.enemyCloseDist) &&
-                (canLootWhileUnarmed || !threat.hasRecentEnemy);
             const idleLoot =
-                safeIdleLootWindow || canQuickGrabWhileUnarmed
+                !gasEmergency &&
+                !threat.anyHostileVisible &&
+                !threat.hasRecentEnemy &&
+                threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
                     ? lootScorer.chooseLoot({
                           game,
                           player,
@@ -143,16 +116,11 @@ export class RealisticBotBrain implements BotBrain {
                           brainType: this.type,
                       })
                     : undefined;
-            const quickGrabLoot =
-                unarmed &&
-                recentlyDamaged &&
-                idleLoot?.weaponSlot !== undefined &&
-                v2.distance(player.pos, idleLoot.pos) <=
-                    BotTuning.loot.unarmedQuickGrabDist
-                    ? idleLoot
-                    : undefined;
             const idleObject =
-                safeIdleLootWindow
+                !gasEmergency &&
+                !threat.anyHostileVisible &&
+                !threat.hasRecentEnemy &&
+                threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
                     ? objectInteractionScorer.chooseObject({
                           game,
                           player,
@@ -163,15 +131,7 @@ export class RealisticBotBrain implements BotBrain {
                       })
                     : undefined;
 
-            if (quickGrabLoot) {
-                combat.setState("loot", timeNow, "unarmed_quick_grab");
-                combat.goalPos = sanitizeGoal(quickGrabLoot.pos);
-                combat.movementStyle = "direct";
-                combat.lootTargetId = quickGrabLoot.lootId;
-                combat.lootWeaponSlot = quickGrabLoot.weaponSlot;
-                combat.objectTargetId = undefined;
-                combat.objectInteractionMode = undefined;
-            } else if (idleObject && (idleObject.mode === "use" || !idleLoot)) {
+            if (idleObject && (idleObject.mode === "use" || !idleLoot)) {
                 combat.setState("interact_object", timeNow, idleObject.reason);
                 if (prevState !== combat.state) {
                     combat.stateLockUntil =
@@ -329,12 +289,6 @@ export class RealisticBotBrain implements BotBrain {
         if (lowHp && danger >= brainProfile.retreatDangerMin) {
             state = "retreat_heal";
             reason = "low_hp";
-        } else if (unarmed && !visible && recentlyDamaged) {
-            state = danger >= brainProfile.highDangerMin ? "seek_cover" : "back_off";
-            reason = "unarmed_recent_damage";
-        } else if (unarmed && !visible && enemyVeryClose) {
-            state = "back_off";
-            reason = "unarmed_enemy_close";
         } else if (needsReload && danger >= brainProfile.retreatDangerMin) {
             state = "retreat_reload";
             reason = "reload_under_threat";

@@ -1,3 +1,4 @@
+import { GameObjectDefs } from "../../../../../shared/defs/gameObjectDefs";
 import { GameConfig } from "../../../../../shared/gameConfig";
 import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
 import { coldet } from "../../../../../shared/utils/coldet";
@@ -9,6 +10,7 @@ import type { Game } from "../../game";
 import type { Player } from "../../objects/player";
 import type { BotBrainType } from "../botBrain";
 import { getBotBrainProfile } from "../botBrainProfiles";
+import { BotTuning } from "../botTuning";
 
 export type BotThreatSnapshot = {
     /**
@@ -52,6 +54,10 @@ export class BotPerception {
     targetSeenTime = -Infinity;
     lastSeenPos?: Vec2;
     lastSeenTime = -Infinity;
+    targetHasShownGun = false;
+    targetAppearsUnarmed = false;
+    targetRecentlyFired = false;
+    targetDistracted = false;
 
     threat: BotThreatSnapshot = {
         nearbyHostileCount: 0,
@@ -66,6 +72,7 @@ export class BotPerception {
 
     private _lastDamagedTime = -Infinity;
     private _lastHeardEnemyTime = -Infinity;
+    private readonly _shownGunHostiles = new Set<number>();
 
     /**
      * True when bot has seen an enemy recently (used for retire priority).
@@ -186,6 +193,9 @@ export class BotPerception {
             }
             const hasLos = this._hasLineOfSight(game, player, other);
             if (!hasLos) continue;
+            if (this._hasVisibleGunEvidence(other)) {
+                this._shownGunHostiles.add(other.__id);
+            }
             if (profile.targetSelection === "threat_score") {
                 const visibleScore = this._scoreTargetChoice(
                     player,
@@ -210,6 +220,7 @@ export class BotPerception {
         }
 
         const chosen = bestVisible ?? bestAny;
+        this._pruneShownGunMemory(game);
 
         const recentEnemyTime = Math.max(
             this.targetSeenTime,
@@ -229,10 +240,88 @@ export class BotPerception {
             hasRecentEnemy,
         };
 
+        const targetVisible = chosen !== undefined && chosen === bestVisible;
+        const targetHasShownGun =
+            chosen !== undefined && this._shownGunHostiles.has(chosen.__id);
+        const targetRecentlyFired =
+            targetVisible &&
+            chosen !== undefined &&
+            this._hasVisibleGun(chosen) &&
+            chosen.shotSlowdownTimer > 0;
+        const targetAppearsUnarmed =
+            targetVisible &&
+            chosen !== undefined &&
+            !targetHasShownGun &&
+            !this._hasVisibleGun(chosen) &&
+            !targetRecentlyFired;
+
+        let targetDistracted = false;
+        if (
+            targetVisible &&
+            chosen !== undefined &&
+            targetHasShownGun &&
+            targetRecentlyFired &&
+            timeNow - this._lastDamagedTime >
+                BotTuning.combat.recentlyDamagedWindowSec
+        ) {
+            for (let i = 0; i < objects.length; i++) {
+                const obj = objects[i];
+                if (obj.__type !== ObjectType.Player) continue;
+                const other = obj as Player;
+                if (other === chosen || other === player) continue;
+                if (other.dead || other.disconnected) continue;
+                if (!util.sameLayer(other.layer, chosen.layer)) continue;
+                if (!this._isNonFriendly(chosen, other, game)) continue;
+
+                if (
+                    v2.distance(other.pos, chosen.pos) <=
+                    BotTuning.unarmed.distractedFightRadius
+                ) {
+                    targetDistracted = true;
+                    break;
+                }
+            }
+        }
+
+        this.targetHasShownGun = targetHasShownGun;
+        this.targetAppearsUnarmed = targetAppearsUnarmed;
+        this.targetRecentlyFired = targetRecentlyFired;
+        this.targetDistracted = targetDistracted;
+
         return {
             target: chosen,
-            visible: chosen !== undefined && chosen === bestVisible,
+            visible: targetVisible,
         };
+    }
+
+    private _hasVisibleGunEvidence(player: Player): boolean {
+        return this._hasVisibleGun(player);
+    }
+
+    private _hasVisibleGun(player: Player): boolean {
+        const activeDef = GameObjectDefs[player.activeWeapon];
+        return activeDef?.type === "gun";
+    }
+
+    private _isNonFriendly(a: Player, b: Player, game: Game): boolean {
+        return !(
+            a.groupId === b.groupId ||
+            (game.map.factionMode && a.teamId === b.teamId)
+        );
+    }
+
+    private _pruneShownGunMemory(game: Game): void {
+        for (const id of this._shownGunHostiles) {
+            const obj = game.objectRegister.getById(id);
+            if (
+                !obj ||
+                obj.__type !== ObjectType.Player ||
+                (obj as Player).dead ||
+                (obj as Player).disconnected
+            ) {
+                this._shownGunHostiles.delete(id);
+            }
+        }
     }
 
     private _hasLineOfSight(game: Game, player: Player, target: Player): boolean {

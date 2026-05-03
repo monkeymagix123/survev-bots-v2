@@ -16,6 +16,7 @@ import {
     computeBotDanger,
     getBotReloadSnapshot,
     getBotThreatBands,
+    isBotUnarmed,
     isBotSafeToHeal,
 } from "./botDecisionSupport";
 import {
@@ -30,6 +31,7 @@ import type { BotBrain } from "./brains/botBrainLogic";
 import { CompetitiveBotBrain } from "./brains/competitiveBotBrain";
 import { PracticeBotBrain } from "./brains/practiceBotBrain";
 import { RealisticBotBrain } from "./brains/realisticBotBrain";
+import { UnarmedBotBrain } from "./brains/unarmedBotBrain";
 import { BotTuning } from "./botTuning";
 import { LegacyBotController } from "./legacy/legacyBotController";
 import { BotAimController } from "./systems/botAimController";
@@ -54,6 +56,7 @@ export class BotController {
     private readonly _objectInteractionScorer = new BotObjectInteractionScorer();
     private readonly _weaponLogic: BotWeaponLogic;
     private readonly _brain: BotBrain;
+    private readonly _unarmedBrain: BotBrain = new UnarmedBotBrain();
     private readonly _brainProfile: BotBrainProfile;
 
     // TEMP (Phase 1 parity verification)
@@ -125,7 +128,10 @@ export class BotController {
         if (this._decisionTicker >= decisionInterval + this._nextDecisionDelaySec) {
             this._decisionTicker = 0;
             this._nextDecisionDelaySec = getDecisionDelaySec(this.brainType);
-            this._brain.decide({
+            const decisionBrain = isBotUnarmed(this.player)
+                ? this._unarmedBrain
+                : this._brain;
+            decisionBrain.decide({
                 brainType: this.brainType,
                 brainProfile: this._brainProfile,
                 game: this.game,
@@ -357,11 +363,25 @@ export class BotController {
         const threat = this._perception.threat;
         const enemyDist = threat.nearestNearbyHostileDist;
         const { enemyVeryClose, enemyClose } = getBotThreatBands(enemyDist);
+        const visibleThreatShouldAbortObject =
+            threat.anyHostileVisible &&
+            (!isBotUnarmed(player) ||
+                !this._perception.targetVisible ||
+                (this._perception.targetHasShownGun &&
+                    !this._perception.targetDistracted));
+        const dangerShouldAbortObject =
+            danger >= BotTuning.objectInteract.breakAbortDangerMin &&
+            (!isBotUnarmed(player) ||
+                !this._perception.targetVisible ||
+                (this._perception.targetHasShownGun &&
+                    !this._perception.targetDistracted) ||
+                (!this._perception.targetAppearsUnarmed &&
+                    !this._perception.targetDistracted));
         const shouldAbortObjectInteraction =
             this._combat.state === "interact_object" &&
-            (threat.anyHostileVisible ||
+            (visibleThreatShouldAbortObject ||
                 recentlyDamaged ||
-                danger >= BotTuning.objectInteract.breakAbortDangerMin);
+                dangerShouldAbortObject);
         if (shouldAbortObjectInteraction) {
             this._clearObjectInteraction();
             objectTarget = undefined;

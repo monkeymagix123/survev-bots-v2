@@ -2,6 +2,7 @@ import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import type { GunDef } from "../../../../shared/defs/gameObjects/gunDefs";
 import { math } from "../../../../shared/utils/math";
+import type { Vec2 } from "../../../../shared/utils/v2";
 import type { Player } from "../objects/player";
 import type { BotBrainProfile } from "./botBrainProfiles";
 import { BotTuning } from "./botTuning";
@@ -12,6 +13,15 @@ export type BotReloadSnapshot = {
     spareAmmo: number;
     isReloading: boolean;
     needsReload: boolean;
+};
+
+export type BotUnarmedThreatContext = {
+    visibleHostile: boolean;
+    hostileHasShownGun: boolean;
+    hostileAppearsUnarmed: boolean;
+    hostileRecentlyFired: boolean;
+    hostileDistracted: boolean;
+    hostilePos?: Vec2;
 };
 
 export function getBotReloadSnapshot(

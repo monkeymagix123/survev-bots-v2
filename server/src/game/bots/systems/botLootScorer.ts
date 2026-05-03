@@ -17,7 +17,10 @@ import type { Game } from "../../game";
 import type { Loot } from "../../objects/loot";
 import type { Player } from "../../objects/player";
 import type { BotBrainType } from "../botBrain";
-import { isBotUnarmed } from "../botDecisionSupport";
+import {
+    type BotUnarmedThreatContext,
+    isBotUnarmed,
+} from "../botDecisionSupport";
 import { getBotBrainProfile } from "../botBrainProfiles";
 import { BotTuning } from "../botTuning";
 import { classifyWeapon } from "./botWeaponProfiles";
@@ -44,8 +47,10 @@ export class BotLootScorer {
         player: Player;
         mode: BotLootMode;
         brainType: BotBrainType;
+        onlyGuns?: boolean;
+        unarmedThreat?: BotUnarmedThreatContext;
     }): BotLootChoice | undefined {
-        const { game, player, mode, brainType } = params;
+        const { game, player, mode, brainType, onlyGuns, unarmedThreat } = params;
         const profile = getBotBrainProfile(brainType);
         const maxDist = this._getSearchDistance(mode, profile);
         const nearby = game.grid.intersectCollider(
@@ -62,16 +67,27 @@ export class BotLootScorer {
             if (!util.sameLayer(loot.layer, player.layer)) continue;
             if (loot.ownerId !== 0 && loot.ownerId !== player.__id) continue;
 
+            const def = GameObjectDefs[loot.type];
+            if (!def || !("lootImg" in def)) continue;
+            if (onlyGuns && def.type !== "gun") continue;
+
             const dist = v2.distance(player.pos, loot.pos);
             if (dist > maxDist) continue;
 
             const score = this._scoreLoot(player, loot, dist);
             if (!score) continue;
 
+            const adjustedScore = this._adjustForUnarmedThreat({
+                player,
+                itemType: def.type,
+                score: score.score,
+                unarmedThreat,
+            });
+
             const choice: BotLootChoice = {
                 lootId: loot.__id,
                 pos: v2.copy(loot.pos),
-                score: score.score,
+                score: adjustedScore,
                 reason: score.reason,
                 weaponSlot: score.weaponSlot,
             };
@@ -82,6 +98,38 @@ export class BotLootScorer {
         }
 
         return best;
+    }
+
+    private _adjustForUnarmedThreat(params: {
+        player: Player;
+        itemType: string;
+        score: number;
+        unarmedThreat?: BotUnarmedThreatContext;
+    }): number {
+        const { player, itemType, score, unarmedThreat } = params;
+        if (!unarmedThreat || !isBotUnarmed(player) || !unarmedThreat.visibleHostile) {
+            return score;
+        }
+
+        let adjusted = score;
+        if (itemType === "gun") {
+            if (unarmedThreat.hostileHasShownGun) {
+                adjusted += BotTuning.unarmed.shownGunLootBonus;
+                if (unarmedThreat.hostileDistracted) {
+                    adjusted += BotTuning.unarmed.distractedShownGunLootRelief;
+                }
+            }
+            return adjusted;
+        }
+
+        if (unarmedThreat.hostileHasShownGun) {
+            adjusted -= BotTuning.unarmed.shownGunNonGunLootPenalty;
+            if (unarmedThreat.hostileDistracted) {
+                adjusted += BotTuning.unarmed.distractedShownGunLootRelief;
+            }
+        }
+
+        return adjusted;
     }
 
     private _getSearchDistance(

@@ -1,6 +1,6 @@
 # Bots (Current Behavior)
 
-This describes how the **internal bots** currently behave on the server (as of 2026-05-01).
+This describes how the **internal bots** currently behave on the server (as of 2026-05-02).
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`, driven by `BotController`.
 
@@ -35,7 +35,10 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - Same `teamId` in faction mode (Wave counts as faction teams).
 - Chooses the **nearest visible (LOS)** enemy if one exists; otherwise the nearest enemy even if currently not visible.
 - `competitive` bots upgrade this slightly: they still prefer visible nearby enemies, but also bias toward low-health / reloading targets and keep a bit more target stickiness.
-- When bots are **unarmed** (no gun in primary/secondary), unseen fallback targets are suppressed unless the hostile is extremely close or the bot was just damaged; this keeps unarmed bots in loot-first behavior instead of passive anchor states.
+- Bots keep a small hostile-weapon memory:
+  - if a visible hostile ever shows a gun, bots remember that hostile as gun-capable for the rest of that life,
+  - if a visible hostile appears truly unarmed, unarmed bots treat them as much less threatening,
+  - if a visible armed hostile is actively shooting near another non-friendly player, bots may treat them as temporarily distracted.
 - Tracks `lastSeenPos/lastSeenTime` when a target is visible, used for short “chase last seen” behavior after LOS is lost.
 - If `Config.bots.allowBotVsBot` is `false`, bots will not target other bots (`isAi` or external `joinMsg.bot`).
 
@@ -124,6 +127,10 @@ Internal bots are normal `Player` objects with `player.isAi = true` and `player.
   - break nearby destructible crates/loot props with melee when safe-ish and worthwhile,
   - use nearby manual doors/buttons when they directly unblock movement or immediate loot access,
   - and drop that behavior quickly if danger rises, a target becomes visible, or the bot is damaged.
+- When bots are **unarmed** (no gun in primary/secondary), they use a dedicated internal unarmed brain:
+  - loose guns get first priority,
+  - otherwise they prefer nearby loot-dropping obstacles / practical interactions over passive wandering,
+  - visible armed hostiles make them cautious, but visible unarmed hostiles or distracted armed hostiles still allow more crate-breaking than the normal armed brain would.
 - Practical limits for this phase:
   - manual doors only when they are actually closed/usable,
   - buttons only when they appear to unlock a nearby relevant door,
