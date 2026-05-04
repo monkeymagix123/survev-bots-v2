@@ -72,6 +72,7 @@ Last updated: 2026-05-03
   - unarmed bot behavior with `giveStartingWeapons=false`
 - Started a more structured navigation pass:
   - bots inside containers can now route toward an exit instead of driving straight into the container shell
+  - bots can now route into and out of simple warehouses through their large side openings
   - large indestructible wall blockers now bias navigation toward sliding/peeling off the wall instead of sitting on it
 - Phase 1 parity verification / eventual legacy comparator removal.
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.

@@ -523,7 +523,10 @@ export class BotNavigationLite {
         goal: Vec2,
         gasEmergency: boolean,
     ): Vec2 | undefined {
-        return this._getContainerExitGoal(game, player, goal, gasEmergency);
+        return (
+            this._getContainerExitGoal(game, player, goal, gasEmergency) ??
+            this._getWarehouseTransitionGoal(game, player, goal, gasEmergency)
+        );
     }
 
     private _getContainerExitGoal(
@@ -556,16 +559,84 @@ export class BotNavigationLite {
     }
 
     private _getContainingContainer(game: Game, player: Player): Building | undefined {
-        const objs = game.grid.intersectPos(player.pos);
+        return this._getContainingStructuredBuilding(
+            game,
+            player.pos,
+            player.layer,
+            (building) => this._isContainerBuilding(building),
+        );
+    }
+
+    private _isContainerBuilding(building: Building): boolean {
+        return building.type.startsWith("container_");
+    }
+
+    private _getWarehouseTransitionGoal(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+        gasEmergency: boolean,
+    ): Vec2 | undefined {
+        const currentWarehouse = this._getContainingWarehouse(
+            game,
+            player.pos,
+            player.layer,
+        );
+        if (
+            currentWarehouse &&
+            !this._isPointInsideBuilding(currentWarehouse, goal, player.layer)
+        ) {
+            return this._pickWarehouseOpeningGoal(
+                game,
+                player,
+                currentWarehouse,
+                goal,
+                gasEmergency,
+                "exit",
+            );
+        }
+
+        const goalWarehouse = this._getContainingWarehouse(game, goal, player.layer);
+        if (!currentWarehouse && goalWarehouse) {
+            return this._pickWarehouseOpeningGoal(
+                game,
+                player,
+                goalWarehouse,
+                goal,
+                gasEmergency,
+                "enter",
+            );
+        }
+
+        return undefined;
+    }
+
+    private _getContainingWarehouse(
+        game: Game,
+        point: Vec2,
+        layer: number,
+    ): Building | undefined {
+        return this._getContainingStructuredBuilding(game, point, layer, (building) =>
+            this._isWarehouseBuilding(building),
+        );
+    }
+
+    private _getContainingStructuredBuilding(
+        game: Game,
+        point: Vec2,
+        layer: number,
+        predicate: (building: Building) => boolean,
+    ): Building | undefined {
+        const objs = game.grid.intersectPos(point);
         let best: Building | undefined;
         let bestZIdx = -Infinity;
 
         for (const obj of objs) {
             if (obj.__type !== ObjectType.Building) continue;
             const building = obj as Building;
-            if (!this._isContainerBuilding(building)) continue;
+            if (!predicate(building)) continue;
             if (building.zIdx < bestZIdx) continue;
-            if (!this._isPointInsideBuilding(building, player.pos, player.layer)) continue;
+            if (!this._isPointInsideBuilding(building, point, layer)) continue;
             best = building;
             bestZIdx = building.zIdx;
         }
@@ -573,8 +644,11 @@ export class BotNavigationLite {
         return best;
     }
 
-    private _isContainerBuilding(building: Building): boolean {
-        return building.type.startsWith("container_");
+    private _isWarehouseBuilding(building: Building): boolean {
+        return (
+            building.type.startsWith("warehouse_01") ||
+            building.type.startsWith("warehouse_02")
+        );
     }
 
     private _isPointInsideBuilding(
@@ -617,6 +691,99 @@ export class BotNavigationLite {
         }
 
         return exits;
+    }
+
+    private _pickWarehouseOpeningGoal(
+        game: Game,
+        player: Player,
+        building: Building,
+        goal: Vec2,
+        gasEmergency: boolean,
+        mode: "enter" | "exit",
+    ): Vec2 | undefined {
+        const candidates = this._getWarehouseOpeningCandidates(
+            game,
+            player,
+            building,
+            mode,
+        );
+        let bestCandidate: Vec2 | undefined;
+        let bestScore = Infinity;
+
+        for (const candidate of candidates) {
+            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
+            if (this._traceRoute(game, player, player.pos, candidate).blocked) continue;
+
+            const score =
+                v2.distance(player.pos, candidate) * 0.35 + v2.distance(candidate, goal);
+            if (score < bestScore) {
+                bestScore = score;
+                bestCandidate = candidate;
+            }
+        }
+
+        return bestCandidate;
+    }
+
+    private _getWarehouseOpeningCandidates(
+        game: Game,
+        player: Player,
+        building: Building,
+        mode: "enter" | "exit",
+    ): Vec2[] {
+        const bounds = this._getBuildingLocalSurfaceBounds(building);
+        const openingOffset =
+            mode === "enter"
+                ? -BotTuning.navigation.warehouseEntryInsideInset
+                : BotTuning.navigation.warehouseEntryExitOutsideDist;
+        const localCandidates = [
+            v2.create(bounds.min.x - openingOffset, 0),
+            v2.create(bounds.max.x + openingOffset, 0),
+        ];
+
+        return localCandidates.map((local) => {
+            const world = this._toWorldPoint(building, local);
+            game.map.clampToMapBounds(world, player.rad);
+            return world;
+        });
+    }
+
+    private _getBuildingLocalSurfaceBounds(building: Building): {
+        min: Vec2;
+        max: Vec2;
+    } {
+        const min = v2.create(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+        const max = v2.create(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+
+        for (const surface of building.surfaces) {
+            for (const collision of surface.colliders) {
+                const worldAabb = collider.toAabb(collision);
+                for (const point of collider.getPoints(worldAabb)) {
+                    const local = this._toLocalPoint(building, point);
+                    min.x = Math.min(min.x, local.x);
+                    min.y = Math.min(min.y, local.y);
+                    max.x = Math.max(max.x, local.x);
+                    max.y = Math.max(max.y, local.y);
+                }
+            }
+        }
+
+        if (!Number.isFinite(min.x) || !Number.isFinite(max.x)) {
+            return {
+                min: v2.create(-10, -10),
+                max: v2.create(10, 10),
+            };
+        }
+
+        return { min, max };
+    }
+
+    private _toLocalPoint(building: Building, point: Vec2): Vec2 {
+        return v2.rotate(v2.sub(point, building.pos), -building.rot);
+    }
+
+    private _toWorldPoint(building: Building, local: Vec2): Vec2 {
+        return v2.add(v2.rotate(local, building.rot), building.pos);
     }
 
     private _pickWallSlideWaypoint(
