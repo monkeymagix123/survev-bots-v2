@@ -45,7 +45,7 @@ Bots follow a lightweight priority stack:
 - Use a lightweight movement state machine
 - Use short detours and fallback recovery instead of full pathfinding
 - Can route out through container exits instead of face-hugging the container walls
-- Can route into and out of simple warehouses through the big side openings
+- Can route into and out of simple warehouses through the big side openings, including actually crossing the threshold on entry
 - Can bias detours to slide along or peel away from large indestructible walls
 - Use local cover-lite sampling under pressure
 - Respect gas/safe-zone pressure first

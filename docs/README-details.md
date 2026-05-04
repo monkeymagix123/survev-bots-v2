@@ -117,6 +117,7 @@ Movement is state-driven and separate from shooting.
 - safe fallback waypoint / gas-center recovery
 - special-case container exit routing when a bot is inside a container but needs to leave it
 - special-case warehouse entry/exit routing through the large side openings
+- warehouse entry now uses an interior opening point so bots cross the threshold instead of stalling just outside
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
 
 It is **not** full pathfinding.
