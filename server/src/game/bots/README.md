@@ -98,7 +98,7 @@ Priority:
 ### Unarmed behavior
 - Treat unseen enemies as background danger
 - Prioritize arming up
-- Use a dedicated internal unarmed brain
+- Use dedicated internal unarmed brain/controller paths
 - Visible armed enemies strongly reduce loot/object willingness
 - Visible unarmed enemies, or distracted armed enemies, still allow more crate-breaking than the normal armed brain would
 - Passive `hold_range` / anchor behavior is avoided while unarmed
