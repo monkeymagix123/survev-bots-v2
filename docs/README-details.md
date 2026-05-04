@@ -30,6 +30,9 @@ They are managed by `BotManager` and driven by:
   - main movement-state selector for armed baseline behavior
 - `server/src/game/bots/brains/unarmedBotBrain.ts`
   - dedicated decision model for bots with no primary/secondary gun
+- `server/src/game/bots/botControllerShared.ts`
+  - shared low-level controller helpers used by both armed and unarmed paths
+  - centralizes common target/object/loot/melee/support-item behavior without merging the two controller flows
 
 ### Supporting systems
 - `BotPerception`
@@ -51,6 +54,7 @@ Important distinction:
 - armed bots and unarmed bots now share some systems,
 - but unarmed bots have their own **brain** and their own **input/controller path**
 - this keeps unarmed-specific caution, loot-object farming, and object-abort behavior separate from the armed path
+- shared controller mechanics now live in `botControllerShared.ts`, so common helper behavior stays aligned between both paths
 - once a bot acquires a primary or secondary gun again, it returns to the normal armed brain/controller path
 
 ## Modes
@@ -189,6 +193,13 @@ The unarmed controller path is intentionally lean:
 - no gun burst/precision handling
 - no quickswitch logic
 - only movement, item use, loot/object interaction, and melee-break output
+
+Shared helper layer:
+- target resolution
+- loot-target resolution and pickup inputs
+- object-target validation / use handling
+- melee-break edge approach and contact checks
+- object-abort, heal-cancel, and heal/boost item-choice helpers
 
 ## Aim / Shooting
 
