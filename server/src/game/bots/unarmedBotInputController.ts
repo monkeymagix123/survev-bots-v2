@@ -1,10 +1,5 @@
-import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
-import type { MeleeDef } from "../../../../shared/defs/gameObjects/meleeDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
-import { ObjectType } from "../../../../shared/net/objectSerializeFns";
-import { coldet } from "../../../../shared/utils/coldet";
-import { collider } from "../../../../shared/utils/collider";
 import { math } from "../../../../shared/utils/math";
 import { util } from "../../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../../shared/utils/v2";
@@ -19,6 +14,18 @@ import {
     getBotThreatBands,
     isBotSafeToHeal,
 } from "./botDecisionSupport";
+import {
+    applyLootInputs,
+    clearObjectInteraction,
+    getMeleeApproachGoal,
+    getObjectTarget,
+    isInMeleeRange,
+    isObjectTargetStillValid,
+    logIdleReason,
+    resolveLootTarget,
+    resolveValidTarget,
+    tryUseInteractObject,
+} from "./botControllerShared";
 import type { BotBrainType } from "./botBrain";
 import type { BotBrainProfile } from "./botBrainProfiles";
 import { logBotStability } from "./botStabilityLogger";
@@ -55,37 +62,19 @@ export class UnarmedBotInputController {
         const msg = new net.InputMsg();
         msg.seq = seq;
 
-        const targetObj = this.perception.targetId
-            ? this.game.objectRegister.getById(this.perception.targetId)
-            : undefined;
-        const target =
-            targetObj && targetObj.__type === ObjectType.Player
-                ? (targetObj as Player)
-                : undefined;
-        const validTarget =
-            target &&
-            !target.dead &&
-            !target.disconnected &&
-            util.sameLayer(target.layer, player.layer)
-                ? target
-                : undefined;
-
-        if (!validTarget) {
-            this.perception.targetId = undefined;
-            this.perception.targetVisible = false;
-        }
+        const validTarget = resolveValidTarget(this.game, player, this.perception);
 
         const gas = this.game.gas;
         const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
 
-        let objectTarget = this._getObjectTarget();
+        let objectTarget = getObjectTarget(this.game, this.combat);
         if (
             objectTarget &&
             (!util.sameLayer(objectTarget.layer, player.layer) ||
                 objectTarget.dead ||
-                !this._isObjectTargetStillValid(objectTarget))
+                !isObjectTargetStillValid(this.combat, objectTarget))
         ) {
-            this._clearObjectInteraction();
+            clearObjectInteraction(this.combat);
             objectTarget = undefined;
         }
 
@@ -95,7 +84,7 @@ export class UnarmedBotInputController {
             !!objectTarget;
         const meleeApproachGoal =
             meleeBreakActive && objectTarget
-                ? this._getMeleeApproachGoal(player, objectTarget)
+                ? getMeleeApproachGoal(this.game, player, objectTarget)
                 : undefined;
         const goalArriveDist = meleeBreakActive
             ? BotTuning.objectInteract.meleeArriveDist
@@ -177,46 +166,8 @@ export class UnarmedBotInputController {
             moveDown: msg.moveDown,
         });
 
-        const lootObj = this.combat.lootTargetId
-            ? this.game.objectRegister.getById(this.combat.lootTargetId)
-            : undefined;
-        const lootTarget =
-            lootObj &&
-            lootObj.__type === ObjectType.Loot &&
-            !lootObj.destroyed &&
-            util.sameLayer(lootObj.layer, player.layer)
-                ? (lootObj as Loot)
-                : undefined;
-
-        if (!lootTarget) {
-            this.combat.lootTargetId = undefined;
-            this.combat.lootWeaponSlot = undefined;
-        } else if (
-            this.combat.state === "loot" &&
-            this.combat.lootWeaponSlot !== undefined &&
-            player.curWeapIdx !== this.combat.lootWeaponSlot
-        ) {
-            let equipInput: number;
-            switch (this.combat.lootWeaponSlot) {
-                case GameConfig.WeaponSlot.Primary:
-                    equipInput = GameConfig.Input.EquipPrimary;
-                    break;
-                case GameConfig.WeaponSlot.Secondary:
-                default:
-                    equipInput = GameConfig.Input.EquipSecondary;
-                    break;
-            }
-            msg.addInput(equipInput);
-        }
-
-        if (
-            this.combat.state === "loot" &&
-            lootTarget &&
-            player.actionType === GameConfig.Action.None &&
-            player.getClosestLoot()?.__id === lootTarget.__id
-        ) {
-            msg.addInput(GameConfig.Input.Loot);
-        }
+        const lootTarget = resolveLootTarget(this.game, this.combat, player);
+        applyLootInputs(msg, this.combat, player, lootTarget);
 
         const danger = computeBotDanger({
             targetVisible: !!validTarget && this.perception.targetVisible,
@@ -246,7 +197,7 @@ export class UnarmedBotInputController {
             this.combat.state === "interact_object" &&
             (visibleThreatShouldAbortObject || recentlyDamaged || dangerShouldAbortObject);
         if (shouldAbortObjectInteraction) {
-            this._clearObjectInteraction();
+            clearObjectInteraction(this.combat);
             objectTarget = undefined;
         }
 
@@ -296,19 +247,7 @@ export class UnarmedBotInputController {
         }
 
         if (objectInteractionActive) {
-            if (!objectTarget) {
-                this._clearObjectInteraction();
-            } else if (this.combat.objectInteractionMode === "use") {
-                if (
-                    player.actionType === GameConfig.Action.None &&
-                    player
-                        .getInteractableObstacles()
-                        .some((obstacle) => obstacle.__id === objectTarget?.__id)
-                ) {
-                    msg.addInput(GameConfig.Input.Use);
-                    this._clearObjectInteraction();
-                }
-            }
+            tryUseInteractObject(msg, this.combat, player, objectTarget);
         }
 
         msg.useItem = "";
@@ -364,8 +303,11 @@ export class UnarmedBotInputController {
             objectInteractionActive &&
             this.combat.objectInteractionMode === "melee_break";
 
-        this._logIdleReason({
-            player,
+        this._lastIdleReason = logIdleReason({
+            brainType: this.brainType,
+            botId: player.__id,
+            state: this.combat.state,
+            stateReason: this.combat.stateReason,
             goal,
             allowShooting,
             weakLosAnchor,
@@ -373,6 +315,7 @@ export class UnarmedBotInputController {
             moveRight: msg.moveRight,
             moveUp: msg.moveUp,
             moveDown: msg.moveDown,
+            lastIdleReason: this._lastIdleReason,
         });
         msg.shootHold = false;
         msg.shootStart = false;
@@ -384,7 +327,7 @@ export class UnarmedBotInputController {
         ) {
             if (player.curWeapIdx !== GameConfig.WeaponSlot.Melee) {
                 msg.addInput(GameConfig.Input.EquipMelee);
-            } else if (this._isInMeleeRange(player, objectTarget)) {
+            } else if (isInMeleeRange(player, objectTarget)) {
                 msg.shootHold = false;
                 msg.shootStart = true;
             }
@@ -393,199 +336,5 @@ export class UnarmedBotInputController {
         msg.touchMoveActive = false;
 
         return msg;
-    }
-
-    private _getObjectTarget(): Obstacle | undefined {
-        if (this.combat.objectTargetId === undefined) return undefined;
-        const object = this.game.objectRegister.getById(this.combat.objectTargetId);
-        if (object && object.__type === ObjectType.Obstacle && !object.destroyed) {
-            return object as Obstacle;
-        }
-        return undefined;
-    }
-
-    private _clearObjectInteraction(): void {
-        this.combat.objectTargetId = undefined;
-        this.combat.objectInteractionMode = undefined;
-        if (this.combat.state === "interact_object") {
-            this.combat.goalPos = undefined;
-        }
-    }
-
-    private _isObjectTargetStillValid(obstacle: Obstacle): boolean {
-        switch (this.combat.objectInteractionMode) {
-            case "use":
-                if (obstacle.isDoor && obstacle.door) {
-                    return (
-                        !obstacle.door.autoOpen &&
-                        !obstacle.door.open &&
-                        obstacle.door.canUse &&
-                        !obstacle.door.locked
-                    );
-                }
-                if (obstacle.isButton) {
-                    return obstacle.button.canUse;
-                }
-                return false;
-            case "melee_break":
-                return obstacle.destructible && obstacle.health > 0;
-            default:
-                return false;
-        }
-    }
-
-    private _isInMeleeRange(player: Player, obstacle: Obstacle): boolean {
-        const meleeCollider = this._getBotMeleeCollider(player);
-        return !!collider.intersectCircle(
-            obstacle.collider,
-            meleeCollider.pos,
-            meleeCollider.rad,
-        );
-    }
-
-    private _getMeleeApproachGoal(player: Player, obstacle: Obstacle): Vec2 {
-        const boundaryPoint = this._getObstacleBoundaryPointTowardPlayer(player, obstacle);
-        let awayDir = v2.sub(player.pos, boundaryPoint);
-        if (v2.lengthSqr(awayDir) <= 0.0001) {
-            awayDir = v2.sub(player.pos, obstacle.pos);
-        }
-        if (v2.lengthSqr(awayDir) <= 0.0001) {
-            awayDir = v2.copy(player.dir);
-        }
-        const outward = v2.normalizeSafe(awayDir, v2.create(1, 0));
-        const standOff = Math.max(
-            this._getBotMeleeReach(player) - BotTuning.objectInteract.meleeApproachInset,
-            0.2,
-        );
-        const approach = v2.add(boundaryPoint, v2.mul(outward, standOff));
-        this.game.map.clampToMapBounds(approach, player.rad);
-        return approach;
-    }
-
-    private _getBotMeleeCollider(player: Player): { pos: Vec2; rad: number } {
-        const meleeDef = this._getBotMeleeDef(player);
-        const rot = Math.atan2(player.dir.y, player.dir.x);
-        const offset = v2.add(
-            meleeDef.attack.offset,
-            v2.mul(v2.create(1, 0), player.scale - 1),
-        );
-        return {
-            pos: v2.add(player.pos, v2.rotate(offset, rot)),
-            rad: meleeDef.attack.rad,
-        };
-    }
-
-    private _getBotMeleeReach(player: Player): number {
-        const meleeDef = this._getBotMeleeDef(player);
-        const offset = v2.add(
-            meleeDef.attack.offset,
-            v2.mul(v2.create(1, 0), player.scale - 1),
-        );
-        return v2.length(offset) + meleeDef.attack.rad;
-    }
-
-    private _getBotMeleeDef(player: Player): MeleeDef {
-        const meleeType = player.weapons[GameConfig.WeaponSlot.Melee].type || "fists";
-        return GameObjectDefs[meleeType] as MeleeDef;
-    }
-
-    private _getObstacleBoundaryPointTowardPlayer(
-        player: Player,
-        obstacle: Obstacle,
-    ): Vec2 {
-        if (obstacle.collider.type === collider.Type.Circle) {
-            let towardPlayer = v2.sub(player.pos, obstacle.collider.pos);
-            if (v2.lengthSqr(towardPlayer) <= 0.0001) {
-                towardPlayer = v2.copy(player.dir);
-            }
-            const dir = v2.normalizeSafe(towardPlayer, v2.create(1, 0));
-            return v2.add(obstacle.collider.pos, v2.mul(dir, obstacle.collider.rad));
-        }
-
-        const point = coldet.clampPosToAabb(player.pos, obstacle.collider);
-        const insideAabb = coldet.testPointAabb(
-            player.pos,
-            obstacle.collider.min,
-            obstacle.collider.max,
-        );
-        if (!insideAabb) {
-            return point;
-        }
-
-        const center = v2.mul(
-            v2.add(obstacle.collider.min, obstacle.collider.max),
-            0.5,
-        );
-        let away = v2.sub(player.pos, center);
-        if (v2.lengthSqr(away) <= 0.0001) {
-            away = v2.copy(player.dir);
-        }
-
-        const dir = v2.normalizeSafe(away, v2.create(1, 0));
-        const dxMin = Math.abs(player.pos.x - obstacle.collider.min.x);
-        const dxMax = Math.abs(obstacle.collider.max.x - player.pos.x);
-        const dyMin = Math.abs(player.pos.y - obstacle.collider.min.y);
-        const dyMax = Math.abs(obstacle.collider.max.y - player.pos.y);
-
-        if (Math.abs(dir.x) >= Math.abs(dir.y)) {
-            return v2.create(
-                dir.x >= 0 ? obstacle.collider.max.x : obstacle.collider.min.x,
-                math.clamp(player.pos.y, obstacle.collider.min.y, obstacle.collider.max.y),
-            );
-        }
-
-        if (Math.min(dyMin, dyMax) <= Math.min(dxMin, dxMax)) {
-            return v2.create(
-                math.clamp(player.pos.x, obstacle.collider.min.x, obstacle.collider.max.x),
-                dir.y >= 0 ? obstacle.collider.max.y : obstacle.collider.min.y,
-            );
-        }
-
-        return v2.create(
-            dir.x >= 0 ? obstacle.collider.max.x : obstacle.collider.min.x,
-            math.clamp(player.pos.y, obstacle.collider.min.y, obstacle.collider.max.y),
-        );
-    }
-
-    private _logIdleReason(params: {
-        player: Player;
-        goal?: Vec2;
-        allowShooting: boolean;
-        weakLosAnchor: boolean;
-        moveLeft: boolean;
-        moveRight: boolean;
-        moveUp: boolean;
-        moveDown: boolean;
-    }): void {
-        const {
-            player,
-            goal,
-            allowShooting,
-            weakLosAnchor,
-            moveLeft,
-            moveRight,
-            moveUp,
-            moveDown,
-        } = params;
-
-        let reason: string | undefined;
-        if (!goal) {
-            reason = "no_goal";
-        } else if (!moveLeft && !moveRight && !moveUp && !moveDown && !allowShooting) {
-            reason = weakLosAnchor ? "weak_los_anchor" : "idle_anchor";
-        }
-
-        if (reason === this._lastIdleReason) return;
-        this._lastIdleReason = reason;
-
-        if (!reason) return;
-
-        logBotStability("idle_reason", {
-            brainType: this.brainType,
-            botId: player.__id,
-            reason,
-            state: this.combat.state,
-            stateReason: this.combat.stateReason,
-        });
     }
 }
