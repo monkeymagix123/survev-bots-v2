@@ -30,7 +30,6 @@ export class UnarmedBotBrain implements BotBrain {
             objectInteractionScorer,
             combat,
             aim,
-            weaponLogic,
         } = ctx;
 
         const scan = perception.scanForTarget(game, player, timeNow, brainType);
@@ -56,11 +55,8 @@ export class UnarmedBotBrain implements BotBrain {
 
             if (prevTargetId !== newTargetId) {
                 aim.resetFocus();
-                weaponLogic.onTargetChanged(timeNow, newVisible);
                 perception.lastSeenPos = undefined;
                 perception.lastSeenTime = -Infinity;
-            } else {
-                weaponLogic.onVisibilityUpdate(prevVisible, newVisible, timeNow);
             }
 
             if (newVisible) {
@@ -76,7 +72,6 @@ export class UnarmedBotBrain implements BotBrain {
             perception.targetRecentlyFired = false;
             perception.targetDistracted = false;
             aim.resetFocus();
-            weaponLogic.onTargetCleared();
         }
 
         const prevState = combat.state;

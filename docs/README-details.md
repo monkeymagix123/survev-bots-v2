@@ -51,6 +51,7 @@ Important distinction:
 - armed bots and unarmed bots now share some systems,
 - but unarmed bots have their own **brain** and their own **input/controller path**
 - this keeps unarmed-specific caution, loot-object farming, and object-abort behavior separate from the armed path
+- once a bot acquires a primary or secondary gun again, it returns to the normal armed brain/controller path
 
 ## Modes
 
@@ -183,6 +184,12 @@ Unarmed bots needed different handling for:
 
 That logic had grown awkward inside the armed controller path, so it now has its own final input builder.
 
+The unarmed controller path is intentionally lean:
+- no armed reload behavior
+- no gun burst/precision handling
+- no quickswitch logic
+- only movement, item use, loot/object interaction, and melee-break output
+
 ## Aim / Shooting
 
 Aim/shoot is still separate from movement-state logic.
@@ -194,12 +201,10 @@ Aim/shoot is still separate from movement-state logic.
 - brain-profile modifiers layered on top
 
 ### Shooting
-- weapon-profile gated
-- LOS-aware
-- burst/tap behavior by weapon class
-- no bot-requested gunfire while starting/channeling item use
-
-Precision bots no longer do the old hard stop-to-focus behavior.
+- armed bots use weapon-profile-gated shooting behavior
+- unarmed bots do not run the armed shooting/reload/quickswitch path
+- unarmed output only attacks during `melee_break`, after switching to melee and reaching actual melee contact
+- bots still do not request gunfire while starting/channeling item use
 
 ## Item Usage
 

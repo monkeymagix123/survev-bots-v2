@@ -72,6 +72,7 @@ export class BotController {
     private _lastMovedTime = 0;
     private _lastHealth = 0;
     private _lastIdleReason?: string;
+    private _wasUnarmedLastUpdate: boolean;
 
     constructor(
         readonly game: Game,
@@ -81,6 +82,7 @@ export class BotController {
     ) {
         this._lastPos = v2.copy(player.pos);
         this._lastHealth = player.health;
+        this._wasUnarmedLastUpdate = isBotUnarmed(player);
         this._brainProfile = getBotBrainProfile(brainType);
         this._aim = new BotAimController(player, difficulty, brainType);
         this._weaponLogic = new BotWeaponLogic(difficulty, brainType);
@@ -88,14 +90,12 @@ export class BotController {
         this._unarmedInputController = new UnarmedBotInputController(
             game,
             player,
-            difficulty,
             brainType,
             this._brainProfile,
             this._perception,
             this._navigation,
             this._combat,
             this._aim,
-            this._weaponLogic,
         );
         this._nextDecisionDelaySec = getDecisionDelaySec(brainType);
 
@@ -126,6 +126,11 @@ export class BotController {
             return;
         }
 
+        const isUnarmedNow = isBotUnarmed(player);
+        if (!isUnarmedNow && this._wasUnarmedLastUpdate) {
+            this._syncArmedStateAfterUnarmedTransition();
+        }
+
         if (player.health < this._lastHealth - 0.001) {
             this._combat.lastDamagedTime = this._time;
             this._perception.markDamaged(this._time);
@@ -145,9 +150,7 @@ export class BotController {
         if (this._decisionTicker >= decisionInterval + this._nextDecisionDelaySec) {
             this._decisionTicker = 0;
             this._nextDecisionDelaySec = getDecisionDelaySec(this.brainType);
-            const decisionBrain = isBotUnarmed(this.player)
-                ? this._unarmedBrain
-                : this._brain;
+            const decisionBrain = isUnarmedNow ? this._unarmedBrain : this._brain;
             decisionBrain.decide({
                 brainType: this.brainType,
                 brainProfile: this._brainProfile,
@@ -165,7 +168,7 @@ export class BotController {
             });
         }
 
-        const msg = isBotUnarmed(this.player)
+        const msg = isUnarmedNow
             ? this._unarmedInputController.buildInput({
                   dt,
                   timeNow: this._time,
@@ -182,6 +185,7 @@ export class BotController {
         }
 
         player.handleInput(msg);
+        this._wasUnarmedLastUpdate = isBotUnarmed(player);
     }
 
     private _createBrain(type: BotBrainType): BotBrain {
@@ -193,6 +197,15 @@ export class BotController {
             case "realistic":
             default:
                 return new RealisticBotBrain();
+        }
+    }
+
+    private _syncArmedStateAfterUnarmedTransition(): void {
+        this._aim.resetFocus();
+        if (this._perception.targetId !== undefined) {
+            this._weaponLogic.onTargetChanged(this._time, this._perception.targetVisible);
+        } else {
+            this._weaponLogic.onTargetCleared();
         }
     }
 

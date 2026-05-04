@@ -63,6 +63,7 @@ Bots follow a lightweight priority stack:
 
 ### Unarmed Bots
 - Use a dedicated internal unarmed brain and unarmed input/controller path
+- Switch back to the normal armed brain/controller path as soon as they acquire a primary or secondary gun
 - Treat unseen enemies as background danger
 - Prioritize arming up or farming nearby loot objects
 - Become much more cautious around hostiles that have shown a gun

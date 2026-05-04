@@ -16,7 +16,6 @@ import {
     chooseBotBoostItem,
     chooseBotHealItem,
     computeBotDanger,
-    getBotReloadSnapshot,
     getBotThreatBands,
     isBotSafeToHeal,
 } from "./botDecisionSupport";
@@ -24,12 +23,10 @@ import type { BotBrainType } from "./botBrain";
 import type { BotBrainProfile } from "./botBrainProfiles";
 import { logBotStability } from "./botStabilityLogger";
 import { type BotCombatMemory } from "./botCombat";
-import type { BotDifficulty } from "./botDifficulty";
 import { BotTuning } from "./botTuning";
 import { BotAimController } from "./systems/botAimController";
 import { BotNavigationLite } from "./systems/botNavigationLite";
 import { BotPerception } from "./systems/botPerception";
-import { BotWeaponLogic } from "./systems/botWeaponLogic";
 
 type BuildInputParams = {
     dt: number;
@@ -43,14 +40,12 @@ export class UnarmedBotInputController {
     constructor(
         private readonly game: Game,
         private readonly player: Player,
-        private readonly difficulty: BotDifficulty,
         private readonly brainType: BotBrainType,
         private readonly brainProfile: BotBrainProfile,
         private readonly perception: BotPerception,
         private readonly navigation: BotNavigationLite,
         private readonly combat: BotCombatMemory,
         private readonly aim: BotAimController,
-        private readonly weaponLogic: BotWeaponLogic,
     ) {}
 
     buildInput(params: BuildInputParams): net.InputMsg {
@@ -115,24 +110,16 @@ export class UnarmedBotInputController {
             goalArriveDist,
         );
 
-        const { gunDef, weaponClass, profile } = this.weaponLogic.getWeaponInfo(player);
-        const { activeWeapon, spareAmmo, isReloading, needsReload } = getBotReloadSnapshot(
-            player,
-            gunDef,
-        );
         const lowHp = player.health < BotTuning.heal.lowHp;
         const veryLowHp = player.health < BotTuning.heal.veryLowHp;
         const wantsBoost = player.boost < BotTuning.boost.threshold;
         const veryLowBoost = player.boost < BotTuning.boost.veryLowBoost;
         const recentlyDamaged =
             timeNow - this.combat.lastDamagedTime < BotTuning.combat.recentlyDamagedWindowSec;
-        const reactionReady = timeNow >= this.weaponLogic.nextShootTime;
         const weakLosAnchor =
             !!validTarget &&
             this.combat.movementStyle === "anchor" &&
-            (!this.perception.targetVisible || !reactionReady || needsReload);
-
-        this.weaponLogic.decrementTimers(dt);
+            !this.perception.targetVisible;
 
         const objectInteractionActive =
             this.combat.state === "interact_object" && !!objectTarget;
@@ -144,10 +131,10 @@ export class UnarmedBotInputController {
             player,
             goal: objectAimGoal ?? goal,
             target: validTarget,
-            gunDef,
         });
 
         msg.toMouseLen = math.clamp(aimUpdate.aimLen, 0, net.Constants.MouseMaxDist);
+        msg.toMouseDir = aimUpdate.aimDir;
 
         const strafeSign =
             this.combat.stateReason === "damage_dodge" &&
@@ -176,25 +163,7 @@ export class UnarmedBotInputController {
                 : undefined,
         });
 
-        const standStillForPrecision =
-            !!validTarget &&
-            !!profile?.stopToShoot &&
-            weaponClass === "precision" &&
-            this.perception.targetVisible &&
-            aimUpdate.distToTarget >= profile.idealMin &&
-            aimUpdate.distToTarget <= profile.idealMax &&
-            timeNow >= this.weaponLogic.nextShootTime &&
-            aimUpdate.angleDeltaDeg <= profile.aimGateDeg * 2;
-
-        if (standStillForPrecision) {
-            msg.moveLeft = false;
-            msg.moveRight = false;
-            msg.moveUp = false;
-            msg.moveDown = false;
-            this.aim.focusTime += dt;
-        } else {
-            this.aim.focusTime = 0;
-        }
+        this.aim.focusTime = 0;
 
         this.navigation.observeMovement({
             dt,
@@ -254,8 +223,8 @@ export class UnarmedBotInputController {
             hasTarget: !!validTarget,
             distToTarget: aimUpdate.distToTarget,
             lowHp,
-            needsReload,
-            isReloading,
+            needsReload: false,
+            isReloading: false,
             recentlyDamaged,
             gasEmergency,
         });
@@ -326,22 +295,6 @@ export class UnarmedBotInputController {
             }
         }
 
-        const wantsReload =
-            !!gunDef &&
-            player.actionType === GameConfig.Action.None &&
-            activeWeapon.ammo === 0 &&
-            spareAmmo > 0;
-        if (wantsReload) {
-            const outOfEngage = !!profile && aimUpdate.distToTarget > profile.engageMax;
-            if (
-                this.combat.state === "retreat_reload" ||
-                ((!validTarget || this.perception.targetVisible === false || outOfEngage) &&
-                    danger <= this.brainProfile.reloadDangerMax)
-            ) {
-                msg.addInput(GameConfig.Input.Reload);
-            }
-        }
-
         if (objectInteractionActive) {
             if (!objectTarget) {
                 this._clearObjectInteraction();
@@ -406,29 +359,10 @@ export class UnarmedBotInputController {
 
         const usingItemThisTick =
             player.actionType === GameConfig.Action.UseItem || msg.useItem !== "";
-
-        const burst = this.weaponLogic.updateBurstTimers({
-            dt,
-            hasTarget: !!validTarget,
-            distToTarget: aimUpdate.distToTarget,
-            profile,
-        });
-
         const allowShooting =
             !usingItemThisTick &&
-            !objectInteractionActive &&
-            this.weaponLogic.allowShooting({
-                timeNow,
-                hasTarget: !!validTarget,
-                targetVisible: this.perception.targetVisible,
-                gasEmergency,
-                distToTarget: aimUpdate.distToTarget,
-                angleDeltaDeg: aimUpdate.angleDeltaDeg,
-                focusTime: this.aim.focusTime,
-                weaponClass,
-                profile,
-                burstGateOk: burst.burstGateOk,
-            });
+            objectInteractionActive &&
+            this.combat.objectInteractionMode === "melee_break";
 
         this._logIdleReason({
             player,
@@ -440,13 +374,8 @@ export class UnarmedBotInputController {
             moveUp: msg.moveUp,
             moveDown: msg.moveDown,
         });
-
-        this.weaponLogic.applyShootInputs({
-            msg,
-            allowShooting,
-            gunDef,
-            profile,
-        });
+        msg.shootHold = false;
+        msg.shootStart = false;
 
         if (
             objectInteractionActive &&
@@ -459,42 +388,6 @@ export class UnarmedBotInputController {
                 msg.shootHold = false;
                 msg.shootStart = true;
             }
-        }
-
-        const shot = this.weaponLogic.computeWillShootThisTick({
-            dt,
-            msg,
-            player,
-            gunDef,
-        });
-
-        this.weaponLogic.updateBloomAndPostShot({
-            dt,
-            willShootThisTick: shot.willShootThisTick,
-            startingBurstThisTick: shot.startingBurstThisTick,
-            gunDef,
-            weaponClass,
-            profile,
-        });
-
-        const movingThisTick =
-            msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown;
-        const noiseDeg = this.weaponLogic.computeShotNoiseDeg({
-            willShootThisTick: shot.willShootThisTick,
-            profile,
-            weaponClass,
-            movingThisTick,
-        });
-
-        msg.toMouseDir = this.aim.getDirWithNoiseDeg(noiseDeg);
-
-        if (!objectInteractionActive) {
-            this.weaponLogic.applyQuickswitch({
-                msg,
-                player,
-                difficulty: this.difficulty,
-                burstHoldT: this.weaponLogic.burstHoldT,
-            });
         }
 
         msg.touchMoveActive = false;
