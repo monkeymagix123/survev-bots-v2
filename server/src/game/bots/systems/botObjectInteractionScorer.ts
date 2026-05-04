@@ -1,6 +1,8 @@
 import { MapObjectDefs } from "../../../../../shared/defs/mapObjectDefs";
 import type { ObstacleDef } from "../../../../../shared/defs/mapObjectsTyping";
 import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
+import { coldet } from "../../../../../shared/utils/coldet";
+import { collisionHelpers } from "../../../../../shared/utils/collisionHelpers";
 import { collider } from "../../../../../shared/utils/collider";
 import { math } from "../../../../../shared/utils/math";
 import { util } from "../../../../../shared/utils/util";
@@ -44,7 +46,8 @@ export class BotObjectInteractionScorer {
             collider.createCircle(player.pos, maxDist + 1.5),
         );
 
-        let best: BotObjectInteractionChoice | undefined;
+        const choicesByObstacleId = new Map<number, BotObjectInteractionChoice>();
+
         for (const obj of nearby) {
             if (obj.__type !== ObjectType.Obstacle) continue;
             const obstacle = obj as Obstacle;
@@ -65,14 +68,23 @@ export class BotObjectInteractionScorer {
             );
             if (!score) continue;
 
-            const choice: BotObjectInteractionChoice = {
-                obstacleId: obstacle.__id,
-                pos: v2.copy(obstacle.pos),
-                score: score.score,
-                reason: score.reason,
-                mode: score.mode,
-            };
+            const choice = this._resolveApproachChoice(
+                game,
+                player,
+                obstacle,
+                score,
+                unarmedThreat,
+            );
+            if (!choice) continue;
 
+            const existing = choicesByObstacleId.get(choice.obstacleId);
+            if (!existing || choice.score > existing.score) {
+                choicesByObstacleId.set(choice.obstacleId, choice);
+            }
+        }
+
+        let best: BotObjectInteractionChoice | undefined;
+        for (const choice of choicesByObstacleId.values()) {
             if (!best || choice.score > best.score) {
                 best = choice;
             }
@@ -261,8 +273,97 @@ export class BotObjectInteractionScorer {
         return (
             obstacle.destructible &&
             obstacle.health > 0 &&
+            !obstacle.isWindow &&
             (def.loot.length > 0 || !!def.destroyType || !!def.airdropCrate)
         );
+    }
+
+    private _resolveApproachChoice(
+        game: Game,
+        player: Player,
+        obstacle: Obstacle,
+        score: { score: number; reason: string; mode: BotObjectInteractionMode },
+        unarmedThreat?: BotUnarmedThreatContext,
+    ): BotObjectInteractionChoice | undefined {
+        if (score.mode !== "melee_break") {
+            return {
+                obstacleId: obstacle.__id,
+                pos: v2.copy(obstacle.pos),
+                score: score.score,
+                reason: score.reason,
+                mode: score.mode,
+            };
+        }
+
+        const blocker = this._getFirstMovementBlocker(game, player, obstacle.pos, obstacle.__id);
+        if (!blocker) {
+            return {
+                obstacleId: obstacle.__id,
+                pos: v2.copy(obstacle.pos),
+                score: score.score,
+                reason: score.reason,
+                mode: score.mode,
+            };
+        }
+
+        if (
+            unarmedThreat &&
+            blocker.destructible &&
+            blocker.health > 0 &&
+            !blocker.isWindow
+        ) {
+            return {
+                obstacleId: blocker.__id,
+                pos: v2.copy(blocker.pos),
+                score: score.score - 35,
+                reason: "break_route_blocker",
+                mode: "melee_break",
+            };
+        }
+
+        return undefined;
+    }
+
+    private _getFirstMovementBlocker(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+        ignoreObstacleId?: number,
+    ): Obstacle | undefined {
+        const len = v2.distance(player.pos, goal);
+        if (len <= 0.0001) return undefined;
+
+        const dir = v2.normalizeSafe(v2.sub(goal, player.pos), v2.create(1, 0));
+        const aabb = coldet.lineSegmentToAabb(player.pos, goal);
+        const nearby = game.grid.intersectCollider(aabb);
+        const obstacles = nearby.filter(
+            (obj): obj is Obstacle =>
+                obj.__type === ObjectType.Obstacle &&
+                obj.__id !== ignoreObstacleId &&
+                this._blocksMovement(player, obj),
+        );
+
+        const hit = collisionHelpers.intersectSegment(
+            obstacles,
+            player.pos,
+            dir,
+            len,
+            0.0,
+            player.layer,
+            false,
+        );
+        if (!hit) return undefined;
+
+        return obstacles.find((obstacle) => obstacle.__id === hit.id);
+    }
+
+    private _blocksMovement(player: Player, obstacle: Obstacle): boolean {
+        if (obstacle.dead || !obstacle.collidable || obstacle.isWindow) return false;
+        if (!util.sameLayer(obstacle.layer, player.layer)) return false;
+        if (obstacle.isDoor && obstacle.door?.autoOpen && !obstacle.door.locked) {
+            return false;
+        }
+        return true;
     }
 
     private _getBreakStatePenalty(

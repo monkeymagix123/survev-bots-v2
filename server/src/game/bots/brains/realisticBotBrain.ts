@@ -317,6 +317,9 @@ export class RealisticBotBrain implements BotBrain {
         } else if (opportunisticLoot) {
             state = "loot";
             reason = opportunisticLoot.reason;
+        } else if (!visible) {
+            state = "chase_last_seen";
+            reason = perception.lastSeenPos ? "lost_los" : "reposition_blocked_los";
         } else if (lastSeenFresh) {
             state = "chase_last_seen";
             reason = "lost_los";
