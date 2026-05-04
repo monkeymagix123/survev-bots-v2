@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-04
+Last updated: 2026-05-03
 
 ## Core Model
 
@@ -115,6 +115,8 @@ Movement is state-driven and separate from shooting.
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / gas-center recovery
+- special-case container exit routing when a bot is inside a container but needs to leave it
+- wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
 
 It is **not** full pathfinding.
 

@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-04
+Last updated: 2026-05-03
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -44,6 +44,8 @@ Bots follow a lightweight priority stack:
 ### Movement
 - Use a lightweight movement state machine
 - Use short detours and fallback recovery instead of full pathfinding
+- Can route out through container exits instead of face-hugging the container walls
+- Can bias detours to slide along or peel away from large indestructible walls
 - Use local cover-lite sampling under pressure
 - Respect gas/safe-zone pressure first
 

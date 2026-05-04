@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-04
+Last updated: 2026-05-03
 
 ## Done
 
@@ -70,6 +70,9 @@ Last updated: 2026-05-04
   - wave behavior
   - loot/object interaction
   - unarmed bot behavior with `giveStartingWeapons=false`
+- Started a more structured navigation pass:
+  - bots inside containers can now route toward an exit instead of driving straight into the container shell
+  - large indestructible wall blockers now bias navigation toward sliding/peeling off the wall instead of sitting on it
 - Phase 1 parity verification / eventual legacy comparator removal.
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.
 
