@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 ## Done
 
@@ -51,10 +51,16 @@ Last updated: 2026-05-03
 - Added hostile weapon memory and distracted-hostile heuristics for unarmed decision-making.
 - Added a dedicated internal `UnarmedBotBrain`.
 - Added a dedicated `UnarmedBotInputController`, so unarmed final input generation is now separated from the main armed controller path.
+- Added a shared `botControllerShared` helper layer so common target/object/loot/melee/support-item behavior stays aligned between armed and unarmed controller paths.
 - Updated melee-break behavior so bots:
   - approach obstacle edges instead of centers
   - use object-specific arrival thresholds
   - use actual melee-def geometry (`attack.offset` + `attack.rad`) for break reach
+- Tightened practical object behavior:
+  - bots no longer break windows for loot
+  - bots reject loot objects that are blocked behind obvious walls/building separation
+  - unarmed bots can redirect to a destructible route-blocker when it directly gates access to the desired object
+- Improved blocked-LOS combat behavior so armed bots reposition instead of passively holding some obscured shots.
 - Added bot stability logging and parity/debug hooks.
 
 ## In Progress

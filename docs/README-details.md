@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 ## Core Model
 
@@ -118,6 +118,9 @@ Movement is state-driven and separate from shooting.
 
 It is **not** full pathfinding.
 
+Combat-side movement also now uses “reposition on blocked LOS” behavior:
+- if an armed bot wants to fight but LOS is lost/blocked, it can prefer `chase_last_seen`-style repositioning over passively holding a useless angle
+
 ### Cover-lite
 - samples nearby local points
 - prefers LOS-blocking points
@@ -149,6 +152,11 @@ Bots can:
 - use nearby manual doors
 - use nearby practical buttons that seem to unlock immediate local progress
 
+Recent guardrails:
+- windows are excluded from loot-breaking
+- loot objects blocked by obvious walls/building separation are rejected
+- unarmed bots can redirect to a destructible blocker if that blocker is what stands between them and the desired object
+
 Limits:
 - no broad puzzle solving
 - no multi-step sequence inference
@@ -159,6 +167,7 @@ Limits:
 - approaches the obstacle edge, not the center
 - uses its own arrival threshold
 - uses actual melee geometry from the melee def (`attack.offset` + `attack.rad`)
+- can be used on a destructible route-blocker for unarmed bots when that blocker directly gates access to a better nearby object target
 
 ## Unarmed Behavior
 
@@ -200,6 +209,7 @@ Shared helper layer:
 - object-target validation / use handling
 - melee-break edge approach and contact checks
 - object-abort, heal-cancel, and heal/boost item-choice helpers
+- blocked-object rejection and redirect-to-blocker helper behavior
 
 ## Aim / Shooting
 

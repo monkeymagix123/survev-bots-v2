@@ -2,7 +2,7 @@
 
 Short snapshot of current bot work.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 ## Current State
 
@@ -10,17 +10,21 @@ Last updated: 2026-05-03
 - Armed bots use the main controller path.
 - Unarmed bots now use a dedicated brain plus a dedicated input/controller path.
 - Nearby looting, loot-object interaction, anti-stuck navigation, and cover-lite behavior are all implemented.
+- Bots now better reject bad object targets and reposition more often on blocked LOS.
 
 ## Current Focus
 
 - Stability / sanity testing
 - Unarmed behavior polish
 - Keeping armed vs unarmed controller logic cleanly separated
+- Practical object/LOS behavior polish
 
 ## Recent Changes
 
 - Separated unarmed final input generation from `BotController`
 - Improved `melee_break` approach and reach handling
+- Stopped window-breaking and added blocked-object rejection / blocker redirection
+- Improved repositioning when combat LOS is blocked
 - Kept docs aligned with the new primary/details/status structure
 
 ## Next Likely Work

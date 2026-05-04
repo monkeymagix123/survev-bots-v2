@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -39,6 +39,7 @@ Bots follow a lightweight priority stack:
 - Prefer visible hostiles when possible
 - Keep short `lastSeen` memory for brief chase behavior
 - Competitive bots score targets a bit better than the other brains
+- When a target is obscured by terrain/objects, armed bots try to reposition instead of passively sitting on a blocked shot
 
 ### Movement
 - Use a lightweight movement state machine
@@ -60,6 +61,8 @@ Bots follow a lightweight priority stack:
 - Can melee-break nearby loot obstacles
 - Can use nearby manual doors/buttons when they clearly help
 - `melee_break` uses an obstacle-edge approach instead of walking to object center
+- Windows are not treated as loot-break targets
+- Loot objects that are blocked behind walls/building separation are rejected unless an unarmed bot can first clear a destructible blocker
 
 ### Unarmed Bots
 - Use a dedicated internal unarmed brain and unarmed input/controller path
@@ -67,6 +70,7 @@ Bots follow a lightweight priority stack:
 - Treat unseen enemies as background danger
 - Prioritize arming up or farming nearby loot objects
 - Become much more cautious around hostiles that have shown a gun
+- Can redirect from a desired crate/object to a destructible route-blocker when that blocker is the only thing in the way
 
 ## Config Notes
 
