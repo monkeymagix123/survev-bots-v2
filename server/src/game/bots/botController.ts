@@ -9,13 +9,10 @@ import type { Loot } from "../objects/loot";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import {
-    chooseBotBoostItem,
-    chooseBotHealItem,
     computeBotDanger,
     getBotReloadSnapshot,
     getBotThreatBands,
     isBotUnarmed,
-    isBotSafeToHeal,
 } from "./botDecisionSupport";
 import {
     getBotBrainProfile,
@@ -26,7 +23,9 @@ import { logBotStability } from "./botStabilityLogger";
 import { BotCombatMemory } from "./botCombat";
 import {
     applyLootInputs,
+    applyHealCancelInput,
     clearObjectInteraction,
+    chooseSupportUseItem,
     getMeleeApproachGoal,
     getObjectTarget,
     isInMeleeRange,
@@ -34,6 +33,7 @@ import {
     logIdleReason,
     resolveLootTarget,
     resolveValidTarget,
+    shouldAbortObjectInteraction,
     tryUseInteractObject,
 } from "./botControllerShared";
 import type { BotDifficulty } from "./botDifficulty";
@@ -372,60 +372,29 @@ export class BotController {
         const threat = this._perception.threat;
         const enemyDist = threat.nearestNearbyHostileDist;
         const { enemyVeryClose, enemyClose } = getBotThreatBands(enemyDist);
-        const shouldAbortObjectInteraction =
-            this._combat.state === "interact_object" &&
-            (threat.anyHostileVisible ||
-                recentlyDamaged ||
-                danger >= BotTuning.objectInteract.breakAbortDangerMin);
-        if (shouldAbortObjectInteraction) {
+        const abortObjectInteraction = shouldAbortObjectInteraction({
+            combatState: this._combat.state,
+            anyHostileVisible: threat.anyHostileVisible,
+            recentlyDamaged,
+            danger,
+            unarmedThreatRules: false,
+        });
+        if (abortObjectInteraction) {
             clearObjectInteraction(this._combat);
             objectTarget = undefined;
         }
 
-        if (
-            player.actionType === GameConfig.Action.UseItem &&
-            (player.actionItem === "bandage" || player.actionItem === "healthkit")
-        ) {
-            const remaining = Math.max(player.action.duration - player.action.time, 0);
-            let finishWindow: number;
-            switch (player.actionItem) {
-                case "bandage":
-                    finishWindow =
-                        BotTuning.itemCancel.bandageFinishWindowSec *
-                        this._brainProfile.healCancelBandageFinishScale;
-                    break;
-                case "healthkit":
-                default:
-                    finishWindow =
-                        BotTuning.itemCancel.healthkitFinishWindowSec *
-                        this._brainProfile.healCancelHealthkitFinishScale;
-                    break;
-            }
-            const almostDone = remaining <= finishWindow;
-            const shouldCancelHeal =
-                !almostDone &&
-                (threat.anyHostileVisible ||
-                    enemyVeryClose ||
-                    (danger >=
-                        BotTuning.danger.healCancelMin *
-                            this._brainProfile.healCancelDangerScale &&
-                        enemyClose));
-
-            if (shouldCancelHeal) {
-                logBotStability("heal_cancel", {
-                    brainType: this.brainType,
-                    botId: player.__id,
-                    item: player.actionItem,
-                    hp: Math.round(player.health),
-                    danger: Number(danger.toFixed(3)),
-                    enemyClose,
-                    enemyVeryClose,
-                    hostileVisible: threat.anyHostileVisible,
-                    remaining: Number(remaining.toFixed(3)),
-                });
-                msg.addInput(GameConfig.Input.Cancel);
-            }
-        }
+        applyHealCancelInput({
+            msg,
+            player,
+            brainType: this.brainType,
+            brainProfile: this._brainProfile,
+            botId: player.__id,
+            danger,
+            enemyClose,
+            enemyVeryClose,
+            anyHostileVisible: threat.anyHostileVisible,
+        });
 
         const wantsReload =
             !!gunDef &&
@@ -450,54 +419,20 @@ export class BotController {
         }
 
         // Use items
-        msg.useItem = "";
-
-        if (!player.downed && player.actionType === GameConfig.Action.None) {
-            const inRetreatState =
-                this._combat.state === "retreat_heal" ||
-                this._combat.state === "seek_cover";
-            const safeToHeal = isBotSafeToHeal({
-                anyHostileVisible: threat.anyHostileVisible,
-                danger,
-                recentlyDamaged,
-                enemyClose,
-                enemyVeryClose,
-                inRetreatState,
-                brainProfile: this._brainProfile,
-            });
-
-            // ── Healing logic ──
-            if (lowHp) {
-                if (safeToHeal) {
-                    msg.useItem = chooseBotHealItem(player, veryLowHp);
-                }
-            }
-            // ── Boost logic ──
-            else if (wantsBoost) {
-                const safeToBoostQuick =
-                    !threat.anyHostileVisible &&
-                    danger <
-                        BotTuning.danger.boostQuickMax *
-                            this._brainProfile.boostQuickDangerScale &&
-                    !recentlyDamaged &&
-                    !enemyVeryClose;
-
-                const safeToBoostLong =
-                    !threat.anyHostileVisible &&
-                    danger <
-                        BotTuning.danger.boostLongMax *
-                            this._brainProfile.boostLongDangerScale &&
-                    !recentlyDamaged &&
-                    !enemyClose;
-
-                msg.useItem = chooseBotBoostItem({
-                    player,
-                    veryLowBoost,
-                    quickSafe: safeToBoostQuick,
-                    longSafe: safeToBoostLong,
-                });
-            }
-        }
+        msg.useItem = chooseSupportUseItem({
+            player,
+            brainProfile: this._brainProfile,
+            combatState: this._combat.state,
+            lowHp,
+            veryLowHp,
+            wantsBoost,
+            veryLowBoost,
+            danger,
+            recentlyDamaged,
+            enemyClose,
+            enemyVeryClose,
+            anyHostileVisible: threat.anyHostileVisible,
+        });
 
         const usingItemThisTick =
             player.actionType === GameConfig.Action.UseItem || msg.useItem !== "";

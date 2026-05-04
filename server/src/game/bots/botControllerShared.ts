@@ -13,7 +13,13 @@ import type { Loot } from "../objects/loot";
 import type { Obstacle } from "../objects/obstacle";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
+import type { BotBrainProfile } from "./botBrainProfiles";
 import type { BotCombatMemory } from "./botCombat";
+import {
+    chooseBotBoostItem,
+    chooseBotHealItem,
+    isBotSafeToHeal,
+} from "./botDecisionSupport";
 import { logBotStability } from "./botStabilityLogger";
 import { BotTuning } from "./botTuning";
 import type { BotPerception } from "./systems/botPerception";
@@ -259,6 +265,197 @@ export function logIdleReason(params: {
     });
 
     return reason;
+}
+
+export function shouldAbortObjectInteraction(params: {
+    combatState: string;
+    anyHostileVisible: boolean;
+    recentlyDamaged: boolean;
+    danger: number;
+    unarmedThreatRules: boolean;
+    targetVisible?: boolean;
+    targetHasShownGun?: boolean;
+    targetDistracted?: boolean;
+    targetAppearsUnarmed?: boolean;
+}): boolean {
+    const {
+        combatState,
+        anyHostileVisible,
+        recentlyDamaged,
+        danger,
+        unarmedThreatRules,
+        targetVisible = false,
+        targetHasShownGun = false,
+        targetDistracted = false,
+        targetAppearsUnarmed = false,
+    } = params;
+
+    if (combatState !== "interact_object") return false;
+    if (recentlyDamaged) return true;
+
+    if (!unarmedThreatRules) {
+        return (
+            anyHostileVisible ||
+            danger >= BotTuning.objectInteract.breakAbortDangerMin
+        );
+    }
+
+    const visibleThreatShouldAbortObject =
+        anyHostileVisible &&
+        (!targetVisible || (targetHasShownGun && !targetDistracted));
+    const dangerShouldAbortObject =
+        danger >= BotTuning.objectInteract.breakAbortDangerMin &&
+        (!targetVisible ||
+            (targetHasShownGun && !targetDistracted) ||
+            (!targetAppearsUnarmed && !targetDistracted));
+
+    return visibleThreatShouldAbortObject || dangerShouldAbortObject;
+}
+
+export function applyHealCancelInput(params: {
+    msg: net.InputMsg;
+    player: Player;
+    brainType: BotBrainType;
+    brainProfile: BotBrainProfile;
+    botId: number;
+    danger: number;
+    enemyClose: boolean;
+    enemyVeryClose: boolean;
+    anyHostileVisible: boolean;
+}): void {
+    const {
+        msg,
+        player,
+        brainType,
+        brainProfile,
+        botId,
+        danger,
+        enemyClose,
+        enemyVeryClose,
+        anyHostileVisible,
+    } = params;
+
+    if (
+        player.actionType !== GameConfig.Action.UseItem ||
+        (player.actionItem !== "bandage" && player.actionItem !== "healthkit")
+    ) {
+        return;
+    }
+
+    const remaining = Math.max(player.action.duration - player.action.time, 0);
+    let finishWindow: number;
+    switch (player.actionItem) {
+        case "bandage":
+            finishWindow =
+                BotTuning.itemCancel.bandageFinishWindowSec *
+                brainProfile.healCancelBandageFinishScale;
+            break;
+        case "healthkit":
+        default:
+            finishWindow =
+                BotTuning.itemCancel.healthkitFinishWindowSec *
+                brainProfile.healCancelHealthkitFinishScale;
+            break;
+    }
+    const almostDone = remaining <= finishWindow;
+    const shouldCancelHeal =
+        !almostDone &&
+        (anyHostileVisible ||
+            enemyVeryClose ||
+            (danger >=
+                BotTuning.danger.healCancelMin *
+                    brainProfile.healCancelDangerScale &&
+                enemyClose));
+
+    if (!shouldCancelHeal) return;
+
+    logBotStability("heal_cancel", {
+        brainType,
+        botId,
+        item: player.actionItem,
+        hp: Math.round(player.health),
+        danger: Number(danger.toFixed(3)),
+        enemyClose,
+        enemyVeryClose,
+        hostileVisible: anyHostileVisible,
+        remaining: Number(remaining.toFixed(3)),
+    });
+    msg.addInput(GameConfig.Input.Cancel);
+}
+
+export function chooseSupportUseItem(params: {
+    player: Player;
+    brainProfile: BotBrainProfile;
+    combatState: string;
+    lowHp: boolean;
+    veryLowHp: boolean;
+    wantsBoost: boolean;
+    veryLowBoost: boolean;
+    danger: number;
+    recentlyDamaged: boolean;
+    enemyClose: boolean;
+    enemyVeryClose: boolean;
+    anyHostileVisible: boolean;
+}): string {
+    const {
+        player,
+        brainProfile,
+        combatState,
+        lowHp,
+        veryLowHp,
+        wantsBoost,
+        veryLowBoost,
+        danger,
+        recentlyDamaged,
+        enemyClose,
+        enemyVeryClose,
+        anyHostileVisible,
+    } = params;
+
+    if (player.downed || player.actionType !== GameConfig.Action.None) {
+        return "";
+    }
+
+    const inRetreatState =
+        combatState === "retreat_heal" || combatState === "seek_cover";
+    const safeToHeal = isBotSafeToHeal({
+        anyHostileVisible,
+        danger,
+        recentlyDamaged,
+        enemyClose,
+        enemyVeryClose,
+        inRetreatState,
+        brainProfile,
+    });
+
+    if (lowHp) {
+        return safeToHeal ? chooseBotHealItem(player, veryLowHp) : "";
+    }
+
+    if (!wantsBoost) return "";
+
+    const safeToBoostQuick =
+        !anyHostileVisible &&
+        danger <
+            BotTuning.danger.boostQuickMax *
+                brainProfile.boostQuickDangerScale &&
+        !recentlyDamaged &&
+        !enemyVeryClose;
+
+    const safeToBoostLong =
+        !anyHostileVisible &&
+        danger <
+            BotTuning.danger.boostLongMax *
+                brainProfile.boostLongDangerScale &&
+        !recentlyDamaged &&
+        !enemyClose;
+
+    return chooseBotBoostItem({
+        player,
+        veryLowBoost,
+        quickSafe: safeToBoostQuick,
+        longSafe: safeToBoostLong,
+    });
 }
 
 function getBotMeleeCollider(player: Player): { pos: Vec2; rad: number } {
