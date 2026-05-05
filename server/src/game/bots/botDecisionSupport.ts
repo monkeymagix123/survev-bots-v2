@@ -70,6 +70,7 @@ export function computeBotDanger(params: {
     isReloading: boolean;
     recentlyDamaged: boolean;
     gasEmergency: boolean;
+    visibleThreatSoftened?: boolean;
 }): number {
     const {
         targetVisible,
@@ -80,14 +81,21 @@ export function computeBotDanger(params: {
         isReloading,
         recentlyDamaged,
         gasEmergency,
+        visibleThreatSoftened = false,
     } = params;
+    const visibleThreatScale = visibleThreatSoftened
+        ? BotTuning.danger.visibleUnarmedThreatScale
+        : 1;
 
     let danger = 0;
-    if (targetVisible) danger += BotTuning.danger.visibleTargetAdd;
+    if (targetVisible) {
+        danger += BotTuning.danger.visibleTargetAdd * visibleThreatScale;
+    }
     if (hasTarget) {
         danger +=
             math.clamp(1 - distToTarget / BotTuning.danger.distanceRef, 0, 1) *
-            BotTuning.danger.distanceAdd;
+            BotTuning.danger.distanceAdd *
+            visibleThreatScale;
     }
     if (lowHp) danger += BotTuning.danger.lowHpAdd;
     if (needsReload) {
@@ -109,6 +117,36 @@ export function getBotThreatBands(nearestNearbyHostileDist: number): {
             nearestNearbyHostileDist < BotTuning.combat.enemyVeryCloseDist,
         enemyClose: nearestNearbyHostileDist < BotTuning.combat.enemyCloseDist,
     };
+}
+
+export function shouldSoftenVisibleUnarmedThreat(params: {
+    targetVisible: boolean;
+    targetHasShownGun: boolean;
+    targetAppearsUnarmed: boolean;
+    targetRecentlyFired: boolean;
+    nearbyHostileCount: number;
+    enemyClose: boolean;
+    enemyVeryClose: boolean;
+}): boolean {
+    const {
+        targetVisible,
+        targetHasShownGun,
+        targetAppearsUnarmed,
+        targetRecentlyFired,
+        nearbyHostileCount,
+        enemyClose,
+        enemyVeryClose,
+    } = params;
+
+    return (
+        targetVisible &&
+        targetAppearsUnarmed &&
+        !targetHasShownGun &&
+        !targetRecentlyFired &&
+        nearbyHostileCount <= 1 &&
+        !enemyClose &&
+        !enemyVeryClose
+    );
 }
 
 export function isBotSafeToHeal(params: {

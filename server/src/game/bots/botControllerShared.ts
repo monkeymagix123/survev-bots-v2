@@ -324,6 +324,7 @@ export function applyHealCancelInput(params: {
     enemyClose: boolean;
     enemyVeryClose: boolean;
     anyHostileVisible: boolean;
+    visibleThreatSoftened?: boolean;
 }): void {
     const {
         msg,
@@ -337,6 +338,7 @@ export function applyHealCancelInput(params: {
         enemyClose,
         enemyVeryClose,
         anyHostileVisible,
+        visibleThreatSoftened = false,
     } = params;
 
     if (
@@ -376,8 +378,10 @@ export function applyHealCancelInput(params: {
     const healthkitCommitted =
         player.actionItem === "healthkit" &&
         progress >= BotTuning.itemCancel.healthkitCommitProgress;
+    const effectiveHostileVisible =
+        anyHostileVisible && !visibleThreatSoftened;
     const normalCancelPressure =
-        anyHostileVisible ||
+        effectiveHostileVisible ||
         enemyVeryClose ||
         (danger >=
             BotTuning.danger.healCancelMin *
@@ -399,7 +403,7 @@ export function applyHealCancelInput(params: {
         danger: Number(danger.toFixed(3)),
         enemyClose,
         enemyVeryClose,
-        hostileVisible: anyHostileVisible,
+        hostileVisible: effectiveHostileVisible,
         remaining: Number(remaining.toFixed(3)),
     });
     msg.addInput(GameConfig.Input.Cancel);
@@ -418,6 +422,7 @@ export function chooseSupportUseItem(params: {
     enemyClose: boolean;
     enemyVeryClose: boolean;
     anyHostileVisible: boolean;
+    visibleThreatSoftened?: boolean;
 }): string {
     const {
         player,
@@ -432,16 +437,20 @@ export function chooseSupportUseItem(params: {
         enemyClose,
         enemyVeryClose,
         anyHostileVisible,
+        visibleThreatSoftened = false,
     } = params;
 
     if (player.downed || player.actionType !== GameConfig.Action.None) {
         return "";
     }
 
+    const effectiveHostileVisible =
+        anyHostileVisible && !visibleThreatSoftened;
+
     const inRetreatState =
         combatState === "retreat_heal" || combatState === "seek_cover";
     const safeToHeal = isBotSafeToHeal({
-        anyHostileVisible,
+        anyHostileVisible: effectiveHostileVisible,
         danger,
         recentlyDamaged,
         enemyClose,
@@ -457,7 +466,7 @@ export function chooseSupportUseItem(params: {
     if (!wantsBoost) return "";
 
     const safeToBoostQuick =
-        !anyHostileVisible &&
+        !effectiveHostileVisible &&
         danger <
             BotTuning.danger.boostQuickMax *
                 brainProfile.boostQuickDangerScale &&
@@ -465,7 +474,7 @@ export function chooseSupportUseItem(params: {
         !enemyVeryClose;
 
     const safeToBoostLong =
-        !anyHostileVisible &&
+        !effectiveHostileVisible &&
         danger <
             BotTuning.danger.boostLongMax *
                 brainProfile.boostLongDangerScale &&

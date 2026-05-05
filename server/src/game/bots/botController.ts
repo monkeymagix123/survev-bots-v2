@@ -13,6 +13,7 @@ import {
     getBotReloadSnapshot,
     getBotThreatBands,
     isBotUnarmed,
+    shouldSoftenVisibleUnarmedThreat,
 } from "./botDecisionSupport";
 import {
     getBotBrainProfile,
@@ -357,6 +358,18 @@ export class BotController {
         const lootTarget = resolveLootTarget(this.game, this._combat, player);
         applyLootInputs(msg, this._combat, player, lootTarget);
 
+        const threat = this._perception.threat;
+        const enemyDist = threat.nearestNearbyHostileDist;
+        const { enemyVeryClose, enemyClose } = getBotThreatBands(enemyDist);
+        const softenVisibleThreat = shouldSoftenVisibleUnarmedThreat({
+            targetVisible: !!validTarget && this._perception.targetVisible,
+            targetHasShownGun: this._perception.targetHasShownGun,
+            targetAppearsUnarmed: this._perception.targetAppearsUnarmed,
+            targetRecentlyFired: this._perception.targetRecentlyFired,
+            nearbyHostileCount: threat.nearbyHostileCount,
+            enemyClose,
+            enemyVeryClose,
+        });
         // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
         const danger = computeBotDanger({
             targetVisible: !!validTarget && this._perception.targetVisible,
@@ -367,11 +380,8 @@ export class BotController {
             isReloading,
             recentlyDamaged,
             gasEmergency,
+            visibleThreatSoftened: softenVisibleThreat,
         });
-
-        const threat = this._perception.threat;
-        const enemyDist = threat.nearestNearbyHostileDist;
-        const { enemyVeryClose, enemyClose } = getBotThreatBands(enemyDist);
         const abortObjectInteraction = shouldAbortObjectInteraction({
             combatState: this._combat.state,
             anyHostileVisible: threat.anyHostileVisible,
@@ -397,6 +407,7 @@ export class BotController {
             enemyClose,
             enemyVeryClose,
             anyHostileVisible: threat.anyHostileVisible,
+            visibleThreatSoftened: softenVisibleThreat,
         });
 
         const wantsReload =
@@ -435,6 +446,7 @@ export class BotController {
             enemyClose,
             enemyVeryClose,
             anyHostileVisible: threat.anyHostileVisible,
+            visibleThreatSoftened: softenVisibleThreat,
         });
 
         const usingItemThisTick =

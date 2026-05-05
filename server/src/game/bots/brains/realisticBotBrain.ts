@@ -10,6 +10,8 @@ import type { BotBrainType } from "../botBrain";
 import {
     computeBotDanger,
     getBotReloadSnapshot,
+    getBotThreatBands,
+    shouldSoftenVisibleUnarmedThreat,
 } from "../botDecisionSupport";
 import { logBotStability } from "../botStabilityLogger";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
@@ -202,8 +204,21 @@ export class RealisticBotBrain implements BotBrain {
 
         const lowHp = player.health < BotTuning.heal.lowHp;
         const visible = perception.targetVisible;
+        const threat = perception.threat;
+        const { enemyVeryClose, enemyClose } = getBotThreatBands(
+            threat.nearestNearbyHostileDist,
+        );
 
         const { isReloading, needsReload } = getBotReloadSnapshot(player, gunDef);
+        const softenVisibleThreat = shouldSoftenVisibleUnarmedThreat({
+            targetVisible: visible,
+            targetHasShownGun: perception.targetHasShownGun,
+            targetAppearsUnarmed: perception.targetAppearsUnarmed,
+            targetRecentlyFired: perception.targetRecentlyFired,
+            nearbyHostileCount: threat.nearbyHostileCount,
+            enemyClose,
+            enemyVeryClose,
+        });
         const danger = computeBotDanger({
             targetVisible: visible,
             hasTarget: true,
@@ -213,13 +228,13 @@ export class RealisticBotBrain implements BotBrain {
             isReloading,
             recentlyDamaged,
             gasEmergency,
+            visibleThreatSoftened: softenVisibleThreat,
         });
 
         const lastSeenFresh =
             !visible &&
             !!perception.lastSeenPos &&
             timeNow - perception.lastSeenTime <= brainProfile.chaseTtlSec;
-        const threat = perception.threat;
         const opportunisticLoot =
             !visible &&
             !gasEmergency &&

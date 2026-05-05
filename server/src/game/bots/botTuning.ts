@@ -11,6 +11,7 @@ export const BotTuning = {
         healMax: 0.35,
         retreatHealMax: 0.45,
         healCancelMin: 0.55,
+        visibleUnarmedThreatScale: 0.45,
         boostQuickMax: 0.5,
         boostLongMax: 0.3,
         visibleTargetAdd: 0.38,
