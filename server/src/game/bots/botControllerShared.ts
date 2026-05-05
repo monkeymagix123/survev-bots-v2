@@ -318,6 +318,8 @@ export function applyHealCancelInput(params: {
     brainType: BotBrainType;
     brainProfile: BotBrainProfile;
     botId: number;
+    combatState: string;
+    movingNow: boolean;
     danger: number;
     enemyClose: boolean;
     enemyVeryClose: boolean;
@@ -329,6 +331,8 @@ export function applyHealCancelInput(params: {
         brainType,
         brainProfile,
         botId,
+        combatState,
+        movingNow,
         danger,
         enemyClose,
         enemyVeryClose,
@@ -362,6 +366,13 @@ export function applyHealCancelInput(params: {
             break;
     }
     const almostDone = remaining <= finishWindow;
+    const retreatMovingBandageCommitted =
+        player.actionItem === "bandage" &&
+        movingNow &&
+        progress >= BotTuning.itemCancel.bandageMovingCommitProgress &&
+        (combatState === "retreat_heal" ||
+            combatState === "seek_cover" ||
+            combatState === "back_off");
     const healthkitCommitted =
         player.actionItem === "healthkit" &&
         progress >= BotTuning.itemCancel.healthkitCommitProgress;
@@ -374,7 +385,9 @@ export function applyHealCancelInput(params: {
             enemyClose);
     const shouldCancelHeal =
         !almostDone &&
-        (healthkitCommitted ? enemyVeryClose : normalCancelPressure);
+        (healthkitCommitted || retreatMovingBandageCommitted
+            ? enemyVeryClose
+            : normalCancelPressure);
 
     if (!shouldCancelHeal) return;
 

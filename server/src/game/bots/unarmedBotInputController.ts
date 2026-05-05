@@ -205,6 +205,9 @@ export class UnarmedBotInputController {
             brainType: this.brainType,
             brainProfile: this.brainProfile,
             botId: player.__id,
+            combatState: this.combat.state,
+            movingNow:
+                msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown,
             danger,
             enemyClose,
             enemyVeryClose,

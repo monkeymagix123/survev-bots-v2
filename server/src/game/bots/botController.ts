@@ -390,6 +390,9 @@ export class BotController {
             brainType: this.brainType,
             brainProfile: this._brainProfile,
             botId: player.__id,
+            combatState: this._combat.state,
+            movingNow:
+                msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown,
             danger,
             enemyClose,
             enemyVeryClose,
