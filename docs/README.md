@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-05
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -40,6 +40,7 @@ Bots follow a lightweight priority stack:
 - Keep short `lastSeen` memory for brief chase behavior
 - Competitive bots score targets a bit better than the other brains
 - When a target is obscured by terrain/objects, armed bots try to reposition instead of passively sitting on a blocked shot
+- Armed bots treat lone visibly unarmed hostiles as less threatening unless they get close or show gun evidence
 
 ### Movement
 - Use a lightweight movement state machine
@@ -75,6 +76,10 @@ Bots follow a lightweight priority stack:
 - Prioritize arming up or farming nearby loot objects
 - Become much more cautious around hostiles that have shown a gun
 - Can redirect from a desired crate/object to a destructible route-blocker when that blocker is the only thing in the way
+
+### Healing
+- Bots can keep moving while healing, just more slowly
+- Healthkits and retreating bandages now have stronger “commit” behavior so bots are less likely to throw away a mostly-good heal
 
 ## Config Notes
 

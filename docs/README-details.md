@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-05
 
 ## Core Model
 
@@ -193,6 +193,12 @@ Unarmed bots default to:
 - visible unarmed hostiles are treated as less threatening
 - distracted armed hostiles allow more opportunistic crate/object behavior
 
+### Armed-vs-unarmed threat softening
+Armed bots now also use that visible-hostile classification in a limited way:
+- a lone visible hostile who appears truly unarmed contributes less danger than a visible armed hostile
+- this only applies when the hostile has not shown a gun, is not firing, and is not already close
+- that softened danger can make armed bots more willing to heal/boost instead of treating mere visibility as full pressure
+
 ### Why separate controller logic exists now
 Unarmed bots needed different handling for:
 - object-interaction abort rules
@@ -238,6 +244,8 @@ Aim/shoot is still separate from movement-state logic.
 - requires safety checks
 - retreat states are only a relaxed gate, not automatic safety
 - bots cancel heals when danger spikes, except when almost done
+- healthkits become “committed” after enough progress, so bots usually keep them unless danger gets very close
+- bandages also get a moving-retreat commitment rule, so bots can keep circling toward cover while finishing a bandage instead of canceling too eagerly
 
 ### Reload
 - explicit reload input is used when empty and timing is acceptable

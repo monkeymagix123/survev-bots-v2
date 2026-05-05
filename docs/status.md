@@ -2,7 +2,7 @@
 
 Short snapshot of current bot work.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-05
 
 ## Current State
 
@@ -27,6 +27,8 @@ Last updated: 2026-05-03
 - Improved `melee_break` approach and reach handling
 - Stopped window-breaking and added blocked-object rejection / blocker redirection
 - Gated armored / stone-plated break targets behind appropriate melee weapon capability
+- Made heal cancellation less wasteful for committed medkits and moving retreat bandages
+- Softened armed-bot danger/heal pressure against lone visibly unarmed hostiles
 - Improved repositioning when combat LOS is blocked
 - Added first-pass structured navigation for containers, simple warehouses, and large wall blockers
 - Tightened warehouse entry so bots step through the opening rather than hovering outside it
