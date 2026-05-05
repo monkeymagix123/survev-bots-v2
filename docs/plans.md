@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-03
+Last updated: 2026-05-05
 
 ## Done
 
@@ -61,6 +61,11 @@ Last updated: 2026-05-03
   - bots now respect melee armor/stone-piercing when choosing plated break targets
   - bots reject loot objects that are blocked behind obvious walls/building separation
   - unarmed bots can redirect to a destructible route-blocker when it directly gates access to the desired object
+- Refined healing/item-discipline behavior:
+  - healthkits are less likely to be canceled late and downgraded into bandages
+  - moving retreat bandages are less likely to be canceled if the bot is still working around cover
+- Refined armed-vs-unarmed danger handling:
+  - armed bots now treat lone visibly unarmed hostiles as less dangerous for danger/heal calculations unless they get close or show gun evidence
 - Improved blocked-LOS combat behavior so armed bots reposition instead of passively holding some obscured shots.
 - Added bot stability logging and parity/debug hooks.
 
