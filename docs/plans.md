@@ -58,6 +58,7 @@ Last updated: 2026-05-03
   - use actual melee-def geometry (`attack.offset` + `attack.rad`) for break reach
 - Tightened practical object behavior:
   - bots no longer break windows for loot
+  - bots now respect melee armor/stone-piercing when choosing plated break targets
   - bots reject loot objects that are blocked behind obvious walls/building separation
   - unarmed bots can redirect to a destructible route-blocker when it directly gates access to the desired object
 - Improved blocked-LOS combat behavior so armed bots reposition instead of passively holding some obscured shots.

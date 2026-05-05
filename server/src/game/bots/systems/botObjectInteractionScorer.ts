@@ -1,5 +1,7 @@
 import { MapObjectDefs } from "../../../../../shared/defs/mapObjectDefs";
+import type { MeleeDef } from "../../../../../shared/defs/gameObjects/meleeDefs";
 import type { ObstacleDef } from "../../../../../shared/defs/mapObjectsTyping";
+import { GameConfig } from "../../../../../shared/gameConfig";
 import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
 import { coldet } from "../../../../../shared/utils/coldet";
 import { collisionHelpers } from "../../../../../shared/utils/collisionHelpers";
@@ -149,7 +151,7 @@ export class BotObjectInteractionScorer {
                 : undefined;
         }
 
-        if (!this._canBreakForLoot(obstacle, def)) return undefined;
+        if (!this._canBreakForLoot(player, obstacle, def)) return undefined;
 
         const statePenalty = this._getBreakStatePenalty(mode, state);
         if (statePenalty === undefined) return undefined;
@@ -269,11 +271,16 @@ export class BotObjectInteractionScorer {
         );
     }
 
-    private _canBreakForLoot(obstacle: Obstacle, def: ObstacleDef): boolean {
+    private _canBreakForLoot(
+        player: Player,
+        obstacle: Obstacle,
+        def: ObstacleDef,
+    ): boolean {
         return (
             obstacle.destructible &&
             obstacle.health > 0 &&
             !obstacle.isWindow &&
+            this._canBotMeleeDamageObstacle(player, def) &&
             (def.loot.length > 0 || !!def.destroyType || !!def.airdropCrate)
         );
     }
@@ -310,7 +317,8 @@ export class BotObjectInteractionScorer {
             unarmedThreat &&
             blocker.destructible &&
             blocker.health > 0 &&
-            !blocker.isWindow
+            !blocker.isWindow &&
+            this._canBotBreakObstacle(player, blocker)
         ) {
             return {
                 obstacleId: blocker.__id,
@@ -398,6 +406,25 @@ export class BotObjectInteractionScorer {
             (def.airdropCrate ? BotTuning.objectInteract.airdropBonus : 0) +
             (obstacle.maxHealth > 100 ? 40 : 0)
         );
+    }
+
+    private _canBotBreakObstacle(player: Player, obstacle: Obstacle): boolean {
+        const def = MapObjectDefs[obstacle.type];
+        return def.type === "obstacle" && this._canBotMeleeDamageObstacle(player, def);
+    }
+
+    private _canBotMeleeDamageObstacle(player: Player, def: ObstacleDef): boolean {
+        if (!def.armorPlated && !def.stonePlated) return true;
+
+        const meleeDef = this._getBotMeleeDef(player);
+        if (def.armorPlated && !meleeDef.armorPiercing) return false;
+        if (def.stonePlated && !meleeDef.stonePiercing) return false;
+        return true;
+    }
+
+    private _getBotMeleeDef(player: Player): MeleeDef {
+        const meleeType = player.weapons[GameConfig.WeaponSlot.Melee].type || "fists";
+        return GameObjectDefs[meleeType] as MeleeDef;
     }
 
     private _estimateLoadoutValue(player: Player): number {

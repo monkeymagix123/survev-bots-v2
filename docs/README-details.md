@@ -158,6 +158,7 @@ Bots can:
 
 Recent guardrails:
 - windows are excluded from loot-breaking
+- armored / stone-plated obstacles are only considered if the bot’s melee slot can actually damage them
 - loot objects blocked by obvious walls/building separation are rejected
 - unarmed bots can redirect to a destructible blocker if that blocker is what stands between them and the desired object
 

@@ -26,6 +26,7 @@ Last updated: 2026-05-03
 - Separated unarmed final input generation from `BotController`
 - Improved `melee_break` approach and reach handling
 - Stopped window-breaking and added blocked-object rejection / blocker redirection
+- Gated armored / stone-plated break targets behind appropriate melee weapon capability
 - Improved repositioning when combat LOS is blocked
 - Added first-pass structured navigation for containers, simple warehouses, and large wall blockers
 - Tightened warehouse entry so bots step through the opening rather than hovering outside it
