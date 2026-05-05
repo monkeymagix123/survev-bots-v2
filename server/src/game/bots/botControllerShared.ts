@@ -343,6 +343,10 @@ export function applyHealCancelInput(params: {
     }
 
     const remaining = Math.max(player.action.duration - player.action.time, 0);
+    const progress =
+        player.action.duration > 0
+            ? math.clamp(player.action.time / player.action.duration, 0, 1)
+            : 0;
     let finishWindow: number;
     switch (player.actionItem) {
         case "bandage":
@@ -358,14 +362,19 @@ export function applyHealCancelInput(params: {
             break;
     }
     const almostDone = remaining <= finishWindow;
+    const healthkitCommitted =
+        player.actionItem === "healthkit" &&
+        progress >= BotTuning.itemCancel.healthkitCommitProgress;
+    const normalCancelPressure =
+        anyHostileVisible ||
+        enemyVeryClose ||
+        (danger >=
+            BotTuning.danger.healCancelMin *
+                brainProfile.healCancelDangerScale &&
+            enemyClose);
     const shouldCancelHeal =
         !almostDone &&
-        (anyHostileVisible ||
-            enemyVeryClose ||
-            (danger >=
-                BotTuning.danger.healCancelMin *
-                    brainProfile.healCancelDangerScale &&
-                enemyClose));
+        (healthkitCommitted ? enemyVeryClose : normalCancelPressure);
 
     if (!shouldCancelHeal) return;
 

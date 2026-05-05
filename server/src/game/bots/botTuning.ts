@@ -104,5 +104,6 @@ export const BotTuning = {
     itemCancel: {
         bandageFinishWindowSec: 0.6,
         healthkitFinishWindowSec: 0.9,
+        healthkitCommitProgress: 0.5,
     },
 } as const;
