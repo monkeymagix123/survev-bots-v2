@@ -232,6 +232,7 @@ Recent optimization work stayed deliberately conservative:
 - added short-lived local-selection caches inside `BotLootScorer` and `BotObjectInteractionScorer`
 - added brief cooldown memory for failed loot/object/blocker picks so bots do not immediately retry the same bad choice
 - centralized armed tactical danger/threat derivation through a shared snapshot helper instead of recomputing overlapping booleans in multiple places
+- added strict same-tick/local reuse for `BotPerception` scans and repeated `BotNavigationLite` route traces
 
 This was meant to reduce repeated hot-path scans and retry loops without materially changing bot personalities.
 

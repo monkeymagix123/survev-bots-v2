@@ -86,6 +86,7 @@ Bots follow a lightweight priority stack:
 - Legacy parity-comparison hooks have been removed from the live bot update path
 - Loot/object selection now uses short-lived scorer caches instead of immediately rescanning the same local candidates every time
 - Failed loot/object targets get brief cooldowns so bots are less likely to bounce straight back onto the same bad pick
+- Perception and navigation now also reuse some same-tick/local work, especially repeated target scans and repeated route traces during one nav solve
 
 ## Config Notes
 

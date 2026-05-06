@@ -42,6 +42,7 @@ export class BotNavigationLite {
     private _nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
     private _fallbackGoal?: Vec2;
     private _fallbackMode?: "waypoint" | "center";
+    private readonly _routeTraceCache = new Map<string, RouteTrace>();
 
     tick(dt: number, hasTarget: boolean): void {
         this._time += dt;
@@ -77,6 +78,8 @@ export class BotNavigationLite {
         overrideGoal?: Vec2,
         arriveDist: number = BotTuning.navigation.arriveDist,
     ): Vec2 | undefined {
+        this._routeTraceCache.clear();
+
         const desiredGoal = this._getDesiredGoal(
             game,
             gasEmergency,
@@ -477,13 +480,21 @@ export class BotNavigationLite {
         start: Vec2,
         goal: Vec2,
     ): RouteTrace {
+        const cacheKey = this._getRouteTraceCacheKey(player.layer, start, goal);
+        const cached = this._routeTraceCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const len = v2.distance(start, goal);
         if (len <= 0.0001) {
-            return {
+            const result = {
                 blocked: false,
                 hitDist: 0,
                 len,
             };
+            this._routeTraceCache.set(cacheKey, result);
+            return result;
         }
 
         const dir = v2.normalizeSafe(v2.sub(goal, start), v2.create(1, 0));
@@ -509,12 +520,14 @@ export class BotNavigationLite {
             ? obstacles.find((obstacle) => obstacle.__id === hit.id)
             : undefined;
 
-        return {
+        const result = {
             blocked: hitDist < len - 0.05,
             hitDist,
             len,
             hitObstacle,
         };
+        this._routeTraceCache.set(cacheKey, result);
+        return result;
     }
 
     private _resolveStructuredGoal(
@@ -950,5 +963,16 @@ export class BotNavigationLite {
     private _clearFallback(): void {
         this._fallbackGoal = undefined;
         this._fallbackMode = undefined;
+    }
+
+    private _getRouteTraceCacheKey(layer: number, start: Vec2, goal: Vec2): string {
+        const prec = 100;
+        return [
+            layer,
+            Math.round(start.x * prec),
+            Math.round(start.y * prec),
+            Math.round(goal.x * prec),
+            Math.round(goal.y * prec),
+        ].join(":");
     }
 }

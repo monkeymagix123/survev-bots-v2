@@ -36,6 +36,7 @@ Last updated: 2026-05-05
 - Tightened warehouse entry so bots step through the opening rather than hovering outside it
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
+- Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
 - Kept docs aligned with the new primary/details/status structure
 
 ## Next Likely Work
