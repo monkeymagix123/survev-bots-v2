@@ -77,6 +77,9 @@ Last updated: 2026-05-05
 - Added a small nav anti-oscillation pass:
   - detours now keep a short blocker-side commitment
   - large-wall slide choices now prefer staying on the same chosen side briefly
+- Tightened two practical edge cases:
+  - unarmed bots now back off under very close melee pressure instead of face-hugging
+  - route-blocker redirection now ignores explosive props like oil barrels
 
 ## In Progress
 

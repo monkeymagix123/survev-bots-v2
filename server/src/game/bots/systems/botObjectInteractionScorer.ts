@@ -394,6 +394,7 @@ export class BotObjectInteractionScorer {
             blocker.destructible &&
             blocker.health > 0 &&
             !blocker.isWindow &&
+            !this._isUnsafeExplosiveRouteBlocker(blocker) &&
             !this._failedRedirectBlockerIds.has(blocker.__id) &&
             this._canBotBreakObstacle(player, blocker)
         ) {
@@ -488,6 +489,11 @@ export class BotObjectInteractionScorer {
     private _canBotBreakObstacle(player: Player, obstacle: Obstacle): boolean {
         const def = MapObjectDefs[obstacle.type];
         return def.type === "obstacle" && this._canBotMeleeDamageObstacle(player, def);
+    }
+
+    private _isUnsafeExplosiveRouteBlocker(obstacle: Obstacle): boolean {
+        const def = MapObjectDefs[obstacle.type];
+        return def.type === "obstacle" && !!def.explosion;
     }
 
     private _canBotMeleeDamageObstacle(player: Player, def: ObstacleDef): boolean {

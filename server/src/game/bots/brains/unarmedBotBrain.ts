@@ -197,9 +197,11 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (recentlyDamaged) {
             state = danger >= brainProfile.highDangerMin ? "seek_cover" : "back_off";
             reason = "unarmed_recent_damage";
-        } else if (enemyVeryClose && !threatContext.hostileAppearsUnarmed) {
+        } else if (enemyVeryClose) {
             state = "back_off";
-            reason = "unarmed_enemy_close";
+            reason = threatContext.hostileAppearsUnarmed
+                ? "unarmed_melee_pressure"
+                : "unarmed_enemy_close";
         } else if (immediateGun) {
             state = "loot";
             reason = "unarmed_find_gun";

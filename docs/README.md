@@ -69,6 +69,7 @@ Bots follow a lightweight priority stack:
 - Windows are not treated as loot-break targets
 - Armored / stone-plated break targets are only chosen when the bot’s melee weapon can actually pierce them
 - Loot objects that are blocked behind walls/building separation are rejected unless an unarmed bot can first clear a destructible blocker
+- Explosive blockers like oil barrels are not chosen as melee route-clearing detours on the way to a better crate/object target
 
 ### Unarmed Bots
 - Use a dedicated internal unarmed brain and unarmed input/controller path
@@ -76,6 +77,7 @@ Bots follow a lightweight priority stack:
 - Treat unseen enemies as background danger
 - Prioritize arming up or farming nearby loot objects
 - Become much more cautious around hostiles that have shown a gun
+- Treat very close visible hostiles as melee pressure and back off instead of passively face-hugging
 - Can redirect from a desired crate/object to a destructible route-blocker when that blocker is the only thing in the way
 
 ### Healing

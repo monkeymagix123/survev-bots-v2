@@ -165,6 +165,7 @@ Recent guardrails:
 - armored / stone-plated obstacles are only considered if the bot’s melee slot can actually damage them
 - loot objects blocked by obvious walls/building separation are rejected
 - unarmed bots can redirect to a destructible blocker if that blocker is what stands between them and the desired object
+- explosive props like oil barrels are not favored as route-clearing blockers on the way to a better target
 
 Limits:
 - no broad puzzle solving
@@ -196,6 +197,7 @@ Unarmed bots default to:
 - visible armed hostiles matter much more
 - visible unarmed hostiles are treated as less threatening
 - distracted armed hostiles allow more opportunistic crate/object behavior
+- very close hostiles still count as melee pressure, so unarmed bots back off instead of passively standing on top of each other
 
 ### Armed-vs-unarmed threat softening
 Armed bots now also use that visible-hostile classification in a limited way:
