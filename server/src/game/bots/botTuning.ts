@@ -108,4 +108,12 @@ export const BotTuning = {
         healthkitFinishWindowSec: 0.9,
         healthkitCommitProgress: 0.5,
     },
+    optimization: {
+        selectionCacheTtlSec: 0.2,
+        selectionCacheMoveDist: 1.25,
+        selectionCacheGoalDist: 1.75,
+        failedLootCooldownSec: 1.4,
+        failedObjectCooldownSec: 1.8,
+        failedBlockerCooldownSec: 1.2,
+    },
 } as const;

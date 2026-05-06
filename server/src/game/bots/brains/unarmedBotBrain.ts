@@ -142,6 +142,7 @@ export class UnarmedBotBrain implements BotBrain {
             ? lootScorer.chooseLoot({
                   game,
                   player,
+                  timeNow,
                   mode: "idle",
                   brainType,
                   onlyGuns: true,
@@ -159,6 +160,7 @@ export class UnarmedBotBrain implements BotBrain {
             ? objectInteractionScorer.chooseObject({
                   game,
                   player,
+                  timeNow,
                   mode: "idle",
                   brainType,
                   state: "wander",
@@ -171,6 +173,7 @@ export class UnarmedBotBrain implements BotBrain {
                 ? lootScorer.chooseLoot({
                       game,
                       player,
+                      timeNow,
                       mode: "idle",
                       brainType,
                       unarmedThreat: threatContext,

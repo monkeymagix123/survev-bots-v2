@@ -64,7 +64,6 @@ export const Config = {
             },
         },
         giveStartingWeapons: true,
-        debugParity: false,
         debugCombat: false,
         debugBotStability: false,
         enableQuickSwitch: true,
@@ -250,11 +249,6 @@ export interface ConfigType {
          * When false, bots start with normal empty gun slots and must loot first.
          */
         giveStartingWeapons: boolean;
-        /**
-         * TEMP (Phase 1 parity verification): compares refactored bots vs legacy.
-         * Logs mismatches to console. Remove once validated.
-         */
-        debugParity: boolean;
         /**
          * Logs bot combat state transitions (movement/state only).
          */

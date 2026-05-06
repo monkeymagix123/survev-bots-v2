@@ -22,7 +22,7 @@ They are managed by `BotManager` and driven by:
 ### Main pieces
 - `server/src/game/bots/botController.ts`
   - main armed-bot controller path
-  - shared update loop / timing / parity hooks
+  - shared update loop / timing for armed bots
 - `server/src/game/bots/unarmedBotInputController.ts`
   - dedicated final input path for unarmed bots
   - keeps unarmed-specific object/loot/survival behavior from overcomplicating the armed controller
@@ -33,6 +33,9 @@ They are managed by `BotManager` and driven by:
 - `server/src/game/bots/botControllerShared.ts`
   - shared low-level controller helpers used by both armed and unarmed paths
   - centralizes common target/object/loot/melee/support-item behavior without merging the two controller flows
+- `server/src/game/bots/botDecisionSupport.ts`
+  - shared tactical snapshot / danger helpers
+  - keeps armed danger, threat-band, and softened-visible-threat logic in one place
 
 ### Supporting systems
 - `BotPerception`
@@ -222,6 +225,16 @@ Shared helper layer:
 - object-abort, heal-cancel, and heal/boost item-choice helpers
 - blocked-object rejection and redirect-to-blocker helper behavior
 
+## Optimization Notes
+
+Recent optimization work stayed deliberately conservative:
+- removed the old legacy parity-comparison path from live bot updates
+- added short-lived local-selection caches inside `BotLootScorer` and `BotObjectInteractionScorer`
+- added brief cooldown memory for failed loot/object/blocker picks so bots do not immediately retry the same bad choice
+- centralized armed tactical danger/threat derivation through a shared snapshot helper instead of recomputing overlapping booleans in multiple places
+
+This was meant to reduce repeated hot-path scans and retry loops without materially changing bot personalities.
+
 ## Aim / Shooting
 
 Aim/shoot is still separate from movement-state logic.
@@ -272,8 +285,9 @@ Holds brain-type behavior overlays such as:
 
 ## Debugging / Observability
 
-### Console / parity
-- optional parity comparison vs legacy controller
+### Console combat log
+- `debugCombat`
+- prints armed-brain combat state transitions to console for quick live inspection
 
 ### Stability log
 - `debugBotStability`

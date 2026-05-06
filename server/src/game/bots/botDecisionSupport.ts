@@ -24,6 +24,14 @@ export type BotUnarmedThreatContext = {
     hostilePos?: Vec2;
 };
 
+export type BotTacticalSnapshot = {
+    enemyVeryClose: boolean;
+    enemyClose: boolean;
+    softenVisibleThreat: boolean;
+    danger: number;
+    effectiveHostileVisible: boolean;
+};
+
 export function getBotReloadSnapshot(
     player: Player,
     gunDef?: GunDef,
@@ -147,6 +155,68 @@ export function shouldSoftenVisibleUnarmedThreat(params: {
         !enemyClose &&
         !enemyVeryClose
     );
+}
+
+export function getBotTacticalSnapshot(params: {
+    targetVisible: boolean;
+    hasTarget: boolean;
+    distToTarget: number;
+    lowHp: boolean;
+    needsReload: boolean;
+    isReloading: boolean;
+    recentlyDamaged: boolean;
+    gasEmergency: boolean;
+    nearestNearbyHostileDist: number;
+    nearbyHostileCount: number;
+    targetHasShownGun: boolean;
+    targetAppearsUnarmed: boolean;
+    targetRecentlyFired: boolean;
+}): BotTacticalSnapshot {
+    const {
+        targetVisible,
+        hasTarget,
+        distToTarget,
+        lowHp,
+        needsReload,
+        isReloading,
+        recentlyDamaged,
+        gasEmergency,
+        nearestNearbyHostileDist,
+        nearbyHostileCount,
+        targetHasShownGun,
+        targetAppearsUnarmed,
+        targetRecentlyFired,
+    } = params;
+
+    const { enemyVeryClose, enemyClose } = getBotThreatBands(nearestNearbyHostileDist);
+    const softenVisibleThreat = shouldSoftenVisibleUnarmedThreat({
+        targetVisible,
+        targetHasShownGun,
+        targetAppearsUnarmed,
+        targetRecentlyFired,
+        nearbyHostileCount,
+        enemyClose,
+        enemyVeryClose,
+    });
+    const danger = computeBotDanger({
+        targetVisible,
+        hasTarget,
+        distToTarget,
+        lowHp,
+        needsReload,
+        isReloading,
+        recentlyDamaged,
+        gasEmergency,
+        visibleThreatSoftened: softenVisibleThreat,
+    });
+
+    return {
+        enemyVeryClose,
+        enemyClose,
+        softenVisibleThreat,
+        danger,
+        effectiveHostileVisible: targetVisible && !softenVisibleThreat,
+    };
 }
 
 export function isBotSafeToHeal(params: {

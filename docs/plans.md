@@ -67,7 +67,12 @@ Last updated: 2026-05-05
 - Refined armed-vs-unarmed danger handling:
   - armed bots now treat lone visibly unarmed hostiles as less dangerous for danger/heal calculations unless they get close or show gun evidence
 - Improved blocked-LOS combat behavior so armed bots reposition instead of passively holding some obscured shots.
-- Added bot stability logging and parity/debug hooks.
+- Added bot stability logging.
+- Finished a low-behavior-shift optimization pass:
+  - removed the legacy parity-comparison path from live bot updates
+  - added short-lived loot/object selection caches
+  - added brief failed-target cooldowns to reduce loot/object retry loops
+  - centralized shared armed tactical snapshot logic for danger/threat derivation
 
 ## In Progress
 
@@ -80,7 +85,6 @@ Last updated: 2026-05-05
   - bots inside containers can now route toward an exit instead of driving straight into the container shell
   - bots can now route into and out of simple warehouses through their large side openings, with entry targeting pushed inside the threshold
   - large indestructible wall blockers now bias navigation toward sliding/peeling off the wall instead of sitting on it
-- Phase 1 parity verification / eventual legacy comparator removal.
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.
 
 ## Next

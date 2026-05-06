@@ -80,6 +80,12 @@ Bots follow a lightweight priority stack:
 ### Healing
 - Bots can keep moving while healing, just more slowly
 - Healthkits and retreating bandages now have stronger “commit” behavior so bots are less likely to throw away a mostly-good heal
+- Armed bots also soften visible-pressure rules against lone clearly unarmed hostiles, so safe-ish heals are less likely to get blocked by pure visibility alone
+
+### Performance / Stability
+- Legacy parity-comparison hooks have been removed from the live bot update path
+- Loot/object selection now uses short-lived scorer caches instead of immediately rescanning the same local candidates every time
+- Failed loot/object targets get brief cooldowns so bots are less likely to bounce straight back onto the same bad pick
 
 ## Config Notes
 
@@ -97,6 +103,6 @@ Bots follow a lightweight priority stack:
 
 ## Where To Look Next
 
-- `server/src/game/bots/README-details.md` → implementation/architecture notes
-- `plans.md` → authoritative progress log
-- `status.md` → short current snapshot
+- `docs/README-details.md` → implementation/architecture notes
+- `docs/plans.md` → authoritative progress log
+- `docs/status.md` → short current snapshot

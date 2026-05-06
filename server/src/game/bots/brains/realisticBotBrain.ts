@@ -8,10 +8,8 @@ import { v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { BotBrainType } from "../botBrain";
 import {
-    computeBotDanger,
+    getBotTacticalSnapshot,
     getBotReloadSnapshot,
-    getBotThreatBands,
-    shouldSoftenVisibleUnarmedThreat,
 } from "../botDecisionSupport";
 import { logBotStability } from "../botStabilityLogger";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
@@ -114,6 +112,7 @@ export class RealisticBotBrain implements BotBrain {
                     ? lootScorer.chooseLoot({
                           game,
                           player,
+                          timeNow,
                           mode: "idle",
                           brainType: this.type,
                       })
@@ -126,6 +125,7 @@ export class RealisticBotBrain implements BotBrain {
                     ? objectInteractionScorer.chooseObject({
                           game,
                           player,
+                          timeNow,
                           mode: "idle",
                           brainType: this.type,
                           state: combat.state,
@@ -205,21 +205,8 @@ export class RealisticBotBrain implements BotBrain {
         const lowHp = player.health < BotTuning.heal.lowHp;
         const visible = perception.targetVisible;
         const threat = perception.threat;
-        const { enemyVeryClose, enemyClose } = getBotThreatBands(
-            threat.nearestNearbyHostileDist,
-        );
-
         const { isReloading, needsReload } = getBotReloadSnapshot(player, gunDef);
-        const softenVisibleThreat = shouldSoftenVisibleUnarmedThreat({
-            targetVisible: visible,
-            targetHasShownGun: perception.targetHasShownGun,
-            targetAppearsUnarmed: perception.targetAppearsUnarmed,
-            targetRecentlyFired: perception.targetRecentlyFired,
-            nearbyHostileCount: threat.nearbyHostileCount,
-            enemyClose,
-            enemyVeryClose,
-        });
-        const danger = computeBotDanger({
+        const tactical = getBotTacticalSnapshot({
             targetVisible: visible,
             hasTarget: true,
             distToTarget,
@@ -228,8 +215,14 @@ export class RealisticBotBrain implements BotBrain {
             isReloading,
             recentlyDamaged,
             gasEmergency,
-            visibleThreatSoftened: softenVisibleThreat,
+            nearestNearbyHostileDist: threat.nearestNearbyHostileDist,
+            nearbyHostileCount: threat.nearbyHostileCount,
+            targetHasShownGun: perception.targetHasShownGun,
+            targetAppearsUnarmed: perception.targetAppearsUnarmed,
+            targetRecentlyFired: perception.targetRecentlyFired,
         });
+        const { enemyVeryClose, enemyClose } = tactical;
+        const danger = tactical.danger;
 
         const lastSeenFresh =
             !visible &&
@@ -246,6 +239,7 @@ export class RealisticBotBrain implements BotBrain {
                 ? lootScorer.chooseLoot({
                       game,
                       player,
+                      timeNow,
                       mode: "opportunistic",
                       brainType: this.type,
                   })
@@ -261,6 +255,7 @@ export class RealisticBotBrain implements BotBrain {
                 ? objectInteractionScorer.chooseObject({
                       game,
                       player,
+                      timeNow,
                       mode: "opportunistic",
                       brainType: this.type,
                       state: combat.state,

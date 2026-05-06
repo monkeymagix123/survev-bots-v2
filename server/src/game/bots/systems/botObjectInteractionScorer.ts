@@ -31,19 +31,63 @@ export type BotObjectInteractionChoice = {
     mode: BotObjectInteractionMode;
 };
 
+type ObjectChoiceCacheEntry = {
+    until: number;
+    botId: number;
+    brainType: BotBrainType;
+    mode: BotObjectInteractMode;
+    state: BotCombatState;
+    layer: number;
+    pos: Vec2;
+    baseGoal?: Vec2;
+    unarmedThreatKey: string;
+    choice?: BotObjectInteractionChoice;
+};
+
 export class BotObjectInteractionScorer {
+    private _cache?: ObjectChoiceCacheEntry;
+    private readonly _failedObstacleIds = new Map<number, number>();
+    private readonly _failedRedirectBlockerIds = new Map<number, number>();
+
     chooseObject(params: {
         game: Game;
         player: Player;
+        timeNow: number;
         mode: BotObjectInteractMode;
         brainType: BotBrainType;
         state: BotCombatState;
         baseGoal?: Vec2;
         unarmedThreat?: BotUnarmedThreatContext;
     }): BotObjectInteractionChoice | undefined {
-        const { game, player, mode, brainType, state, baseGoal, unarmedThreat } = params;
+        const {
+            game,
+            player,
+            timeNow,
+            mode,
+            brainType,
+            state,
+            baseGoal,
+            unarmedThreat,
+        } = params;
         const profile = getBotBrainProfile(brainType);
         const maxDist = this._getSearchDistance(mode, profile);
+        this._pruneFailures(timeNow);
+
+        const cached = this._getCachedChoice({
+            game,
+            player,
+            timeNow,
+            mode,
+            brainType,
+            state,
+            baseGoal,
+            unarmedThreat,
+            maxDist,
+        });
+        if (cached !== undefined) {
+            return cached;
+        }
+
         const nearby = game.grid.intersectCollider(
             collider.createCircle(player.pos, maxDist + 1.5),
         );
@@ -54,6 +98,7 @@ export class BotObjectInteractionScorer {
             if (obj.__type !== ObjectType.Obstacle) continue;
             const obstacle = obj as Obstacle;
             if (obstacle.dead || !util.sameLayer(obstacle.layer, player.layer)) continue;
+            if (this._failedObstacleIds.has(obstacle.__id)) continue;
 
             const dist = v2.distance(player.pos, obstacle.pos);
             if (dist > maxDist) continue;
@@ -92,7 +137,38 @@ export class BotObjectInteractionScorer {
             }
         }
 
+        this._cacheChoice({
+            timeNow,
+            player,
+            brainType,
+            mode,
+            state,
+            baseGoal,
+            unarmedThreat,
+            choice: best,
+        });
+
         return best;
+    }
+
+    markFailedObstacleTarget(
+        obstacleId: number | undefined,
+        timeNow: number,
+        reason: "target" | "redirect_blocker" = "target",
+    ): void {
+        if (obstacleId === undefined) return;
+        const targetMap =
+            reason === "redirect_blocker"
+                ? this._failedRedirectBlockerIds
+                : this._failedObstacleIds;
+        const ttl =
+            reason === "redirect_blocker"
+                ? BotTuning.optimization.failedBlockerCooldownSec
+                : BotTuning.optimization.failedObjectCooldownSec;
+        targetMap.set(obstacleId, timeNow + ttl);
+        if (this._cache?.choice?.obstacleId === obstacleId) {
+            this._cache = undefined;
+        }
     }
 
     private _getSearchDistance(
@@ -318,6 +394,7 @@ export class BotObjectInteractionScorer {
             blocker.destructible &&
             blocker.health > 0 &&
             !blocker.isWindow &&
+            !this._failedRedirectBlockerIds.has(blocker.__id) &&
             this._canBotBreakObstacle(player, blocker)
         ) {
             return {
@@ -510,6 +587,140 @@ export class BotObjectInteractionScorer {
         }
 
         return 0;
+    }
+
+    private _getCachedChoice(params: {
+        game: Game;
+        player: Player;
+        timeNow: number;
+        mode: BotObjectInteractMode;
+        brainType: BotBrainType;
+        state: BotCombatState;
+        baseGoal?: Vec2;
+        unarmedThreat?: BotUnarmedThreatContext;
+        maxDist: number;
+    }): BotObjectInteractionChoice | undefined {
+        const {
+            game,
+            player,
+            timeNow,
+            mode,
+            brainType,
+            state,
+            baseGoal,
+            unarmedThreat,
+            maxDist,
+        } = params;
+        const cached = this._cache;
+        if (!cached || cached.until < timeNow) return undefined;
+        if (
+            cached.botId !== player.__id ||
+            cached.brainType !== brainType ||
+            cached.mode !== mode ||
+            cached.state !== state ||
+            cached.layer !== player.layer ||
+            cached.unarmedThreatKey !== this._getUnarmedThreatKey(unarmedThreat)
+        ) {
+            return undefined;
+        }
+        if (
+            v2.distance(player.pos, cached.pos) >
+            BotTuning.optimization.selectionCacheMoveDist
+        ) {
+            return undefined;
+        }
+        if (!this._sameBaseGoal(cached.baseGoal, baseGoal)) return undefined;
+        if (!cached.choice) return undefined;
+        if (this._failedObstacleIds.has(cached.choice.obstacleId)) return undefined;
+
+        const obj = game.objectRegister.getById(cached.choice.obstacleId);
+        if (
+            !obj ||
+            obj.__type !== ObjectType.Obstacle ||
+            obj.dead ||
+            !util.sameLayer(obj.layer, player.layer)
+        ) {
+            return undefined;
+        }
+        if (v2.distance(player.pos, obj.pos) > maxDist) return undefined;
+
+        return {
+            ...cached.choice,
+            pos: v2.copy(obj.pos),
+        };
+    }
+
+    private _cacheChoice(params: {
+        timeNow: number;
+        player: Player;
+        brainType: BotBrainType;
+        mode: BotObjectInteractMode;
+        state: BotCombatState;
+        baseGoal?: Vec2;
+        unarmedThreat?: BotUnarmedThreatContext;
+        choice?: BotObjectInteractionChoice;
+    }): void {
+        const {
+            timeNow,
+            player,
+            brainType,
+            mode,
+            state,
+            baseGoal,
+            unarmedThreat,
+            choice,
+        } = params;
+        this._cache = {
+            until: timeNow + BotTuning.optimization.selectionCacheTtlSec,
+            botId: player.__id,
+            brainType,
+            mode,
+            state,
+            layer: player.layer,
+            pos: v2.copy(player.pos),
+            baseGoal: baseGoal ? v2.copy(baseGoal) : undefined,
+            unarmedThreatKey: this._getUnarmedThreatKey(unarmedThreat),
+            choice: choice
+                ? {
+                      ...choice,
+                      pos: v2.copy(choice.pos),
+                  }
+                : undefined,
+        };
+    }
+
+    private _sameBaseGoal(a?: Vec2, b?: Vec2): boolean {
+        if (!a && !b) return true;
+        if (!a || !b) return false;
+        return (
+            v2.distance(a, b) <= BotTuning.optimization.selectionCacheGoalDist
+        );
+    }
+
+    private _getUnarmedThreatKey(unarmedThreat?: BotUnarmedThreatContext): string {
+        if (!unarmedThreat) return "none";
+
+        return [
+            Number(unarmedThreat.visibleHostile),
+            Number(unarmedThreat.hostileHasShownGun),
+            Number(unarmedThreat.hostileAppearsUnarmed),
+            Number(unarmedThreat.hostileRecentlyFired),
+            Number(unarmedThreat.hostileDistracted),
+        ].join(":");
+    }
+
+    private _pruneFailures(timeNow: number): void {
+        for (const [obstacleId, until] of this._failedObstacleIds) {
+            if (until <= timeNow) {
+                this._failedObstacleIds.delete(obstacleId);
+            }
+        }
+
+        for (const [obstacleId, until] of this._failedRedirectBlockerIds) {
+            if (until <= timeNow) {
+                this._failedRedirectBlockerIds.delete(obstacleId);
+            }
+        }
     }
 
     private _getDetourDistance(
