@@ -74,6 +74,9 @@ Last updated: 2026-05-05
   - added brief failed-target cooldowns to reduce loot/object retry loops
   - centralized shared armed tactical snapshot logic for danger/threat derivation
   - added light same-tick/local reuse in perception and navigation for repeated scans/traces
+- Added a small nav anti-oscillation pass:
+  - detours now keep a short blocker-side commitment
+  - large-wall slide choices now prefer staying on the same chosen side briefly
 
 ## In Progress
 

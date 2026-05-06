@@ -61,6 +61,7 @@ export const BotTuning = {
         warehouseEntryInsideInset: 2.25,
         warehouseEntryExitOutsideDist: 1.6,
         detourTtlSec: 1.0,
+        detourCommitSec: 0.65,
         failedWaypointTtlSec: 2.5,
         failedWaypointDist: 2.0,
         forceDetourTtlSec: 1.25,
@@ -75,6 +76,7 @@ export const BotTuning = {
         wallSlideClearanceDist: 1.25,
         wallSlideSideDist: 6,
         wallEscapeDist: 3.5,
+        detourSameSideBonus: 140,
     },
     loot: {
         idleSearchDist: 14,

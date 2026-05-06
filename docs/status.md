@@ -37,6 +37,7 @@ Last updated: 2026-05-05
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
+- Added a short navigation-side commitment so bots are less likely to hover while re-picking left/right around the same blocker
 - Kept docs aligned with the new primary/details/status structure
 
 ## Next Likely Work

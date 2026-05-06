@@ -115,6 +115,7 @@ Movement is state-driven and separate from shooting.
 `BotNavigationLite` intentionally stays simple:
 - direct goals when possible
 - short detour waypoints around blockers
+- short side-commitment around a chosen detour/wall-follow side so bots do not re-flip as easily between near-equivalent routes
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / gas-center recovery

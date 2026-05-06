@@ -33,6 +33,9 @@ export class BotNavigationLite {
     private _detourWaypoint?: Vec2;
     private _detourGoal?: Vec2;
     private _detourUntil = -Infinity;
+    private _detourCommitUntil = -Infinity;
+    private _detourBlockerId?: number;
+    private _detourSideSign?: -1 | 1;
     private _failedWaypoints: FailedWaypoint[] = [];
     private _forceDetourGoal?: Vec2;
     private _forceDetourUntil = -Infinity;
@@ -127,6 +130,7 @@ export class BotNavigationLite {
         const directTrace = this._traceRoute(game, player, player.pos, activeGoal);
         const forceDetour = this._shouldForceDetour(activeGoal);
 
+        const detourCommitted = this._time < this._detourCommitUntil;
         if (
             this._detourWaypoint &&
             this._detourGoal &&
@@ -134,7 +138,7 @@ export class BotNavigationLite {
             this._isNavPointValid(game, player, this._detourWaypoint, gasEmergency) &&
             !this._isRecentlyFailed(this._detourWaypoint) &&
             !this._traceRoute(game, player, player.pos, this._detourWaypoint).blocked &&
-            (directTrace.blocked || forceDetour)
+            (directTrace.blocked || forceDetour || detourCommitted)
         ) {
             return this._detourWaypoint;
         }
@@ -152,10 +156,14 @@ export class BotNavigationLite {
             gasEmergency,
         );
         if (detour) {
-            this._detourWaypoint = detour;
+            this._detourWaypoint = detour.pos;
             this._detourGoal = v2.copy(activeGoal);
             this._detourUntil = this._time + BotTuning.navigation.detourTtlSec;
-            return detour;
+            this._detourCommitUntil =
+                this._time + BotTuning.navigation.detourCommitSec;
+            this._detourBlockerId = detour.blockerId;
+            this._detourSideSign = detour.sideSign;
+            return detour.pos;
         }
 
         return activeGoal;
@@ -392,7 +400,7 @@ export class BotNavigationLite {
         goal: Vec2,
         directTrace: RouteTrace,
         gasEmergency: boolean,
-    ): Vec2 | undefined {
+    ): { pos: Vec2; blockerId?: number; sideSign?: -1 | 1 } | undefined {
         const wallSlideWaypoint = this._pickWallSlideWaypoint(
             game,
             player,
@@ -418,6 +426,13 @@ export class BotNavigationLite {
 
         let bestPos: Vec2 | undefined;
         let bestScore = -Infinity;
+        let bestSideSign: -1 | 1 | undefined;
+        const preferCommittedSide =
+            directTrace.hitObstacle &&
+            this._detourBlockerId === directTrace.hitObstacle.__id &&
+            this._time < this._detourCommitUntil
+                ? this._detourSideSign
+                : undefined;
 
         const sideDists = [
             BotTuning.navigation.detourSideShortDist,
@@ -462,16 +477,28 @@ export class BotNavigationLite {
                         (len - distToGoal) * 6 -
                         distFromBot * 1.5 -
                         distToGoal * 0.25;
+                    const sideCommitBonus =
+                        preferCommittedSide !== undefined &&
+                        preferCommittedSide === sideSign
+                            ? BotTuning.navigation.detourSameSideBonus
+                            : 0;
 
-                    if (score > bestScore) {
-                        bestScore = score;
+                    if (score + sideCommitBonus > bestScore) {
+                        bestScore = score + sideCommitBonus;
                         bestPos = v2.copy(candidate);
+                        bestSideSign = sideSign;
                     }
                 }
             }
         }
 
-        return bestPos;
+        return bestPos
+            ? {
+                  pos: bestPos,
+                  blockerId: directTrace.hitObstacle?.__id,
+                  sideSign: bestSideSign,
+              }
+            : undefined;
     }
 
     private _traceRoute(
@@ -805,7 +832,7 @@ export class BotNavigationLite {
         goal: Vec2,
         directTrace: RouteTrace,
         gasEmergency: boolean,
-    ): Vec2 | undefined {
+    ): { pos: Vec2; blockerId?: number; sideSign?: -1 | 1 } | undefined {
         const blocker = directTrace.hitObstacle;
         if (!blocker || !this._isLargeIndestructibleWall(blocker)) {
             return undefined;
@@ -832,23 +859,38 @@ export class BotNavigationLite {
         );
 
         const candidates = [
-            v2.add(base, v2.mul(tangent, BotTuning.navigation.wallSlideSideDist)),
-            v2.add(base, v2.mul(tangent, -BotTuning.navigation.wallSlideSideDist)),
-            v2.add(player.pos, v2.mul(normal, BotTuning.navigation.wallEscapeDist)),
+            {
+                pos: v2.add(base, v2.mul(tangent, BotTuning.navigation.wallSlideSideDist)),
+                sideSign: 1 as const,
+            },
+            {
+                pos: v2.add(base, v2.mul(tangent, -BotTuning.navigation.wallSlideSideDist)),
+                sideSign: -1 as const,
+            },
+            {
+                pos: v2.add(player.pos, v2.mul(normal, BotTuning.navigation.wallEscapeDist)),
+                sideSign: undefined,
+            },
         ];
 
         let bestPos: Vec2 | undefined;
         let bestScore = -Infinity;
+        let bestSideSign: -1 | 1 | undefined;
+        const preferCommittedSide =
+            this._detourBlockerId === blocker.__id &&
+            this._time < this._detourCommitUntil
+                ? this._detourSideSign
+                : undefined;
         for (const candidate of candidates) {
-            game.map.clampToMapBounds(candidate, player.rad);
-            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
-            if (this._isRecentlyFailed(candidate)) continue;
+            game.map.clampToMapBounds(candidate.pos, player.rad);
+            if (!this._isNavPointValid(game, player, candidate.pos, gasEmergency)) continue;
+            if (this._isRecentlyFailed(candidate.pos)) continue;
 
-            const firstLeg = this._traceRoute(game, player, player.pos, candidate);
+            const firstLeg = this._traceRoute(game, player, player.pos, candidate.pos);
             if (firstLeg.blocked) continue;
 
-            const secondLeg = this._traceRoute(game, player, candidate, goal);
-            const progress = directTrace.len - v2.distance(candidate, goal);
+            const secondLeg = this._traceRoute(game, player, candidate.pos, goal);
+            const progress = directTrace.len - v2.distance(candidate.pos, goal);
             const tangentGoalAlign = Math.abs(
                 v2.dot(
                     v2.normalizeSafe(v2.sub(goal, player.pos), v2.create(1, 0)),
@@ -858,16 +900,29 @@ export class BotNavigationLite {
             const score =
                 (secondLeg.blocked ? 0 : 850) +
                 progress * 8 -
-                v2.distance(player.pos, candidate) * 1.25 +
+                v2.distance(player.pos, candidate.pos) * 1.25 +
                 tangentGoalAlign * 80;
+            const sideCommitBonus =
+                preferCommittedSide !== undefined &&
+                candidate.sideSign !== undefined &&
+                preferCommittedSide === candidate.sideSign
+                    ? BotTuning.navigation.detourSameSideBonus
+                    : 0;
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestPos = v2.copy(candidate);
+            if (score + sideCommitBonus > bestScore) {
+                bestScore = score + sideCommitBonus;
+                bestPos = v2.copy(candidate.pos);
+                bestSideSign = candidate.sideSign;
             }
         }
 
-        return bestPos;
+        return bestPos
+            ? {
+                  pos: bestPos,
+                  blockerId: blocker.__id,
+                  sideSign: bestSideSign,
+              }
+            : undefined;
     }
 
     private _isLargeIndestructibleWall(obstacle: Obstacle): boolean {
@@ -953,6 +1008,9 @@ export class BotNavigationLite {
         this._detourWaypoint = undefined;
         this._detourGoal = undefined;
         this._detourUntil = -Infinity;
+        this._detourCommitUntil = -Infinity;
+        this._detourBlockerId = undefined;
+        this._detourSideSign = undefined;
     }
 
     private _clearForcedDetour(): void {
