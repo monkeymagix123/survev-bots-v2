@@ -40,6 +40,7 @@ Last updated: 2026-05-05
 - Added a short navigation-side commitment so bots are less likely to hover while re-picking left/right around the same blocker
 - Made unarmed bots react more reliably to very close melee pressure
 - Stopped route-blocker redirects from choosing explosive props like oil barrels
+- Made unarmed bots less likely to idle at short range from another visible unarmed hostile
 - Kept docs aligned with the new primary/details/status structure
 
 ## Next Likely Work

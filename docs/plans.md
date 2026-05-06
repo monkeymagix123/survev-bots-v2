@@ -80,6 +80,7 @@ Last updated: 2026-05-05
 - Tightened two practical edge cases:
   - unarmed bots now back off under very close melee pressure instead of face-hugging
   - route-blocker redirection now ignores explosive props like oil barrels
+- Refined unarmed visible-melee behavior so bots keep moving toward nearby loot or disengage instead of idling at a short distance
 
 ## In Progress
 

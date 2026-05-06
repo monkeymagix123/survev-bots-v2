@@ -198,6 +198,7 @@ Unarmed bots default to:
 - visible unarmed hostiles are treated as less threatening
 - distracted armed hostiles allow more opportunistic crate/object behavior
 - very close hostiles still count as melee pressure, so unarmed bots back off instead of passively standing on top of each other
+- if a visible hostile still appears unarmed and no immediate gun/object is available, bots now prefer nearby fallback loot or disengage instead of stalling in place
 
 ### Armed-vs-unarmed threat softening
 Armed bots now also use that visible-hostile classification in a limited way:

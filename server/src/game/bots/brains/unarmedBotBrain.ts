@@ -169,7 +169,12 @@ export class UnarmedBotBrain implements BotBrain {
               })
             : undefined;
         const fallbackLoot =
-            !immediateGun && !objectGoal && !gasEmergency && !visibleHostile
+            !immediateGun &&
+            !objectGoal &&
+            !gasEmergency &&
+            (!visibleHostile ||
+                threatContext.hostileAppearsUnarmed ||
+                threatContext.hostileDistracted)
                 ? lootScorer.chooseLoot({
                       game,
                       player,
@@ -211,6 +216,9 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (fallbackLoot) {
             state = "loot";
             reason = fallbackLoot.reason;
+        } else if (visibleHostile && threatContext.hostileAppearsUnarmed) {
+            state = "back_off";
+            reason = "unarmed_visible_melee_disengage";
         } else {
             state = "wander";
             reason = "unarmed_seek_object";
