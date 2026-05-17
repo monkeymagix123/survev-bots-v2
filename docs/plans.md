@@ -81,6 +81,9 @@ Last updated: 2026-05-05
   - unarmed bots now back off under very close melee pressure instead of face-hugging
   - route-blocker redirection now ignores explosive props like oil barrels
 - Refined unarmed visible-melee behavior so bots keep moving toward nearby loot or disengage instead of idling at a short distance
+- Improved normal-mode idle spread:
+  - roaming now prefers nearby loot-bearing destructible objects
+  - otherwise it biases toward nearby buildings before generic random local roam
 
 ## In Progress
 

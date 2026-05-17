@@ -41,6 +41,7 @@ Last updated: 2026-05-05
 - Made unarmed bots react more reliably to very close melee pressure
 - Stopped route-blocker redirects from choosing explosive props like oil barrels
 - Made unarmed bots less likely to idle at short range from another visible unarmed hostile
+- Made normal-mode idle roaming more local/interesting so bots spread less by all collapsing toward the same safe-zone area
 - Kept docs aligned with the new primary/details/status structure
 
 ## Next Likely Work

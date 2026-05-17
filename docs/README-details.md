@@ -116,6 +116,7 @@ Movement is state-driven and separate from shooting.
 - direct goals when possible
 - short detour waypoints around blockers
 - short side-commitment around a chosen detour/wall-follow side so bots do not re-flip as easily between near-equivalent routes
+- normal idle roaming now first looks for nearby interesting local destinations (loot-bearing destructible obstacles, then nearby buildings), and only then falls back to a local random roam step
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / gas-center recovery

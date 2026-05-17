@@ -1,3 +1,5 @@
+import { MapObjectDefs } from "../../../../../shared/defs/mapObjectDefs";
+import type { ObstacleDef } from "../../../../../shared/defs/mapObjectsTyping";
 import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
 import { coldet } from "../../../../../shared/utils/coldet";
 import { collisionHelpers } from "../../../../../shared/utils/collisionHelpers";
@@ -68,7 +70,7 @@ export class BotNavigationLite {
 
     ensureWaypoint(game: Game, _player: Player): void {
         if (!this.waypoint || this.waypointTtl <= 0) {
-            this.waypoint = this._pickWaypoint(game);
+            this.waypoint = this._pickWaypoint(game, _player);
             this.waypointTtl = util.random(5, 10);
         }
     }
@@ -245,7 +247,7 @@ export class BotNavigationLite {
             !this._fallbackMode
         ) {
             this._fallbackMode = "waypoint";
-            this._fallbackGoal = this._pickWaypoint(game);
+            this._fallbackGoal = this._pickWaypoint(game, player);
             this._clearDetour();
             this._clearForcedDetour();
         }
@@ -340,7 +342,19 @@ export class BotNavigationLite {
         }
     }
 
-    private _pickWaypoint(game: Game): Vec2 {
+    private _pickWaypoint(game: Game, player?: Player): Vec2 {
+        if (player) {
+            const interesting = this._pickLocalInterestWaypoint(game, player);
+            if (interesting) {
+                return interesting;
+            }
+
+            const localRoam = this._pickLocalRoamWaypoint(game, player);
+            if (localRoam) {
+                return localRoam;
+            }
+        }
+
         const map = game.map;
         const gas = game.gas;
 
@@ -360,6 +374,95 @@ export class BotNavigationLite {
         }
 
         return v2.copy(center);
+    }
+
+    private _pickLocalInterestWaypoint(game: Game, player: Player): Vec2 | undefined {
+        const obstacleCandidates: Vec2[] = [];
+        const buildingCandidates: Vec2[] = [];
+        const nearby = game.grid.intersectCollider(
+            collider.createCircle(player.pos, BotTuning.navigation.waypointBuildingSearchDist),
+        );
+        const currentBuildingId = this._getContainingBuildingId(game, player.pos, player.layer);
+
+        for (const obj of nearby) {
+            if (!obj || !("pos" in obj)) continue;
+            if (!util.sameLayer(obj.layer, player.layer)) continue;
+
+            if (obj.__type === ObjectType.Obstacle) {
+                const obstacle = obj as Obstacle;
+                if (this._isInterestingRoamObstacle(obstacle, player)) {
+                    obstacleCandidates.push(v2.copy(obstacle.pos));
+                }
+                continue;
+            }
+
+            if (obj.__type === ObjectType.Building) {
+                const building = obj as Building;
+                if (building.__id === currentBuildingId) continue;
+                if (
+                    v2.distance(player.pos, building.pos) <=
+                    BotTuning.navigation.waypointBuildingSearchDist
+                ) {
+                    buildingCandidates.push(v2.copy(building.pos));
+                }
+            }
+        }
+
+        const obstacleChoice = this._pickRandomValidWaypoint(
+            game,
+            player,
+            obstacleCandidates,
+        );
+        if (obstacleChoice) return obstacleChoice;
+
+        return this._pickRandomValidWaypoint(game, player, buildingCandidates);
+    }
+
+    private _pickLocalRoamWaypoint(game: Game, player: Player): Vec2 | undefined {
+        for (let attempts = 0; attempts < 10; attempts++) {
+            const candidate = v2.add(
+                player.pos,
+                util.randomPointInCircle(BotTuning.navigation.waypointLocalRoamDist),
+            );
+            game.map.clampToMapBounds(candidate, player.rad);
+            if (
+                v2.distance(player.pos, candidate) <
+                BotTuning.navigation.waypointLocalRoamMinStep
+            ) {
+                continue;
+            }
+            if (!this._isNavPointValid(game, player, candidate, false)) continue;
+            return candidate;
+        }
+        return undefined;
+    }
+
+    private _pickRandomValidWaypoint(
+        game: Game,
+        player: Player,
+        candidates: Vec2[],
+    ): Vec2 | undefined {
+        if (candidates.length === 0) return undefined;
+
+        const shuffled = [...candidates];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        for (const candidate of shuffled) {
+            game.map.clampToMapBounds(candidate, player.rad);
+            if (!this._isNavPointValid(game, player, candidate, false)) continue;
+            if (
+                v2.distance(player.pos, candidate) <
+                BotTuning.navigation.waypointLocalRoamMinStep
+            ) {
+                continue;
+            }
+            return candidate;
+        }
+
+        return undefined;
     }
 
     private _getDesiredGoal(
@@ -682,6 +785,37 @@ export class BotNavigationLite {
         }
 
         return best;
+    }
+
+    private _getContainingBuildingId(
+        game: Game,
+        point: Vec2,
+        layer: number,
+    ): number | undefined {
+        return this._getContainingStructuredBuilding(game, point, layer, () => true)?.__id;
+    }
+
+    private _isInterestingRoamObstacle(obstacle: Obstacle, player: Player): boolean {
+        if (
+            obstacle.dead ||
+            obstacle.isWindow ||
+            !obstacle.destructible ||
+            obstacle.health <= 0 ||
+            v2.distance(player.pos, obstacle.pos) >
+                BotTuning.navigation.waypointInterestSearchDist
+        ) {
+            return false;
+        }
+
+        const def = MapObjectDefs[obstacle.type];
+        if (def.type !== "obstacle") return false;
+
+        const obstacleDef = def as ObstacleDef;
+        return (
+            obstacleDef.loot.length > 0 ||
+            !!obstacleDef.destroyType ||
+            !!obstacleDef.airdropCrate
+        );
     }
 
     private _isWarehouseBuilding(building: Building): boolean {
