@@ -12,7 +12,20 @@
             "helmet": "helmet01",
             "chest": "chest01",
             "scope": "4xscope",
-            "perks": [{ "type": "endless_ammo", "droppable": false }, { "type": "leadership", "droppable": false }],
+            "perks": [
+                {
+                    "type": "endless_ammo",
+                    "droppable": false
+                },
+                {
+                    "type": "leadership",
+                    "droppable": false
+                },
+                {
+                    "type": "small_arms",
+                    "droppable": true
+                }
+            ],
             "inventory": {
                 "frag": 0,
                 "smoke": 0,
