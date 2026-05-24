@@ -101,6 +101,7 @@ export const BotTuning = {
         meleeApproachInset: 0.75,
         meleeArriveDist: 0.2,
         meleeMoveDeadzone: 0.2,
+        meleeSwingStopSec: 0.08,
         stateCommitSec: 0.55,
         loadoutValuePenalty: 8,
         lootBaselineScore: 420,

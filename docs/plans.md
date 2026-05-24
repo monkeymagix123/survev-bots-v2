@@ -96,6 +96,8 @@ Last updated: 2026-05-23
   - AR/SMG/LMG spray now keeps a short persistent offset instead of snapping to a fresh random visible angle every shot
 - Fixed a melee-break stall:
   - crate/object punch checks now use intended same-tick aim direction instead of stale previous-tick facing
+- Added configurable melee-break swing planting:
+  - crate punches can briefly plant via `BotTuning.objectInteract.meleeSwingStopSec`, with `0` available as a no-stop option
 
 ## In Progress
 

@@ -73,6 +73,7 @@ export class BotController {
     private _lastHealth = 0;
     private _lastIdleReason?: string;
     private _wasUnarmedLastUpdate: boolean;
+    private _meleeSwingStopUntil = -Infinity;
     private _resumeGunSlot?:
         | typeof GameConfig.WeaponSlot.Primary
         | typeof GameConfig.WeaponSlot.Secondary;
@@ -290,6 +291,15 @@ export class BotController {
             gunDef,
         });
 
+        const meleeBreakInRange =
+            meleeBreakActive &&
+            !!objectTarget &&
+            player.curWeapIdx === GameConfig.WeaponSlot.Melee &&
+            isInMeleeRange(player, objectTarget, aimUpdate.aimDir);
+        const holdStillForMeleeBreak =
+            BotTuning.objectInteract.meleeSwingStopSec > 0 &&
+            (meleeBreakInRange || this._time < this._meleeSwingStopUntil);
+
         msg.toMouseLen = math.clamp(aimUpdate.aimLen, 0, net.Constants.MouseMaxDist);
 
         const strafeSign =
@@ -310,9 +320,10 @@ export class BotController {
                 !gasEmergency,
             strafeSign,
             anchor:
-                this._combat.movementStyle === "anchor" &&
-                !gasEmergency &&
-                !weakLosAnchor,
+                holdStillForMeleeBreak ||
+                ((this._combat.movementStyle === "anchor" &&
+                    !gasEmergency &&
+                    !weakLosAnchor)),
             aimDir: aimUpdate.aimDir,
             dt,
             moveDeadzone: meleeBreakActive
@@ -502,7 +513,11 @@ export class BotController {
         ) {
             if (player.curWeapIdx !== GameConfig.WeaponSlot.Melee) {
                 msg.addInput(GameConfig.Input.EquipMelee);
-            } else if (isInMeleeRange(player, objectTarget, aimUpdate.aimDir)) {
+            } else if (meleeBreakInRange) {
+                if (BotTuning.objectInteract.meleeSwingStopSec > 0) {
+                    this._meleeSwingStopUntil =
+                        this._time + BotTuning.objectInteract.meleeSwingStopSec;
+                }
                 msg.shootHold = false;
                 msg.shootStart = true;
             }

@@ -71,6 +71,7 @@ Bots follow a lightweight priority stack:
 - Can use nearby manual doors/buttons when they clearly help
 - `melee_break` uses an obstacle-edge approach instead of walking to object center
 - `melee_break` punch checks now use the bot’s intended same-tick aim direction, so bots are less likely to stand next to a crate without actually swinging
+- `melee_break` now has a tiny configurable swing-plant window (`BotTuning.objectInteract.meleeSwingStopSec`); set it to `0` if you want no stop-at-all behavior
 - Armed bots now remember and re-equip their gun after temporary melee crate-breaking instead of getting stranded on fists
 - Windows are not treated as loot-break targets
 - Armored / stone-plated break targets are only chosen when the bot’s melee weapon can actually pierce them
