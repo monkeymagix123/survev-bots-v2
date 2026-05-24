@@ -3,20 +3,23 @@ import type { MapDef } from "../mapDefs";
 import { Main, type PartialMapDef } from "./baseDefs";
 
 const mapDef: PartialMapDef = {
+    desc: {
+        backgroundImg: "img/main_splash_7_3.png",
+    },
     assets: {
         audio: [],
         atlases: ["gradient", "loadout", "shared", "main"],
     },
     biome: {
         colors: {
-            background: 2118510,
-            water: 3310251,
-            waterRipple: 11792639,
-            beach: 16035400,
-            riverbank: 9079434,
-            grass: 6066442,
-            underground: 1772803,
-            playerSubmerge: 2854052,
+            background: 0x20536e,
+            water: 0x3282ab,
+            waterRipple: 0xb3f0ff,
+            beach: 0xf4ae48,
+            riverbank: 0x8a8a8a,
+            grass: 0x5c910a,
+            underground: 0x1b0d03,
+            playerSubmerge: 0x2b8ca4,
             playerGhillie: 0x5b8e0a,
         },
         sound: { riverShore: "stone" },
@@ -43,7 +46,7 @@ const mapDef: PartialMapDef = {
                 crate_03: 8,
                 bush_01: 78,
                 cache_06: 12,
-                tree_01: 300,
+                tree_07sp: 300,
                 tree_08sp: 30,
                 tree_08spb: 30,
                 tree_07spr: 160,
@@ -61,7 +64,8 @@ const mapDef: PartialMapDef = {
         ],
         fixedSpawns: [
             {
-                warehouse_01: 2,
+                warehouse_01: { small: 1, large: 2 },
+                warehouse_03: 1,
                 house_red_01: { small: 2, large: 3 },
                 house_red_02: { small: 2, large: 3 },
                 barn_01: { small: 1, large: 3 },
@@ -74,6 +78,7 @@ const mapDef: PartialMapDef = {
                 greenhouse_01: 1,
                 cache_01: 1,
                 cache_02sp: 1,
+                cache_04: 1,
                 cache_07: 1,
                 bunker_structure_01: { odds: 0.05 },
                 bunker_structure_02: 1,
@@ -87,7 +92,6 @@ const mapDef: PartialMapDef = {
                 tree_02: 3,
                 teahouse_01: { small: 2, large: 3 },
                 stone_04: 1,
-                club_complex_01: 1,
             },
         ],
         spawnReplacements: [{ tree_01: "tree_07sp" }],

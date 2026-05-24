@@ -24,15 +24,15 @@ const mapDef: PartialMapDef = {
     },
     biome: {
         colors: {
-            background: 2118510,
-            water: 3310251,
-            waterRipple: 11792639,
-            beach: 15709019,
-            riverbank: 9079434,
-            grass: 4351497,
-            underground: 1772803,
-            playerSubmerge: 2854052,
-            playerGhillie: 4285194,
+            background: 0x20536e,
+            water: 0x3282ab,
+            waterRipple: 0xb3f0ff,
+            beach: 0xefb35b,
+            riverbank: 0x8a8a8a,
+            grass: 0x426609,
+            underground: 0x1b0d03,
+            playerSubmerge: 0x2b8ca4,
+            playerGhillie: 0x41630a,
         },
         sound: { riverShore: "stone" },
         particles: { camera: "falling_leaf_spring" },
@@ -45,13 +45,6 @@ const mapDef: PartialMapDef = {
             { name: "helmet03_moon", count: 1, weight: 3 },
             { name: "tier_katanas", count: 1, weight: 3 }, // ?
             { name: "naginata", count: 1, weight: 1 }, // ?
-        ],
-        tier_ghillie: [
-            {
-                name: "outfitGhillie",
-                count: 1,
-                weight: 1,
-            },
         ],
     },
     mapGen: {
@@ -93,15 +86,15 @@ const mapDef: PartialMapDef = {
         ],
         fixedSpawns: [
             {
-                logging_complex_01sp: 1,
                 logging_complex_02sp: 1,
                 logging_complex_03sp: 3,
-                teapavilion_01w: 1,
                 warehouse_01: { small: 3, large: 4 },
+                workshop_complex_01: 1,
                 house_red_01: { small: 3, large: 4 },
                 barn_01: { small: 3, large: 4 },
-                cache_01: 1,
+                cache_01w: 1,
                 cache_02sp: 1,
+                cache_07w: 1,
                 bunker_structure_01b: 1,
                 bunker_structure_03: 1,
                 bunker_structure_07: 1,
@@ -123,11 +116,7 @@ const mapDef: PartialMapDef = {
                 recorder_02: "recorder_09",
             },
         ],
-        importantSpawns: [
-            "logging_complex_01sp",
-            "logging_complex_02sp",
-            "teapavilion_01w",
-        ],
+        importantSpawns: ["logging_complex_01sp", "logging_complex_02sp"],
     },
     /* STRIP_FROM_PROD_CLIENT:END */
 };

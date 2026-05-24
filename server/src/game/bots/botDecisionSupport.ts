@@ -38,7 +38,8 @@ export function getBotReloadSnapshot(
 ): BotReloadSnapshot {
     const activeWeapon = player.weapons[player.curWeapIdx];
     const ammoType = gunDef?.ammo;
-    const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+    const inventory = player.inventory as Record<string, number>;
+    const spareAmmo = ammoType ? (inventory[ammoType] ?? 0) : 0;
     const isReloading = player.isReloading();
     const needsReload =
         isReloading || (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);

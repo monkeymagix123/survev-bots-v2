@@ -9,8 +9,8 @@ import { util } from "../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../shared/utils/v2";
 import type { AudioManager } from "../audioManager";
 import type { Camera } from "../camera";
-import type { DebugOptions } from "../config";
-import { debugLines } from "../debugLines";
+import type { DebugRenderOpts } from "../config";
+import { debugLines } from "../debug/debugLines";
 import type { SoundHandle } from "../lib/createJS";
 import type { Map } from "../map";
 import type { Particle, ParticleBarn } from "./particles";
@@ -67,7 +67,7 @@ class PhysicsParticle {
                 !player.dead &&
                 util.sameLayer(this.layer, player.layer)
             ) {
-                colliders.push(collider.createCircle(player.m_pos, player.m_rad, 0));
+                colliders.push(collider.createCircle(player.m_pos, player.m_rad));
             }
         }
 
@@ -122,7 +122,7 @@ class Explosion {
     soundInstance!: SoundHandle | null;
     soundUpdateThrottle!: number;
 
-    constructor(_e: unknown) {
+    constructor() {
         this.active = false;
     }
 
@@ -279,7 +279,7 @@ export class ExplosionBarn {
             }
         }
         if (!explosion) {
-            explosion = new Explosion(this);
+            explosion = new Explosion();
             this.explosions.push(explosion);
         }
         explosion.init(type, pos, layer);
@@ -308,7 +308,7 @@ export class ExplosionBarn {
         camera: Camera,
         particleBarn: ParticleBarn,
         audioManager: AudioManager,
-        debug: DebugOptions,
+        debug: DebugRenderOpts,
     ) {
         for (let i = 0; i < this.explosions.length; i++) {
             const e = this.explosions[i];
@@ -318,7 +318,7 @@ export class ExplosionBarn {
                     e.free();
                 }
 
-                if (IS_DEV && debug.render.explosions) {
+                if (IS_DEV && debug.explosions) {
                     const def = GameObjectDefs[e.type] as ExplosionDef;
                     debugLines.addCircle(e.pos, def.rad.min, 0xff0000, 0);
                     debugLines.addCircle(e.pos, def.rad.max, 0xff9900, 0);
@@ -638,6 +638,30 @@ const ExplosionEffectDefs: Record<string, ExplotionDef> = {
         shakeDur: 0,
         lifetime: 0.5,
     },
+    potato_lmgshot: {
+        burst: {
+            particle: "",
+            scale: 0.1,
+            sound: {
+                grass: "potato_01",
+                water: "potato_02",
+                detune: 400,
+                volume: 0.5,
+            },
+        },
+        scatter: {
+            particle: "potato_smg_impact",
+            count: 1,
+            speed: {
+                min: 5,
+                max: 20,
+            },
+        },
+        rippleCount: 1,
+        shakeStr: 0,
+        shakeDur: 0,
+        lifetime: 0.3,
+    },
     bomb_iron: {
         burst: {
             particle: "explosionBomb",
@@ -651,5 +675,49 @@ const ExplosionEffectDefs: Record<string, ExplotionDef> = {
         shakeStr: 0.25,
         shakeDur: 0.4,
         lifetime: 2,
+    },
+    coconut: {
+        burst: {
+            particle: "",
+            scale: 0.75,
+            sound: {
+                grass: "coconut_01",
+                water: "frag_water_01",
+            },
+        },
+        scatter: {
+            particle: "coconut_impact",
+            count: 6,
+            speed: {
+                min: 5,
+                max: 25,
+            },
+        },
+        rippleCount: 1,
+        shakeStr: 0,
+        shakeDur: 0,
+        lifetime: 1,
+    },
+    tomato: {
+        burst: {
+            particle: "",
+            scale: 0.75,
+            sound: {
+                grass: "tomato_01", // TODO: add sound
+                water: "frag_water_01",
+            },
+        },
+        scatter: {
+            particle: "tomato_impact",
+            count: 4,
+            speed: {
+                min: 5,
+                max: 25,
+            },
+        },
+        rippleCount: 1,
+        shakeStr: 0,
+        shakeDur: 0,
+        lifetime: 1,
     },
 };

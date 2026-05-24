@@ -9,8 +9,8 @@ import { util } from "../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../shared/utils/v2";
 import type { AudioManager } from "../audioManager";
 import type { Camera } from "../camera";
-import type { DebugOptions } from "../config";
-import { debugLines } from "../debugLines";
+import type { DebugRenderOpts } from "../config";
+import { debugLines } from "../debug/debugLines";
 import type { Ctx } from "../game";
 import type { Map } from "../map";
 import type { Renderer } from "../renderer";
@@ -46,6 +46,7 @@ export class Obstacle implements AbstractObject {
     rot!: number;
     scale!: number;
     pos!: Vec2;
+    imgRot!: number;
     imgMirrorX!: boolean;
     imgMirrorY!: boolean;
 
@@ -70,6 +71,8 @@ export class Obstacle implements AbstractObject {
         useId?: number;
         canUse?: boolean;
         onOff?: boolean;
+        isVat?: boolean;
+        roleToPromote?: string;
     };
 
     door!: {
@@ -93,7 +96,11 @@ export class Obstacle implements AbstractObject {
     explodeParticle!: string | string[];
     skinPlayerId!: number;
 
-    collider!: Collider & { height: number };
+    // for skin interpolation
+    visualPosOld!: Vec2;
+    posInterpTicker!: number;
+
+    collider!: Collider;
 
     constructor() {
         this.sprite.anchor.set(0.5, 0.5);
@@ -105,6 +112,7 @@ export class Obstacle implements AbstractObject {
         this.smokeEmitter = null;
         this.sprite.visible = false;
         this.img = "";
+        this.visualPosOld = v2.create(0, 0);
     }
 
     m_free() {
@@ -130,6 +138,10 @@ export class Obstacle implements AbstractObject {
             this.type = data.type;
             this.layer = data.layer;
             this.healthT = data.healthT;
+            if (!data.dead) {
+                util.removeFrom(ctx.map.deadObstacleIds, this.__id);
+                this.exploded = false;
+            }
             this.dead = data.dead;
             this.isSkin = data.isSkin;
             if (this.isSkin) {
@@ -137,6 +149,12 @@ export class Obstacle implements AbstractObject {
             }
         }
         const def = MapObjectDefs[this.type] as ObstacleDef;
+
+        if (!v2.eq(data.pos, this.visualPosOld)) {
+            this.visualPosOld = v2.copy(isNew ? data.pos : this.pos);
+            this.posInterpTicker = 0;
+        }
+
         this.pos = v2.copy(data.pos);
         this.rot = math.oriToRad(data.ori);
         this.scale = data.scale;
@@ -194,10 +212,22 @@ export class Obstacle implements AbstractObject {
                     interactionText: def.button?.interactionText || "game-use",
                     seq: data.button?.seq!,
                     seqOld: data.button?.seq!,
+                    roleToPromote: def.button?.roleToPromote,
+                    isVat: def.button?.isVat,
                 };
             }
             this.isPuzzlePiece = data.isPuzzlePiece;
             this.parentBuildingId = this.isPuzzlePiece ? data.parentBuildingId! : 0;
+
+            if (def.img.randomRotation) {
+                // use the ID, while its not technically random, the obstacle positions are
+                // which makes the rotation of each obstacle on your screen effectively random
+                // and the id keeps it consistent so the obstacle doesn't rotate every time its re-added
+                // to your screen
+                this.imgRot = math.deg2rad(this.__id % 360);
+            } else {
+                this.imgRot = 0;
+            }
         }
         if (this.isDoor && fullUpdate) {
             this.door.canUse = data.door?.canUse;
@@ -265,8 +295,15 @@ export class Obstacle implements AbstractObject {
         }
     }
 
-    getInteraction() {
+    getInteraction(player: Player) {
         if (this.isButton && this.button.canUse) {
+            if (
+                this.button.roleToPromote &&
+                this.button.roleToPromote === player.m_netData.m_role
+            ) {
+                return null;
+            }
+
             return {
                 rad: this.button.interactionRad,
                 action: this.button.interactionText,
@@ -375,36 +412,38 @@ export class Obstacle implements AbstractObject {
                 door.wasOpen = door.open;
             }
         }
-        if (
-            this.dead &&
-            !this.exploded &&
-            (map.deadObstacleIds.push(this.__id),
-            (this.exploded = true),
-            this.smokeEmitter && (this.smokeEmitter.stop(), (this.smokeEmitter = null)),
-            !this.isNew)
-        ) {
-            const def = MapObjectDefs[this.type] as ObstacleDef;
-
-            // Destroy effect
-            const aabb = collider.toAabb(this.collider);
-            const extent = v2.mul(v2.sub(aabb.max, aabb.min), 0.5);
-            const center = v2.add(aabb.min, extent);
-            const numParticles = Math.floor(util.random(5, 11));
-            for (let i = 0; i < numParticles; i++) {
-                const vel = v2.mul(v2.randomUnit(), util.random(5, 15));
-                const particle = Array.isArray(this.explodeParticle)
-                    ? this.explodeParticle[
-                          Math.floor(Math.random() * this.explodeParticle.length)
-                      ]
-                    : this.explodeParticle;
-                particleBarn.addParticle(particle, this.layer, center, vel);
+        if (this.dead && !this.exploded) {
+            map.deadObstacleIds.push(this.__id);
+            this.exploded = true;
+            if (this.smokeEmitter) {
+                this.smokeEmitter.stop();
+                this.smokeEmitter = null;
             }
-            audioManager.playSound(def.sound?.explode!, {
-                channel: "sfx",
-                soundPos: center,
-                layer: this.layer,
-                filter: "muffled",
-            });
+
+            if (!this.isNew) {
+                const def = MapObjectDefs[this.type] as ObstacleDef;
+
+                // Destroy effect
+                const aabb = collider.toAabb(this.collider);
+                const extent = v2.mul(v2.sub(aabb.max, aabb.min), 0.5);
+                const center = v2.add(aabb.min, extent);
+                const numParticles = Math.floor(util.random(5, 11));
+                for (let i = 0; i < numParticles; i++) {
+                    const vel = v2.mul(v2.randomUnit(), util.random(5, 15));
+                    const particle = Array.isArray(this.explodeParticle)
+                        ? this.explodeParticle[
+                              Math.floor(Math.random() * this.explodeParticle.length)
+                          ]
+                        : this.explodeParticle;
+                    particleBarn.addParticle(particle, this.layer, center, vel);
+                }
+                audioManager.playSound(def.sound?.explode!, {
+                    channel: "sfx",
+                    soundPos: center,
+                    layer: this.layer,
+                    filter: "muffled",
+                });
+            }
         }
 
         if (this.smokeEmitter) {
@@ -447,8 +486,15 @@ export class Obstacle implements AbstractObject {
         this.isNew = false;
     }
 
-    render(camera: Camera, debug: DebugOptions, layer: number) {
-        const pos = this.isDoor ? this.door.interpPos : this.pos;
+    render(dt: number, camera: Camera, debug: DebugRenderOpts, layer: number) {
+        let pos = this.isDoor ? this.door.interpPos : this.pos;
+
+        if (this.isSkin && camera.m_interpEnabled) {
+            this.posInterpTicker += dt;
+            const posT = math.clamp(this.posInterpTicker / camera.m_interpInterval, 0, 1);
+            pos = v2.lerp(posT, this.visualPosOld, this.pos);
+        }
+
         const rot = this.isDoor ? this.door.interpRot : this.rot;
         const scale = this.scale;
 
@@ -463,7 +509,7 @@ export class Obstacle implements AbstractObject {
         if (this.imgMirrorX) {
             this.sprite.scale.x *= -1;
         }
-        this.sprite.rotation = -rot;
+        this.sprite.rotation = -rot + this.imgRot;
 
         if (this.isDoor && this.door?.casingSprite) {
             const casingPos = camera.m_pointToScreen(
@@ -476,11 +522,18 @@ export class Obstacle implements AbstractObject {
             this.door.casingSprite.visible = !this.dead;
         }
 
-        if (IS_DEV && debug.render.obstacles && util.sameLayer(layer, this.layer)) {
+        if (IS_DEV && debug.obstacles && util.sameLayer(layer, this.layer)) {
             const def = MapObjectDefs[this.type] as ObstacleDef;
 
             const color = def.collidable ? 0xff0000 : 0xffff00;
             debugLines.addCollider(this.collider, color, 0.1);
+
+            // don't feel like adding a debug option for this rn
+            // but its only used for trees
+            // if (def.aabb) {
+            //     const aabb = collider.transform(def.aabb, this.pos, this.rot, this.scale);
+            //     debugLines.addCollider(aabb, 0x00ff00, 0.2);
+            // }
         }
     }
 }

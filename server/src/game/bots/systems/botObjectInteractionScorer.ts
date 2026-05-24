@@ -544,7 +544,8 @@ export class BotObjectInteractionScorer {
             }
 
             const ammoType = gunDef.ammo;
-            const reserveAmmo = ammoType ? player.inventory[ammoType] ?? 0 : 0;
+            const inventory = player.inventory as Record<string, number>;
+            const reserveAmmo = ammoType ? (inventory[ammoType] ?? 0) : 0;
             value += Math.min(reserveAmmo / 30, 4);
         }
 

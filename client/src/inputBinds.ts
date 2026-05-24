@@ -1,7 +1,7 @@
 import base64 from "base64-js";
-import BitBuffer from "bit-buffer";
 import $ from "jquery";
 import { Input as GameInput, type Input } from "../../shared/gameConfig";
+import { BitStream } from "../../shared/lib/bitBuffer";
 import type { ConfigManager } from "./config";
 import {
     type InputHandler,
@@ -12,6 +12,7 @@ import {
     MouseWheel,
 } from "./input";
 import { crc16 } from "./lib/crc";
+import type { Localization } from "./ui/localization";
 
 function def(name: string, defaultValue: InputValue | null) {
     return {
@@ -82,7 +83,7 @@ export class InputBinds {
 
     toArray() {
         const buf = new ArrayBuffer(this.binds.length * 2 + 1);
-        const stream = new BitBuffer.BitStream(buf);
+        const stream = new BitStream(buf);
         stream.writeUint8(1);
         for (let i = 0; i < this.binds.length; i++) {
             const bind = this.binds[i];
@@ -117,7 +118,7 @@ export class InputBinds {
         for (let i = 0; i < data.length; i++) {
             view[i] = data[i];
         }
-        const stream = new BitBuffer.BitStream(arrayBuf);
+        const stream = new BitStream(arrayBuf);
         const version = stream.readUint8();
         this.clearAllBinds();
         for (let idx = 0; stream.length - stream.index >= 10; ) {
@@ -160,7 +161,7 @@ export class InputBinds {
         }
     }
 
-    upgradeBinds(_version: unknown) {
+    upgradeBinds(_version: number) {
         const newBinds: GameInput[] = [];
 
         // Set default inputs for the new binds, as long as those
@@ -249,6 +250,7 @@ export class InputBindUi {
     constructor(
         public input: InputHandler,
         public inputBinds: InputBinds,
+        private localization: Localization,
     ) {
         this.input = input;
         this.inputBinds = inputBinds;
@@ -272,13 +274,22 @@ export class InputBindUi {
             const key = defKeys[i];
             const bindDef = BindDefs[key as unknown as keyof typeof BindDefs];
             const bind = binds[key as unknown as number];
+            const nameKey =
+                "bind-" +
+                bindDef.name
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/-+/g, "-")
+                    .replace(/^-|-$/g, "");
             const btn = $("<a/>", {
                 class: "btn-game-menu btn-darken btn-keybind-desc",
-                text: bindDef.name,
+                text: this.localization.translate(nameKey) || bindDef.name,
             });
             const val = $("<div/>", {
                 class: "btn-keybind-display",
-                text: bind ? bind.toString() : "",
+                text: bind
+                    ? this.localization.translate(bind.toString()) || bind.toString()
+                    : "",
             });
             btn.on("click", (event) => {
                 const targetElem = $(event.target);
@@ -288,7 +299,6 @@ export class InputBindUi {
                     event.stopPropagation();
                     const disallowKeys: number[] = [
                         Key.Control,
-                        Key.Shift,
                         Key.Alt,
                         Key.Windows,
                         Key.ContextMenu,

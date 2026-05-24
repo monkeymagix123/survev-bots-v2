@@ -2,12 +2,13 @@ import { GameConfig } from "../../gameConfig";
 import { util } from "../../utils/util";
 import { v2 } from "../../utils/v2";
 import type { MapDef } from "../mapDefs";
+import { MapId } from "../types/misc";
 import { Main, type PartialMapDef } from "./baseDefs";
 
 export const Wave2: MapDef = {
-    mapId: 12,
+    mapId: MapId.Wave2,
     isWave: true,
-    desc: { name: "Wave2", icon: "", buttonCss: "" },
+    desc: { name: "Wave2", icon: "", buttonCss: "", backgroundImg: "" },
     assets: {
         audio: [],
         atlases: ["gradient", "loadout", "shared", "main"],
@@ -41,7 +42,10 @@ export const Wave2: MapDef = {
     gameConfig: {
         planes: {
             timings: [],
-            crates: [],
+            crates: [
+                { name: "airdrop_crate_01", weight: 10 },
+                { name: "airdrop_crate_02", weight: 1 },
+            ],
         },
         bagSizes: {},
         bleedDamage: 2,
@@ -168,7 +172,6 @@ export const Wave2: MapDef = {
             { name: "awc", count: 1, weight: 1 },
             { name: "pkp", count: 1, weight: 1 },
         ],
-        tier_sledgehammer: [{ name: "sledgehammer", count: 1, weight: 1 }],
         tier_chest_04: [
             { name: "p30l", count: 1, weight: 40 }, // ?
             { name: "p30l_dual", count: 1, weight: 1 }, // ?
@@ -478,7 +481,10 @@ export const Wave2: MapDef = {
             large: "bridge_lg_structure_01",
             xlarge: "",
         },
-        // customSpawnRules: {},
+        customSpawnRules: {
+            locationSpawns: [],
+            placeSpawns: [],
+        },
         densitySpawns: [
             {
                 stone_01: 350,
@@ -502,9 +508,7 @@ export const Wave2: MapDef = {
             },
         ],
         fixedSpawns: [{}],
-        randomSpawns: [
-            {},
-        ],
+        randomSpawns: [],
         spawnReplacements: [{}],
         importantSpawns: [],
     },

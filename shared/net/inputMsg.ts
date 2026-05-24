@@ -1,3 +1,4 @@
+import type { Input } from "../gameConfig";
 import { v2 } from "../utils/v2";
 import { type AbstractMsg, type BitStream, Constants } from "./net";
 
@@ -15,10 +16,10 @@ export class InputMsg implements AbstractMsg {
     touchMoveLen = 255;
     toMouseDir = v2.create(1, 0);
     toMouseLen = 0;
-    inputs: number[] = [];
+    inputs: Input[] = [];
     useItem = "";
 
-    addInput(input: number) {
+    addInput(input: Input) {
         if (this.inputs.length < 7 && !this.inputs.includes(input)) {
             this.inputs.push(input);
         }
@@ -43,14 +44,11 @@ export class InputMsg implements AbstractMsg {
         s.writeUnitVec(this.toMouseDir, 10);
         s.writeFloat(this.toMouseLen, 0, Constants.MouseMaxDist, 8);
 
-        s.writeBits(this.inputs.length, 4);
-        for (let i = 0; i < this.inputs.length; i++) {
-            s.writeUint8(this.inputs[i]);
-        }
+        s.writeArray(this.inputs, 4, (i) => {
+            s.writeUint8(i);
+        });
 
         s.writeGameType(this.useItem);
-
-        s.writeBits(0, 6);
     }
 
     deserialize(s: BitStream) {
@@ -72,13 +70,10 @@ export class InputMsg implements AbstractMsg {
         this.toMouseDir = s.readUnitVec(10);
         this.toMouseLen = s.readFloat(0, Constants.MouseMaxDist, 8);
 
-        const length = s.readBits(4);
-        for (let i = 0; i < length; i++) {
-            this.inputs.push(s.readUint8());
-        }
+        this.inputs = s.readArray(4, () => {
+            return s.readUint8();
+        });
 
         this.useItem = s.readGameType();
-
-        s.readBits(6);
     }
 }

@@ -9,18 +9,18 @@ export class GameOverMsg implements AbstractMsg {
     playerStats: Array<PlayerStatsMsg["playerStats"]> = [];
 
     serialize(s: BitStream) {
+        /* STRIP_FROM_PROD_CLIENT:START */
         s.writeUint8(this.teamId);
         s.writeUint8(this.teamRank);
         s.writeUint8(+this.gameOver);
         s.writeUint8(this.winningTeamId);
 
-        s.writeUint8(this.playerStats.length);
-        for (let i = 0; i < this.playerStats.length; i++) {
-            const stats = this.playerStats[i];
+        s.writeArray(this.playerStats, 8, (stats) => {
             const statsMsg = new PlayerStatsMsg();
             statsMsg.playerStats = stats;
             statsMsg.serialize(s);
-        }
+        });
+        /* STRIP_FROM_PROD_CLIENT:END */
     }
 
     deserialize(s: BitStream) {
@@ -28,10 +28,11 @@ export class GameOverMsg implements AbstractMsg {
         this.teamRank = s.readUint8();
         this.gameOver = s.readUint8() as unknown as boolean;
         this.winningTeamId = s.readUint8();
-        for (let count = s.readUint8(), i = 0; i < count; i++) {
+
+        this.playerStats = s.readArray(8, () => {
             const statsMsg = new PlayerStatsMsg();
             statsMsg.deserialize(s);
-            this.playerStats.push(statsMsg.playerStats);
-        }
+            return statsMsg.playerStats;
+        });
     }
 }

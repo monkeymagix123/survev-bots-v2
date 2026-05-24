@@ -2,10 +2,11 @@ import { GameConfig } from "../../gameConfig";
 import { util } from "../../utils/util";
 import { v2 } from "../../utils/v2";
 import type { MapDef } from "../mapDefs";
+import { MapId } from "../types/misc";
 import { Main, type PartialMapDef } from "./baseDefs";
 
 const mapDef: PartialMapDef = {
-    mapId: 2,
+    mapId: MapId.Woods,
     desc: {
         name: "Woods",
         icon: "img/gui/player-king-woods.svg",
@@ -22,14 +23,15 @@ const mapDef: PartialMapDef = {
     },
     biome: {
         colors: {
-            background: 2118510,
-            water: 3310251,
-            waterRipple: 11792639,
-            beach: 15709019,
-            riverbank: 7812619,
-            grass: 9339690,
-            underground: 1772803,
-            playerSubmerge: 2854052,
+            background: 0x20536e,
+            water: 0x3282ab,
+            waterRipple: 0xb3f0ff,
+            beach: 0xefb35b,
+            riverbank: 0x77360b,
+            grass: 0x8e832a,
+            underground: 0x1b0d03,
+            playerSubmerge: 0x2b8ca4,
+            playerGhillie: 0x91852c,
         },
         particles: { camera: "falling_leaf" },
     },
@@ -62,15 +64,25 @@ const mapDef: PartialMapDef = {
     },
     /* STRIP_FROM_PROD_CLIENT:START */
     lootTable: {
+        tier_toilet: [
+            { name: "tier_guns", count: 1, weight: 0.1 },
+            { name: "tier_scopes", count: 1, weight: 0.05 },
+            { name: "tier_medical", count: 1, weight: 0.75 },
+            { name: "tier_throwables", count: 1, weight: 0.05 },
+            { name: "tier_outfits", count: 1, weight: 0.05 },
+        ],
         tier_guns: [
-            { name: "dp28", count: 1, weight: 3.5 },
+            { name: "dp28", count: 1, weight: 2.75 },
+            { name: "bar", count: 1, weight: 2.75 },
+            { name: "imbel", count: 1, weight: 2.75 },
+            { name: "m870", count: 1, weight: 2.5 },
             { name: "m1100", count: 1, weight: 3 },
-            { name: "mp220", count: 1, weight: 1.5 },
-            { name: "saiga", count: 1, weight: 0.1 },
-            { name: "spas12", count: 1, weight: 3 },
-            { name: "qbb97", count: 1, weight: 0.1 },
-            { name: "bar", count: 1, weight: 3 },
-            { name: "pkp", count: 1, weight: 0.005 },
+            { name: "mp220", count: 1, weight: 2 },
+            { name: "saiga", count: 1, weight: 0.15 },
+            { name: "spas12", count: 1, weight: 2.5 },
+            { name: "qbb97", count: 1, weight: 0.125 },
+            { name: "pkp", count: 1, weight: 0.007 },
+            { name: "m249", count: 1, weight: 0.011 },
         ],
         tier_ammo: [
             { name: "762mm", count: 60, weight: 3 },
@@ -89,16 +101,16 @@ const mapDef: PartialMapDef = {
             { name: "strobe", count: 1, weight: 0.2 },
         ],
         tier_armor: [
-            { name: "helmet01", count: 1, weight: 3 },
-            { name: "helmet02", count: 1, weight: 2 },
+            { name: "helmet01", count: 1, weight: 2.5 },
+            { name: "helmet02", count: 1, weight: 2.5 },
             { name: "helmet03", count: 1, weight: 1 },
-            { name: "chest01", count: 1, weight: 3 },
-            { name: "chest02", count: 1, weight: 2 },
+            { name: "chest01", count: 1, weight: 2.5 },
+            { name: "chest02", count: 1, weight: 2.5 },
             { name: "chest03", count: 1, weight: 1 },
         ],
         tier_packs: [
-            { name: "backpack01", count: 1, weight: 3 },
-            { name: "backpack02", count: 1, weight: 2 },
+            { name: "backpack01", count: 1, weight: 2 },
+            { name: "backpack02", count: 1, weight: 3 },
             { name: "backpack03", count: 1, weight: 1 },
         ],
         tier_chest: [
@@ -112,6 +124,7 @@ const mapDef: PartialMapDef = {
             { name: "4xscope", count: 1, weight: 1 },
             { name: "8xscope", count: 1, weight: 0.5 },
             { name: "pkp", count: 1, weight: 0.05 },
+            { name: "m249", count: 1, weight: 0.05 },
         ],
         tier_airdrop_throwables: [
             { name: "frag", count: 2, weight: 1 },
@@ -119,14 +132,15 @@ const mapDef: PartialMapDef = {
             { name: "strobe", count: 1, weight: 0.5 },
         ],
         tier_airdrop_uncommon: [
-            { name: "mirv", count: 8, weight: 1 },
-            { name: "strobe", count: 2, weight: 0.5 },
+            { name: "mirv", count: 8, weight: 0.75 },
+            { name: "strobe", count: 2, weight: 0.75 },
             { name: "saiga", count: 1, weight: 1 },
-            { name: "qbb97", count: 1, weight: 2 },
+            { name: "spas16", count: 1, weight: 1 },
+            { name: "qbb97", count: 1, weight: 1 },
         ],
         tier_airdrop_rare: [
-            { name: "usas", count: 1, weight: 2 },
-            { name: "pkp", count: 1, weight: 0.08 },
+            { name: "usas", count: 1, weight: 1.5 },
+            { name: "pkp", count: 1, weight: 0.75 },
             { name: "m249", count: 1, weight: 1 },
             { name: "m9", count: 1, weight: 0.005 },
         ],
@@ -137,12 +151,12 @@ const mapDef: PartialMapDef = {
         ],
         tier_hatchet: [
             { name: "usas", count: 1, weight: 2 },
-            { name: "pkp", count: 1, weight: 0.08 },
-            { name: "m249", count: 1, weight: 1 },
+            { name: "pkp", count: 1, weight: 0.25 },
+            { name: "m249", count: 1, weight: 0.75 },
         ],
         tier_airdrop_melee: [
-            { name: "", count: 1, weight: 19 },
-            { name: "stonehammer", count: 1, weight: 1 },
+            { name: "", count: 1, weight: 13 },
+            { name: "stonehammer", count: 1, weight: 3 },
             { name: "pan", count: 1, weight: 1 },
         ],
     },
@@ -157,6 +171,7 @@ const mapDef: PartialMapDef = {
                         odds: 1,
                         innerRad: 32,
                         outerRad: 96,
+                        centerObj: "teapavilion_01w",
                         spawnBound: {
                             pos: v2.create(0.5, 0.5),
                             rad: 100,
@@ -202,23 +217,23 @@ const mapDef: PartialMapDef = {
                 container_03: 2,
                 container_04: 2,
                 shack_01: 2,
-                outhouse_01: 1,
+                outhouse_01: 6,
                 loot_tier_1: 36,
                 loot_tier_beach: 8,
             },
         ],
         fixedSpawns: [
             {
-                logging_complex_01: 1,
                 logging_complex_02: 1,
                 logging_complex_03: 3,
-                teapavilion_01w: 1,
                 warehouse_01: 3,
+                workshop_complex_01: 1,
                 house_red_01: 3,
                 barn_01: 3,
                 cache_03: 48,
-                cache_01: 1,
+                cache_01w: 1,
                 cache_02w: 1,
+                cache_07w: 1,
                 bunker_structure_01b: 1,
                 bunker_structure_03: 1,
                 bunker_structure_07: 1,

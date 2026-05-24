@@ -1,9 +1,10 @@
 import { util } from "../../utils/util";
 import type { MapDef } from "../mapDefs";
+import { MapId } from "../types/misc";
 import { Main, type PartialMapDef } from "./baseDefs";
 
 const mapDef: PartialMapDef = {
-    mapId: 11, // start at 11 for new maps
+    mapId: MapId.Wave,
     isWave: true,
     desc: {
         name: "Wave",
@@ -11,7 +12,7 @@ const mapDef: PartialMapDef = {
         buttonCss: "",
     },
     assets: {
-        atlases: ["gradient", "loadout", "shared", "main", "faction"],
+        atlases: ["gradient", "loadout", "shared", "faction"],
     },
     gameMode: {
         maxPlayers: 100,

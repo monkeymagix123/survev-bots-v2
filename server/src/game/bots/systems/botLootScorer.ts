@@ -405,7 +405,7 @@ export class BotLootScorer {
         dist: number,
     ): LootScore | undefined {
         const bagSpace = this._getBagSpace(player, loot.type);
-        const held = player.inventory[loot.type] ?? 0;
+        const held = (player.inventory as Record<string, number>)[loot.type] ?? 0;
         if (bagSpace <= held) return undefined;
 
         const desired = this._getDesiredHealCount(player, loot.type);
@@ -431,7 +431,7 @@ export class BotLootScorer {
         dist: number,
     ): LootScore | undefined {
         const bagSpace = this._getBagSpace(player, loot.type);
-        const held = player.inventory[loot.type] ?? 0;
+        const held = (player.inventory as Record<string, number>)[loot.type] ?? 0;
         if (bagSpace <= held) return undefined;
 
         const desired = this._getDesiredBoostCount(player, loot.type);
@@ -452,7 +452,7 @@ export class BotLootScorer {
 
     private _scoreAmmo(player: Player, loot: Loot, dist: number): LootScore | undefined {
         const bagSpace = this._getBagSpace(player, loot.type);
-        const held = player.inventory[loot.type] ?? 0;
+        const held = (player.inventory as Record<string, number>)[loot.type] ?? 0;
         if (bagSpace <= 0 || held >= bagSpace) return undefined;
 
         let matchingGuns = 0;
@@ -583,7 +583,9 @@ export class BotLootScorer {
     }
 
     private _getBagSpace(player: Player, itemType: string): number {
-        const bag = player.bagSizes[itemType];
+        const bag = (player.game.playerBarn.bagSizes as Record<string, number[]>)[
+            itemType
+        ];
         if (!bag) return 0;
         return bag[player.getGearLevel(player.backpack)] ?? 0;
     }

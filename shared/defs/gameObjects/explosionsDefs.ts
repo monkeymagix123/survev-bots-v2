@@ -1,4 +1,4 @@
-export interface ExplosionDef {
+export type ExplosionDef = {
     readonly type: "explosion";
     damage: number;
     obstacleDamage: number;
@@ -11,10 +11,19 @@ export interface ExplosionDef {
     explosionEffectType: string;
     decalType: string;
     teamDamage?: boolean;
-    freezeAmount?: number; // unused atm in favor of gameconfig constant
-    freezeDuration?: number; // how long to slow down player on hit
-    dropRandomLoot?: boolean;
-}
+    dropRandomLoot?: number;
+    healTeam?: boolean;
+    healAmount?: number;
+} & (
+    | {
+          freezeDuration: number; // how long to slow down player on hit
+          frozenSprites: string[];
+      }
+    | {
+          freezeDuration?: undefined;
+          frozenSprites?: undefined;
+      }
+);
 
 export const ExplosionDefs: Record<string, ExplosionDef> = {
     explosion_frag: {
@@ -129,33 +138,33 @@ export const ExplosionDefs: Record<string, ExplosionDef> = {
     },
     explosion_snowball: {
         type: "explosion",
-        damage: 2,
+        damage: 6,
         obstacleDamage: 1,
         rad: { min: 1.24, max: 1.25 },
         shrapnelCount: 0,
         shrapnelType: "",
         explosionEffectType: "snowball",
         decalType: "decal_snowball_explosion",
-        freezeAmount: 3,
         freezeDuration: 0.5,
-        dropRandomLoot: true,
+        frozenSprites: ["player-snow-01.img", "player-snow-02.img", "player-snow-03.img"],
+        dropRandomLoot: 1,
     },
     explosion_snowball_heavy: {
         type: "explosion",
-        damage: 5,
+        damage: 28,
         obstacleDamage: 1,
         rad: { min: 1.24, max: 1.25 },
         shrapnelCount: 0,
         shrapnelType: "",
         explosionEffectType: "snowball_heavy",
         decalType: "decal_snowball_explosion",
-        freezeAmount: 3,
-        freezeDuration: 1,
-        dropRandomLoot: true,
+        freezeDuration: 2,
+        frozenSprites: ["player-snow-01.img", "player-snow-02.img", "player-snow-03.img"],
+        dropRandomLoot: 1,
     },
     explosion_potato: {
         type: "explosion",
-        damage: 2,
+        damage: 8,
         obstacleDamage: 1,
         teamDamage: false,
         rad: { min: 1.24, max: 1.25 },
@@ -163,13 +172,13 @@ export const ExplosionDefs: Record<string, ExplosionDef> = {
         shrapnelType: "",
         explosionEffectType: "potato",
         decalType: "decal_potato_explosion",
-        freezeAmount: 3,
         freezeDuration: 0.5,
-        dropRandomLoot: true,
+        frozenSprites: ["player-mash-01.img", "player-mash-02.img", "player-mash-03.img"],
+        dropRandomLoot: 1,
     },
     explosion_potato_heavy: {
         type: "explosion",
-        damage: 5,
+        damage: 15,
         obstacleDamage: 1,
         teamDamage: false,
         rad: { min: 1.24, max: 1.25 },
@@ -177,9 +186,9 @@ export const ExplosionDefs: Record<string, ExplosionDef> = {
         shrapnelType: "",
         explosionEffectType: "potato_heavy",
         decalType: "decal_potato_explosion",
-        freezeAmount: 3,
         freezeDuration: 1,
-        dropRandomLoot: true,
+        frozenSprites: ["player-mash-01.img", "player-mash-02.img", "player-mash-03.img"],
+        dropRandomLoot: 2,
     },
     explosion_potato_cannonball: {
         type: "explosion",
@@ -202,8 +211,21 @@ export const ExplosionDefs: Record<string, ExplosionDef> = {
         shrapnelType: "",
         explosionEffectType: "potato_smgshot",
         decalType: "",
-        freezeAmount: 3,
         freezeDuration: 1,
+        frozenSprites: ["player-mash-01.img", "player-mash-02.img", "player-mash-03.img"],
+    },
+    explosion_potato_lmgshot: {
+        type: "explosion",
+        damage: 8.5,
+        obstacleDamage: 1.3,
+        teamDamage: false,
+        rad: { min: 1.25, max: 1.75 },
+        shrapnelCount: 0,
+        shrapnelType: "",
+        explosionEffectType: "potato_lmgshot",
+        decalType: "",
+        freezeDuration: 0.25,
+        frozenSprites: ["player-mash-01.img", "player-mash-02.img", "player-mash-03.img"],
     },
     explosion_bomb_iron: {
         type: "explosion",
@@ -214,5 +236,45 @@ export const ExplosionDefs: Record<string, ExplosionDef> = {
         shrapnelType: "shrapnel_bomb_iron",
         explosionEffectType: "bomb_iron",
         decalType: "decal_bomb_iron_explosion",
+    },
+    explosion_coconut: {
+        type: "explosion",
+        damage: 22,
+        obstacleDamage: 1,
+        teamDamage: false,
+        freezeDuration: 1,
+        // TODO: coconut frozen sprites
+        frozenSprites: ["player-mash-01.img", "player-mash-02.img", "player-mash-03.img"],
+        rad: { min: 1.34, max: 1.35 },
+        shrapnelCount: 0,
+        shrapnelType: "",
+        explosionEffectType: "coconut",
+        decalType: "",
+        healTeam: true,
+        healAmount: 7,
+    },
+    explosion_tomato: {
+        type: "explosion",
+        damage: 11,
+        obstacleDamage: 1,
+        teamDamage: false,
+        rad: { min: 1.29, max: 1.3 },
+        shrapnelCount: 0,
+        shrapnelType: "",
+        explosionEffectType: "tomato",
+        decalType: "",
+        freezeDuration: 0.5,
+        frozenSprites: ["player-mash-04.img", "player-mash-05.img"],
+        dropRandomLoot: 1,
+    },
+    explosion_cobalt: {
+        type: "explosion",
+        damage: 175,
+        obstacleDamage: 1,
+        rad: { min: 5, max: 8 },
+        shrapnelCount: 20,
+        shrapnelType: "shrapnel_cobalt",
+        explosionEffectType: "barrel",
+        decalType: "decal_barrel_explosion",
     },
 };

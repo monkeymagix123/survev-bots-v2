@@ -5,8 +5,7 @@ import * as net from "../../../../shared/net/net";
 import type { Vec2 } from "../../../../shared/utils/v2";
 import { Config } from "../../config";
 import type { Game } from "../game";
-import type { Group } from "../group";
-import type { Team } from "../team";
+import type { Group, Team } from "../group";
 import { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import { BotController, type BotDifficulty } from "./botController";
@@ -489,11 +488,11 @@ export class BotManager {
     private _computePendingJoinSlots(now: number): number {
         let pendingJoinSlots = 0;
         for (const [token, data] of this.game.joinTokens) {
-            if (data.expiresAt < now || data.availableUses <= 0) {
+            if (data.expiresAt < now) {
                 this.game.joinTokens.delete(token);
                 continue;
             }
-            pendingJoinSlots += data.availableUses;
+            pendingJoinSlots += 1;
         }
         return pendingJoinSlots;
     }
@@ -592,7 +591,7 @@ export class BotManager {
             if (isWaveMap) {
                 // Wave map: internal bots always spawn on Team 2 (Blue).
                 team =
-                    playerBarn.teams.find((t) => t.teamId === 2) ??
+                    playerBarn.teams.find((t) => t.id === 2) ??
                     playerBarn.teams[1] ??
                     playerBarn.getSmallestTeam();
             } else {
@@ -624,36 +623,20 @@ export class BotManager {
         joinMsg.bot = false; // internal bot, not an external websocket bot
 
         const socketId = `ai:${this.game.id}:${++this._nextBotId}`;
-        const bot = new Player(this.game, pos, layer, socketId, joinMsg);
+        const bot = new Player(
+            this.game,
+            pos,
+            layer,
+            joinMsg.name,
+            socketId,
+            joinMsg,
+            "",
+            "",
+            null,
+        );
 
         bot.isAi = true;
         bot.hasClient = false;
-
-        if (team && group) {
-            team.addPlayer(bot);
-            group.addPlayer(bot);
-        } else if (!team && group) {
-            group.addPlayer(bot);
-            bot.teamId = group.groupId;
-        } else if (team && !group) {
-            team.addPlayer(bot);
-            bot.groupId = playerBarn.groupIdAllocator.getNextId();
-        } else {
-            bot.groupId = playerBarn.groupIdAllocator.getNextId();
-            bot.teamId = bot.groupId;
-        }
-
-        if (bot.game.map.factionMode) {
-            bot.playerStatusDirty = true;
-        }
-
-        if (bot.game.map.perkMode) {
-            bot.roleMenuTicker = GameConfig.player.perkModeRoleSelectDuration + 5;
-        }
-
-        if (!bot.game.map.perkMode && group && !group.spawnLeader) {
-            group.spawnLeader = bot;
-        }
 
         // Register the controller immediately with the resolved brain type so
         // wave-assigned brain types are used rather than falling back to random
@@ -669,18 +652,7 @@ export class BotManager {
         this._controllers.set(bot.__id, controller);
 
         this._applyStartingLoadout(bot);
-
-        playerBarn.newPlayers.push(bot);
-        this.game.objectRegister.register(bot);
-        playerBarn.players.push(bot);
-        playerBarn.livingPlayers.push(bot);
-
-        if (!this.game.modeManager.isSolo) {
-            playerBarn.livingPlayers.sort((a, b) => a.teamId - b.teamId);
-        }
-        playerBarn.aliveCountDirty = true;
-
-        this.game.pluginManager.emit("playerJoin", bot);
+        playerBarn.activatePlayer(bot, group, team);
 
         // Ensure a started transition when internal bots bring alive contexts above 1
         if (!this.game.started) {
@@ -717,8 +689,6 @@ export class BotManager {
             bot.weaponManager.setCurWeapIndex(
                 GameConfig.WeaponSlot.Primary,
                 true,
-                true,
-                true,
             );
             // Spawn holding the gun immediately (avoid a draw delay on first tick)
             bot.weapons[GameConfig.WeaponSlot.Primary].cooldown = 0;
@@ -728,10 +698,9 @@ export class BotManager {
     private _pickLootGun(exclude: Set<string>): string | undefined {
         const tier = this.game.map.mapDef.lootTable["tier_guns"] ? "tier_guns" : "tier_world";
         for (let attempt = 0; attempt < 30; attempt++) {
-            const items = this.game.lootBarn.getLootTable(tier);
-            if (!items.length) return undefined;
+            const item = this.game.lootBarn.getLootTable(tier);
+            if (!item) return undefined;
 
-            const item = items[0];
             const type = item.name;
             if (!type) continue;
             if (exclude.has(type)) continue;
@@ -750,20 +719,22 @@ export class BotManager {
         if (def?.type !== "gun") return;
 
         const gunDef = def as GunDef;
-        const trueMaxClip = bot.weaponManager.getTrueAmmoStats(gunDef).trueMaxClip;
+        const trueMaxClip = bot.weaponManager.getAmmoStats(gunDef).maxClip;
         bot.weaponManager.setWeapon(slot, gunType, trueMaxClip);
 
         const ammoType = gunDef.ammo;
         const backpackLevel = bot.getGearLevel(bot.backpack);
-        const bagSpace = bot.bagSizes[ammoType]
-            ? bot.bagSizes[ammoType][backpackLevel]
+        const bagSizes = this.game.playerBarn.bagSizes as Record<string, number[]>;
+        const bagSpace = bagSizes[ammoType]
+            ? bagSizes[ammoType][backpackLevel]
             : 0;
         if (!bagSpace) return;
 
         const extraAmmo = Math.max(gunDef.ammoSpawnCount - trueMaxClip, 0);
         if (!extraAmmo) return;
 
-        bot.inventory[ammoType] = Math.min(bagSpace, bot.inventory[ammoType] + extraAmmo);
+        const inventory = bot.inventory as Record<string, number>;
+        inventory[ammoType] = Math.min(bagSpace, (inventory[ammoType] ?? 0) + extraAmmo);
         bot.inventoryDirty = true;
     }
 

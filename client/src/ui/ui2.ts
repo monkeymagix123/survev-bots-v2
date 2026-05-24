@@ -12,7 +12,13 @@ import type { MeleeDef } from "../../../shared/defs/gameObjects/meleeDefs";
 import type { RoleDef } from "../../../shared/defs/gameObjects/roleDefs";
 import { MapObjectDefs } from "../../../shared/defs/mapObjectDefs";
 import type { ObstacleDef } from "../../../shared/defs/mapObjectsTyping";
-import { Action, DamageType, GameConfig, Input } from "../../../shared/gameConfig";
+import {
+    Action,
+    DamageType,
+    GameConfig,
+    Input,
+    type InventoryItem,
+} from "../../../shared/gameConfig";
 import { PickupMsgType } from "../../../shared/net/net";
 import { collider } from "../../../shared/utils/collider";
 import { math } from "../../../shared/utils/math";
@@ -29,7 +35,7 @@ import type { Localization } from "./localization";
 
 const maxKillFeedLines = 6;
 const touchHoldDuration = 0.75 * 1000;
-const perkUiCount = 3;
+const perkUiCount = 4;
 
 enum InteractionType {
     None,
@@ -53,10 +59,7 @@ function isLmb(e: MouseEvent) {
     return e.button == 0;
 }
 function isRmb(e: MouseEvent) {
-    if ("which" in e) {
-        return e.which == 3;
-    }
-    return (e as MouseEvent).button == 2;
+    return e.button == 2;
 }
 // These functions, copy and diff, only work if both
 // arguments have the same internal structure
@@ -279,7 +282,7 @@ export class UiManager2 {
                 domElemById("ui-boost-counter-1").firstElementChild,
                 domElemById("ui-boost-counter-2").firstElementChild,
                 domElemById("ui-boost-counter-3").firstElementChild,
-            ] as unknown as HTMLElement[],
+            ] as HTMLElement[],
         },
         scopes: [] as Array<{
             scopeType: string;
@@ -329,8 +332,6 @@ export class UiManager2 {
         public localization: Localization,
         public inputBinds: InputBinds,
     ) {
-        const itemAction = this;
-
         // KillFeed
         for (let i = 0; i < maxKillFeedLines; i++) {
             // Search for an existing line; if we don't find one, create it
@@ -558,7 +559,7 @@ export class UiManager2 {
             // Add an input handler specifically to handle fullscreen on Firefox;
             // "requestFullscreen() must be called from inside a short running user-generated event handler."
             const keyCode = e.which || e.keyCode;
-            const bind = itemAction.inputBinds.getBind(Input.Fullscreen);
+            const bind = this.inputBinds.getBind(Input.Fullscreen);
             if (bind && keyCode == bind.code) {
                 helpers.toggleFullScreen();
             }
@@ -696,16 +697,31 @@ export class UiManager2 {
                     !obstacle.dead &&
                     util.sameLayer(obstacle.layer, activePlayer.layer)
                 ) {
-                    const interact = obstacle.getInteraction();
+                    const interact = obstacle.getInteraction(activePlayer);
                     if (interact) {
-                        const res = collider.intersectCircle(
-                            obstacle.collider,
-                            activePlayer.m_netData.m_pos,
-                            interact.rad + activePlayer.m_rad,
-                        );
-                        if (res && res.pen >= closestPen) {
-                            closestObj = obstacle;
-                            closestPen = res.pen;
+                        if (obstacle.isButton && obstacle.button.isVat) {
+                            const distance = v2.distance(
+                                activePlayer.m_pos,
+                                obstacle.pos,
+                            );
+
+                            if (
+                                distance + activePlayer.m_rad <
+                                interact.rad * obstacle.scale
+                            ) {
+                                closestObj = obstacle;
+                                closestPen = 0;
+                            }
+                        } else {
+                            const res = collider.intersectCircle(
+                                obstacle.collider,
+                                activePlayer.m_netData.m_pos,
+                                interact.rad + activePlayer.m_rad,
+                            );
+                            if (res && res.pen >= closestPen) {
+                                closestObj = obstacle;
+                                closestPen = res.pen;
+                            }
                         }
                     }
                 }
@@ -889,7 +905,7 @@ export class UiManager2 {
             const ve = state.loot[Se];
             const ke = ve.count;
             ve.count = activePlayer.m_localData.m_inventory[ve.type] || 0;
-            ve.maximum = GameConfig.bagSizes[ve.type][xe];
+            ve.maximum = GameConfig.bagSizes[ve.type as InventoryItem][xe];
             ve.selectable = ve.count > 0 && !spectating;
             if (ve.count > ke) {
                 ve.ticker = 0;
@@ -1120,16 +1136,15 @@ export class UiManager2 {
             }
         }
         if (patch.boost) {
-            const v = GameConfig.player.boostBreakpoints;
-            let I = 0;
-            for (let T = 0; T < v.length; T++) {
-                I += v[T];
-            }
-            for (let P = state.boost / 100, C = 0; C < dom.boost.bars.length; C++) {
-                const A = v[C] / I;
-                const O = math.clamp(P / A, 0, 1);
-                P = math.max(P - A, 0);
-                dom.boost.bars[C].style.width = `${O * 100}%`;
+            const breakPoints = GameConfig.player.boostBreakpoints;
+            const max = breakPoints.reduce((a, b) => a + b, 0);
+
+            let boostT = state.boost / 100;
+            for (let i = 0; i < dom.boost.bars.length; i++) {
+                const breakPointT = breakPoints[i] / max;
+                const widthT = math.clamp(boostT / breakPointT, 0, 1);
+                boostT = math.max(boostT - breakPointT, 0);
+                dom.boost.bars[i].style.width = `${widthT * 100}%`;
             }
             dom.boost.div.style.opacity = String(state.boost == 0 ? 0 : 1);
         }
@@ -1279,7 +1294,8 @@ export class UiManager2 {
                 const oe = ie ? ie.level : 0;
                 re.div.style.display = ie ? "block" : "none";
                 re.level.innerHTML = this.localization.translate(`game-level-${oe}`);
-                re.level.style.color = oe >= 3 ? "#ff9900" : "#ffffff";
+                re.level.style.color =
+                    oe === 4 ? "#b30000" : oe === 3 ? "#ff9900" : "#ffffff";
                 re.image.src = helpers.getSvgFromGameType(ae.item);
             }
             if (te.selectable) {
@@ -1598,6 +1614,7 @@ export class UiManager2 {
             [PickupMsgType.AlreadyEquipped]: "game-item-already-equipped",
             [PickupMsgType.BetterItemEquipped]: "game-better-item-equipped",
             [PickupMsgType.GunCannotFire]: "game-gun-cannot-fire",
+            [PickupMsgType.MaxPerks]: "game-max-perks",
         };
         const key = typeMap[type] || typeMap[PickupMsgType.Full];
         return this.localization.translate(key);
@@ -1617,14 +1634,14 @@ export class UiManager2 {
                 if (
                     object &&
                     player &&
-                    object == player &&
+                    (object == player || player.downed) &&
                     player.m_hasPerk("self_revive")
                 ) {
                     return this.localization.translate("game-revive-self");
                 }
                 return this.localization.translate("game-revive-teammate");
             case InteractionType.Object: {
-                const x = (object as Obstacle).getInteraction()!;
+                const x = (object as Obstacle).getInteraction(player)!;
                 return `${this.localization.translate(
                     x.action,
                 )} ${this.localization.translate(x.object)}`;

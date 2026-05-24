@@ -1,3 +1,6 @@
+/// <reference types="vite/client" />
+/// <reference types="turnstile-types" />
+
 declare global {
     interface Navigator {
         standalone?: boolean;
@@ -19,26 +22,35 @@ declare global {
     }
 
     interface Window {
-        login: () => void;
-        deleteAccount: () => void;
-        deleteItems: () => void;
-        unlock: (item: string) => void;
-        setQuest: (questType: string, idx: number) => void;
-        refreshQuest: (idx: number) => void;
-        setPassUnlock: (questType: string) => void;
         mobile?: boolean;
         webkitAudioContext?: AudioContext;
         CP: any;
 
-        aiptag?: {
-            cmd: {
-                display: Array<() => void>;
-            };
+        fusetag?: {
+            que: Array<() => any>;
+            initialised?: boolean;
+            fuseUUID?: string;
+            activateZone: (id: string) => void;
+            pageInit: (options?: PageInitOptions) => void;
+            registerAll: () => void;
+            registerZone: (id: string) => void;
+            setTargeting: (key: string, value: TargetingValue) => void;
+            setAllowRefreshCallback: (callback: (slotDivId: string) => boolean) => void;
+            destroySticky: () => void;
         };
-        aipDisplayTag?: {
-            display(string: string): void;
-            destroy(string: string): void;
+        nitroAds?: {
+            queue: Array<unknown>;
+            createAd: (id: string, options: Record<string, unknown>) => Promise<unknown>;
         };
+
+        // SDK
+        CrazyGames: any;
+        PokiSDK: any;
+        SDK_OPTIONS: any;
+        sdk: any;
+        SpellSyncConfig: any;
+        spellSync: any;
+        showAdFlag: boolean;
     }
 
     interface Document {
@@ -63,9 +75,18 @@ declare global {
         }
     >;
 
+    const PASS_TYPE: string;
+
     const IS_DEV: boolean;
-    const GIT_VERSION: string;
-    const AIP_PLACEMENT_ID: string;
+    const VITE_ENABLE_SURVEV_ADS: boolean;
+
+    const GIT_VERSION: string | undefined;
+
+    const AD_PREFIX: string | undefined;
+    const GAMEMONETIZE_ID: string | undefined;
+    const TURNSTILE_SITE_KEY: string | undefined;
+
+    window.fusetag = window.fusetag || (window.fusetag = { que: [] });
 }
 
 declare module "pixi.js-legacy" {

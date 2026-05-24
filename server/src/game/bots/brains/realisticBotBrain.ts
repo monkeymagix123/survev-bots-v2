@@ -167,7 +167,8 @@ export class RealisticBotBrain implements BotBrain {
                 const { gunDef, weaponClass } = weaponLogic.getWeaponInfo(player);
                 const activeWeapon = player.weapons[player.curWeapIdx];
                 const ammoType = gunDef?.ammo;
-                const spareAmmo = ammoType ? player.inventory[ammoType] : 0;
+                const inventory = player.inventory as Record<string, number>;
+                const spareAmmo = ammoType ? (inventory[ammoType] ?? 0) : 0;
                 const needsReload =
                     player.isReloading() ||
                     (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);

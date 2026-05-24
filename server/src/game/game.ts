@@ -1,11 +1,21 @@
+import fs from "node:fs";
+import path from "node:path";
 import { GameConfig, TeamMode } from "../../../shared/gameConfig";
 import * as net from "../../../shared/net/net";
+import type { Loadout } from "../../../shared/utils/loadout";
+import { math } from "../../../shared/utils/math";
 import { v2 } from "../../../shared/utils/v2";
 import { Config } from "../config";
-import { Logger } from "../utils/logger";
-import type { ServerGameConfig } from "./gameManager";
+import { ServerLogger } from "../utils/logger";
+import { apiPrivateRouter } from "../utils/serverHelpers";
+import {
+    type FindGamePrivateBody,
+    ProcessMsgType,
+    type SaveGameBody,
+    type ServerGameConfig,
+    type UpdateDataMsg,
+} from "../utils/types";
 import { GameModeManager } from "./gameModeManager";
-import { ProcessMsgType, type UpdateDataMsg } from "./gameProcessManager";
 import { Grid } from "./grid";
 import { GameMap } from "./map";
 import { AirdropBarn } from "./objects/airdrop";
@@ -23,26 +33,30 @@ import { ProjectileBarn } from "./objects/projectile";
 import { SmokeBarn } from "./objects/smoke";
 import { BotManager } from "./bots/botManager";
 import { PluginManager } from "./pluginManager";
-
-export interface GroupData {
-    hash: string;
-    autoFill: boolean;
-}
+import { Profiler } from "./profiler";
 
 export interface JoinTokenData {
-    autoFill: boolean;
-    playerCount: number;
-    availableUses: number;
     expiresAt: number;
-    groupHashToJoin: string;
+    userId: string | null;
+    findGameIp: string;
+    loadout?: Loadout;
+    quests?: string[];
+    groupData: {
+        autoFill: boolean;
+        playerCount: number;
+        groupHashToJoin: string;
+    };
 }
 
 export class Game {
     started = false;
     stopped = false;
-    allowJoin = true;
+    // for debug
+    preventStart = false;
+    allowJoin = false;
     over = false;
     startedTime = 0;
+    stopTicker = 0;
     id: string;
     teamMode: TeamMode;
     mapName: string;
@@ -50,6 +64,12 @@ export class Game {
     config: ServerGameConfig;
     pluginManager = new PluginManager(this);
     modeManager: GameModeManager;
+
+    tickTimeWarnThreshold = (1000 / Config.gameTps) * 4;
+    gameTickWarnings = 0;
+
+    netSyncWarnThreshold = (1000 / Config.netSyncTps) * 4;
+    netSyncWarnings = 0;
 
     grid: Grid<GameObject>;
     objectRegister: ObjectRegister;
@@ -92,20 +112,24 @@ export class Game {
     perfTicker = 0;
     tickTimes: number[] = [];
 
-    logger: Logger;
+    logger: ServerLogger;
 
     start = Date.now();
+
+    profiler = new Profiler();
+
+    debugSpeedMulti = 1;
 
     constructor(
         id: string,
         config: ServerGameConfig,
-        readonly sendSocketMsg: (id: string, data: ArrayBuffer) => void,
-        readonly closeSocket: (id: string) => void,
+        readonly sendSocketMsg: (id: string, data: Uint8Array) => void,
+        readonly closeSocket: (id: string, reason?: string) => void,
         readonly sendData?: (data: UpdateDataMsg) => void,
     ) {
         this.id = id;
-        this.logger = new Logger(`Game #${this.id.substring(0, 4)}`);
-        this.logger.log("Creating");
+        this.logger = new ServerLogger(`Game #${this.id.substring(0, 4)}`);
+        this.logger.info("Creating");
 
         this.config = config;
 
@@ -145,54 +169,133 @@ export class Game {
 
     async init() {
         await this.pluginManager.loadPlugins();
-        this.pluginManager.emit("gameCreated", this);
         this.map.init();
+        this.pluginManager.emit("gameCreated", this);
 
         this.allowJoin = true;
-        this.logger.log(`Created in ${Date.now() - this.start} ms`);
+        this.logger.info(`Created in ${Date.now() - this.start} ms`);
 
         this.updateData();
     }
 
-    update(): void {
-        const now = Date.now();
+    update(dt?: number) {
+        if (!this.allowJoin) return;
+        this.profiler.flush();
+
+        const now = performance.now();
         if (!this.now) this.now = now;
-        const dt = (now - this.now) / 1000;
+        dt ??= math.clamp((now - this.now) / 1000, 0.001, 1 / 8);
+
+        dt *= this.debugSpeedMulti;
+
         this.now = now;
+
+        if (this.over) {
+            this.stopTicker -= dt;
+            if (this.stopTicker <= 0) {
+                this.stop();
+                return;
+            }
+        }
+
+        if (!this.started && !this.preventStart) {
+            this.started = this.modeManager.isGameStarted();
+            if (this.started) {
+                this.gas.advanceGasStage();
+            }
+        }
 
         if (this.started) this.startedTime += dt;
 
         //
         // Update modules
         //
+        this.profiler.addSample("gas");
         this.gas.update(dt);
-        this.botManager.update(dt);
-        this.playerBarn.update(dt);
-        this.map.update(dt);
-        this.lootBarn.update(dt);
-        this.bulletBarn.update(dt);
-        this.projectileBarn.update(dt);
-        this.explosionBarn.update();
-        this.smokeBarn.update(dt);
-        this.airdropBarn.update(dt);
-        this.deadBodyBarn.update(dt);
-        this.decalBarn.update(dt);
-        this.planeBarn.update(dt);
+        this.profiler.endSample();
 
-        if (Config.perfLogging.enabled) {
-            // Record performance and start the next tick
-            // THIS TICK COUNTER IS WORKING CORRECTLY!
-            // It measures the time it takes to calculate a tick, not the time between ticks.
-            const tickTime = Date.now() - this.now;
+        this.profiler.addSample("bots");
+        this.botManager.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("players");
+        this.playerBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("map");
+        this.map.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("loot");
+        this.lootBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("bullets");
+        this.bulletBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("projectiles");
+        this.projectileBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("explosions");
+        this.explosionBarn.update();
+        this.profiler.endSample();
+
+        this.profiler.addSample("smoke");
+        this.smokeBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("airdrops");
+        this.airdropBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("deadBodies");
+        this.deadBodyBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("decals");
+        this.decalBarn.update(dt);
+        this.profiler.endSample();
+
+        this.profiler.addSample("planes");
+        this.planeBarn.update(dt);
+        this.profiler.endSample();
+
+        const tickTime = performance.now() - this.now;
+
+        if (tickTime > 1000) {
+            let errString = `Tick took over 1 second! ${tickTime.toFixed(2)}ms\n`;
+            errString += "Profiler stats:\n";
+            errString += this.profiler.getStats();
+            this.logger.error(errString);
+        } else if (tickTime > this.tickTimeWarnThreshold) {
+            this.logger.warn(
+                `Tick took over ${this.tickTimeWarnThreshold}ms! ${tickTime.toFixed(2)}ms`,
+            );
+            this.gameTickWarnings++;
+
+            if (this.gameTickWarnings > 20) {
+                let errString = `Server is overloaded! Increasing tickTimeWarnThreshold.\n`;
+                errString += "Profiler stats:\n";
+                errString += this.profiler.getStats();
+                this.logger.warn(errString);
+
+                this.gameTickWarnings = 0;
+                this.tickTimeWarnThreshold *= 2;
+            }
+        }
+
+        if (Config.logging.debugLogs) {
             this.tickTimes.push(tickTime);
 
             this.perfTicker += dt;
-            if (this.perfTicker >= Config.perfLogging.time) {
+            if (this.perfTicker >= 15) {
                 this.perfTicker = 0;
                 const mspt =
                     this.tickTimes.reduce((a, b) => a + b) / this.tickTimes.length;
 
-                this.logger.log(
+                this.logger.debug(
                     `Avg ms/tick: ${mspt.toFixed(2)} | Load: ${((mspt / (1000 / Config.gameTps)) * 100).toFixed(1)}%`,
                 );
                 this.tickTimes = [];
@@ -201,6 +304,10 @@ export class Game {
     }
 
     netSync() {
+        if (!this.allowJoin) return;
+
+        const start = performance.now();
+
         // serialize objects and send msgs
         this.objectRegister.serializeObjs();
         this.playerBarn.sendMsgs();
@@ -209,6 +316,7 @@ export class Game {
         // reset stuff
         //
         this.playerBarn.flush();
+        this.lootBarn.flush();
         this.planeBarn.flush();
         this.bulletBarn.flush();
         this.airdropBarn.flush();
@@ -218,30 +326,46 @@ export class Game {
         this.mapIndicatorBarn.flush();
 
         this.msgsToSend.stream.index = 0;
+
+        const syncTime = performance.now() - start;
+        if (syncTime > 1000) {
+            this.logger.error(`Tick took over 1 second! ${syncTime.toFixed(2)}ms`);
+        } else if (syncTime > this.netSyncWarnThreshold) {
+            this.logger.warn(
+                `Tick took over ${this.netSyncWarnThreshold}ms! ${syncTime.toFixed(2)}ms`,
+            );
+            this.netSyncWarnings++;
+
+            if (this.netSyncWarnings > 20) {
+                this.logger.warn(
+                    `Server is overloaded! Increasing netSyncWarnThreshold.`,
+                );
+
+                this.netSyncWarnings = 0;
+                this.netSyncWarnThreshold *= 2;
+            }
+        }
     }
 
     get canJoin(): boolean {
         const isWaveMap = !!this.map.mapDef.isWave;
         let aliveForJoin = this.aliveCount;
         if (isWaveMap) {
-            const livingPlayers = this.playerBarn.livingPlayers;
-            aliveForJoin = 0;
-            for (let i = 0; i < livingPlayers.length; i++) {
-                const p = livingPlayers[i];
-                if (p.isAi || p.bot) continue;
-                aliveForJoin++;
-            }
+            aliveForJoin = this.playerBarn.livingPlayers.filter(
+                (p) => !p.isAi && !p.bot,
+            ).length;
         }
         return (
             aliveForJoin < this.map.mapDef.gameMode.maxPlayers &&
             !this.over &&
-            this.gas.stage < 2
+            this.startedTime < 60
         );
     }
 
     deserializeMsg(buff: ArrayBuffer): {
         type: net.MsgType;
         msg: net.AbstractMsg | undefined;
+        error?: string;
     } {
         const msgStream = new net.MsgStream(buff);
         const stream = msgStream.stream;
@@ -260,6 +384,23 @@ export class Game {
 
         switch (type) {
             case net.MsgType.Join: {
+                // read protocol version outside of JoinMsg
+                // reason: if theres a protocol change in JoinMsg it will fail to deserialize the entire msg
+                // and won't give the proper invalid-protocol error
+                // so we read it before deserializing the msg to avoid it throwing and giving the wrong error
+
+                const oldIdx = stream.index;
+                const protocol = stream.readUint32();
+
+                if (protocol !== GameConfig.protocolVersion) {
+                    return {
+                        type: net.MsgType.Join,
+                        msg: undefined,
+                        error: "index-invalid-protocol",
+                    };
+                }
+                stream.index = oldIdx;
+
                 msg = new net.JoinMsg();
                 msg.deserialize(stream);
                 break;
@@ -298,33 +439,60 @@ export class Game {
         };
     }
 
-    handleMsg(buff: ArrayBuffer | Buffer, socketId: string): void {
+    handleMsg(buff: ArrayBuffer | Buffer, socketId: string, ip: string) {
         if (!(buff instanceof ArrayBuffer)) return;
 
         const player = this.playerBarn.socketIdToPlayer.get(socketId);
 
         let msg: net.AbstractMsg | undefined = undefined;
         let type = net.MsgType.None;
+        let error: string | undefined;
 
         try {
             const deserialized = this.deserializeMsg(buff);
             msg = deserialized.msg;
             type = deserialized.type;
+            error = deserialized.error;
         } catch (err) {
-            this.logger.warn("Failed to deserialize msg: ");
-            console.error(err);
+            this.logger.error(
+                "Failed to deserialize msg: ",
+                err,
+                "msg buffer: ",
+                // JSON.stringify doesn't work on buffers, so need to convert to an Uint8Array first
+                // and then to a regular array... 😭
+                // the slice is to make sure it doesn't overflow the error webhook
+                JSON.stringify([...new Uint8Array(buff.slice(0, 255))]),
+            );
+            if (player) {
+                player.disconnect();
+            } else {
+                this.closeSocket(socketId);
+            }
+            return;
+        }
+
+        if (error) {
+            if (player) {
+                player.disconnect();
+            } else {
+                this.closeSocket(socketId);
+            }
             return;
         }
 
         if (!msg) return;
 
         if (type === net.MsgType.Join && !player) {
-            this.playerBarn.addPlayer(socketId, msg as net.JoinMsg);
+            this.playerBarn.addPlayer(socketId, msg as net.JoinMsg, ip);
             return;
         }
 
         if (!player) {
             this.closeSocket(socketId);
+            return;
+        }
+
+        if (player.disconnected) {
             return;
         }
 
@@ -356,16 +524,17 @@ export class Game {
         }
     }
 
-    handleSocketClose(socketId: string): void {
+    handleSocketClose(socketId: string) {
         const player = this.playerBarn.socketIdToPlayer.get(socketId);
         if (!player) return;
-        this.logger.log(`"${player.name}" left`);
+        this.logger.info(`"${player.name}" left`);
+        player.questManager.flushProgress();
         player.disconnected = true;
         player.group?.checkPlayers();
         player.spectating = undefined;
-        player.dir = v2.create(0, 0);
+        player.dirNew = v2.create(1, 0);
         player.setPartDirty();
-        if (player.timeAlive < GameConfig.player.minActiveTime && !player.downed) {
+        if (player.canDespawn()) {
             player.game.playerBarn.removePlayer(player);
         }
     }
@@ -374,26 +543,59 @@ export class Game {
         this.msgsToSend.serializeMsg(type, msg);
     }
 
-    checkGameOver(): void {
-        if (this.over) return;
-        const didGameEnd: boolean = this.modeManager.handleGameEnd();
-        if (didGameEnd) {
-            this.over = true;
-            this.updateData();
-            setTimeout(() => {
-                this.stop();
-            }, 750);
+    async sendQuestProgress(
+        userId: string,
+        progress: Array<{ id: string; delta: number }>,
+    ) {
+        try {
+            const req = await apiPrivateRouter.quest_progress.$post({
+                json: {
+                    userId,
+                    progress,
+                },
+            });
+            const res = await req.json();
+            if (!req.ok || !(res as { success: boolean }).success) {
+                this.logger.error(`Failed to save quest progress`, res);
+            }
+        } catch (err) {
+            this.logger.error(`Failed to save quest progress:`, err);
         }
     }
 
-    addJoinToken(id: string, autoFill: boolean, playerCount: number) {
-        this.joinTokens.set(id, {
-            autoFill,
-            playerCount,
-            availableUses: playerCount,
-            expiresAt: Date.now() + 15000,
+    checkGameOver() {
+        if (this.over) return;
+        const didGameEnd: boolean = this.modeManager.handleGameEnd();
+
+        if (didGameEnd) {
+            this.over = true;
+
+            // send win emoji after 1 second
+            this.playerBarn.sendWinEmoteTicker = 1;
+            // stop game after 1.8s
+            this.stopTicker = 1.8;
+
+            this.updateData();
+        }
+    }
+
+    addJoinTokens(tokens: FindGamePrivateBody["playerData"], autoFill: boolean) {
+        const groupData = {
+            playerCount: tokens.length,
             groupHashToJoin: "",
-        });
+            autoFill,
+        };
+
+        for (const token of tokens) {
+            this.joinTokens.set(token.token, {
+                expiresAt: Date.now() + 10000,
+                userId: token.userId,
+                groupData,
+                findGameIp: token.ip,
+                loadout: token.loadout,
+                quests: token.quests,
+            });
+        }
     }
 
     updateData() {
@@ -409,16 +611,113 @@ export class Game {
         });
     }
 
-    stop(): void {
+    stop() {
         if (this.stopped) return;
         this.stopped = true;
         this.allowJoin = false;
         for (const player of this.playerBarn.players) {
-            if (!player.disconnected && player.hasClient) {
-                this.closeSocket(player.socketId);
+            if (!player.disconnected) {
+                player.disconnect();
             }
         }
-        this.logger.log("Game Ended");
+        this.logger.info("Game Ended");
         this.updateData();
+        this._saveGameToDatabase();
+    }
+
+    private async _saveGameToDatabase() {
+        const players = this.modeManager.getPlayersSortedByRank();
+        /**
+         * teamTotal is for total teams that started the match, i hope?
+         *
+         * it also seems to be unused by the client so we could also remove it?
+         */
+        const teamTotal = new Set(players.map(({ player }) => player.teamId)).size;
+
+        const teamKills = players.reduce(
+            (acc, curr) => {
+                acc[curr.player.teamId] =
+                    (acc[curr.player.teamId] ?? 0) + curr.player.kills;
+                return acc;
+            },
+            {} as Record<string, number>,
+        );
+
+        const values: SaveGameBody["matchData"] = players.map(({ player, rank }) => {
+            return {
+                // *NOTE: userId is optional; we save the game stats for non logged users too
+                userId: player.userId,
+                region: Config.gameServer.thisRegion,
+                username: player.name,
+                playerId: player.matchDataId,
+                teamMode: this.teamMode,
+                teamCount: player.group?.players.length ?? 1,
+                teamTotal: teamTotal,
+                teamId: player.teamId,
+                timeAlive: Math.round(player.timeAlive),
+                died: player.dead,
+                kills: player.kills,
+                team_kills: teamKills[player.groupId] ?? 0,
+                damageDealt: Math.round(player.damageDealt),
+                damageTaken: Math.round(player.damageTaken),
+                killerId: player.killedBy?.matchDataId || 0,
+                gameId: this.id,
+                mapId: this.map.mapId,
+                mapSeed: this.map.seed,
+                killedIds: player.killedIds,
+                rank: rank,
+                ip: player.ip,
+                findGameIp: player.findGameIp,
+                role: player.role,
+            };
+        });
+
+        // only save the game if it has more than 2 players lol
+        if (values.length < 2) return;
+
+        // FIXME: maybe move this to the parent game server process?
+        // to avoid blocking the game from being GC'd until this request is done
+        // and opening a database in each process if it fails
+        // etc
+        let res: Response | undefined = undefined;
+        try {
+            res = await apiPrivateRouter.save_game.$post({
+                json: {
+                    matchData: values,
+                },
+            });
+        } catch (err) {
+            this.logger.error(`Failed to fetch API save game:`, err);
+        }
+
+        if (!res || !res.ok) {
+            const region = Config.gameServer.thisRegion.toUpperCase();
+            this.logger.error(
+                `[${region}] Failed to save game data, saving locally instead`,
+            );
+
+            const dir = path.resolve("lost_game_data");
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir);
+            }
+            fs.writeFileSync(
+                path.join(dir, `${this.id}.json`),
+                JSON.stringify(values),
+                "utf8",
+            );
+        }
+    }
+
+    /**
+     * Steps the game X seconds in the future
+     * This is done in smaller steps of 0.1 seconds
+     * To make sure everything updates properly
+     *
+     * Used for unit tests, don't call this on actual game code :p
+     */
+    step(seconds: number) {
+        for (let i = 0, steps = seconds * 10; i < steps; i++) {
+            this.update(0.1);
+        }
     }
 }
