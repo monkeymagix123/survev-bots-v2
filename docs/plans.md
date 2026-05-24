@@ -86,6 +86,8 @@ Last updated: 2026-05-23
   - otherwise it biases toward nearby buildings before generic random local roam
 - Fixed a real idle-roam stall:
   - completed waypoints are now refreshed immediately instead of being kept until TTL expiry
+- Fixed armed melee-break recovery:
+  - bots now remember and restore a gun slot after temporarily equipping fists for crate breaking
 
 ## In Progress
 

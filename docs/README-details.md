@@ -244,6 +244,7 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 
 ## Recent Fixes
 
+- Armed bots now remember which gun slot they were using before temporary `melee_break`, and re-equip that gun afterward.
 - Unarmed bots now treat very close hostiles as melee pressure and back off instead of face-hugging.
 - If a visible hostile still appears unarmed, bots now keep pursuing nearby loot/object opportunities or deliberately disengage instead of idling.
 - Route-blocker redirection no longer chooses explosive blockers like oil barrels for melee clearing.

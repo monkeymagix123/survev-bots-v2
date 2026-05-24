@@ -1,3 +1,4 @@
+import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import { math } from "../../../../shared/utils/math";
@@ -72,6 +73,9 @@ export class BotController {
     private _lastHealth = 0;
     private _lastIdleReason?: string;
     private _wasUnarmedLastUpdate: boolean;
+    private _resumeGunSlot?:
+        | typeof GameConfig.WeaponSlot.Primary
+        | typeof GameConfig.WeaponSlot.Secondary;
 
     constructor(
         readonly game: Game,
@@ -229,6 +233,13 @@ export class BotController {
             this._combat.state === "interact_object" &&
             this._combat.objectInteractionMode === "melee_break" &&
             !!objectTarget;
+        if (
+            meleeBreakActive &&
+            (player.curWeapIdx === GameConfig.WeaponSlot.Primary ||
+                player.curWeapIdx === GameConfig.WeaponSlot.Secondary)
+        ) {
+            this._resumeGunSlot = player.curWeapIdx;
+        }
         const meleeApproachGoal =
             meleeBreakActive && objectTarget
                 ? getMeleeApproachGoal(this.game, player, objectTarget)
@@ -497,6 +508,17 @@ export class BotController {
             }
         }
 
+        if (!meleeBreakActive && player.curWeapIdx === GameConfig.WeaponSlot.Melee) {
+            const resumeGunSlot = this._getResumeGunSlot(player);
+            if (resumeGunSlot !== undefined) {
+                msg.addInput(
+                    resumeGunSlot === GameConfig.WeaponSlot.Primary
+                        ? GameConfig.Input.EquipPrimary
+                        : GameConfig.Input.EquipSecondary,
+                );
+            }
+        }
+
         const shot = this._weaponLogic.computeWillShootThisTick({
             dt,
             msg,
@@ -537,6 +559,33 @@ export class BotController {
         msg.touchMoveActive = false;
 
         return msg;
+    }
+
+    private _getResumeGunSlot(
+        player: Player,
+    ):
+        | typeof GameConfig.WeaponSlot.Primary
+        | typeof GameConfig.WeaponSlot.Secondary
+        | undefined {
+        const rememberedSlot = this._resumeGunSlot;
+        if (rememberedSlot !== undefined) {
+            const rememberedType = player.weapons[rememberedSlot].type;
+            if (rememberedType && GameObjectDefs[rememberedType]?.type === "gun") {
+                return rememberedSlot;
+            }
+        }
+
+        for (const slot of [
+            GameConfig.WeaponSlot.Primary,
+            GameConfig.WeaponSlot.Secondary,
+        ] as const) {
+            const type = player.weapons[slot].type;
+            if (type && GameObjectDefs[type]?.type === "gun") {
+                return slot;
+            }
+        }
+
+        return undefined;
     }
 
 }
