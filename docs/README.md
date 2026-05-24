@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 

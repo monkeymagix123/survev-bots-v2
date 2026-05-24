@@ -2,12 +2,12 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 ## Done
 
 - Replaced the old ad hoc bot injection with a first-class internal bot system built around `BotManager` and `BotController`.
-- Added `Config.bots` plus `survev-config.json` overrides.
+- Added `Config.bots` plus `survev-config.hjson` overrides.
 - Added bot brain mix (`practice` / `realistic` / `competitive`) and kept `difficulty` as the base mechanical layer.
 - Added `Config.bots.giveStartingWeapons` so bots can optionally start unarmed.
 - Added Wave-map bot support with faction split behavior and map-driven wave lifecycle.

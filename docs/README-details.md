@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 ## Core Model
 
@@ -312,7 +312,7 @@ Holds brain-type behavior overlays such as:
 
 ### Console combat log
 - `debugCombat`
-- prints armed-brain combat state transitions to console for quick live inspection
+- prints armed and unarmed brain combat state transitions to console for quick live inspection
 
 ### Stability log
 - `debugBotStability`
