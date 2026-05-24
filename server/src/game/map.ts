@@ -832,7 +832,7 @@ export class GameMap {
         // generate faction bridges here
         // so we can abort and restart map gen if they fail to spawn
 
-        if (this.factionMode && this.normalRivers.length) {
+        if (this.factionMode && !this.isWaveMap && this.normalRivers.length) {
             this.timerStart();
             const bridges = this.generateFactionBridges();
             this.timerEnd("Generating faction bridges");
