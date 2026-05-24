@@ -53,6 +53,7 @@ export class BotWeaponLogic {
     burstPauseT = 0;
     postShotNoFireT = 0;
     lostLosTime = -Infinity;
+    sprayNoiseDeg = 0;
     private _lastVisible = false;
 
     constructor(
@@ -80,6 +81,7 @@ export class BotWeaponLogic {
         this.postShotNoFireT = 0;
         this._lastVisible = visibleNow;
         this.lostLosTime = -Infinity;
+        this.sprayNoiseDeg = 0;
     }
 
     onTargetCleared(): void {
@@ -89,6 +91,7 @@ export class BotWeaponLogic {
         this.postShotNoFireT = 0;
         this._lastVisible = false;
         this.lostLosTime = -Infinity;
+        this.sprayNoiseDeg = 0;
     }
 
     onVisibilityUpdate(prevVisible: boolean, visibleNow: boolean, timeNow: number): void {
@@ -287,12 +290,41 @@ export class BotWeaponLogic {
 
     computeShotNoiseDeg(params: {
         willShootThisTick: boolean;
+        triggerActiveThisTick: boolean;
+        gunDef?: GunDef;
         profile?: WeaponProfile;
         weaponClass?: WeaponClass;
         movingThisTick: boolean;
     }): number {
-        const { willShootThisTick, profile, weaponClass, movingThisTick } = params;
-        if (!willShootThisTick || !profile) return 0;
+        const {
+            willShootThisTick,
+            triggerActiveThisTick,
+            gunDef,
+            profile,
+            weaponClass,
+            movingThisTick,
+        } = params;
+        if (!profile) {
+            this.sprayNoiseDeg = 0;
+            return 0;
+        }
+
+        const persistentSpray =
+            !!weaponClass &&
+            (weaponClass === "smg" || weaponClass === "ar" || weaponClass === "lmg") &&
+            (gunDef?.fireMode === "auto" || gunDef?.fireMode === "burst");
+
+        if (!triggerActiveThisTick) {
+            this.sprayNoiseDeg *= 0.5;
+            if (Math.abs(this.sprayNoiseDeg) < 0.05) {
+                this.sprayNoiseDeg = 0;
+            }
+            return 0;
+        }
+
+        if (!willShootThisTick) {
+            return persistentSpray ? this.sprayNoiseDeg : 0;
+        }
 
         const skill = getBotSkillProfile(this.difficulty, this.brainType);
         let spreadDeg = skill.baseAimErrorDeg + this.bloomDeg;
@@ -311,7 +343,19 @@ export class BotWeaponLogic {
         const cap = Math.min(25, spreadDeg * 3);
         noiseDeg = math.clamp(noiseDeg, -cap, cap);
 
-        return noiseDeg;
+        if (!persistentSpray) {
+            this.sprayNoiseDeg = noiseDeg;
+            return noiseDeg;
+        }
+
+        const maxSwingDeg = Math.max(0.75, spreadDeg * 0.65);
+        const boundedTarget = math.clamp(
+            noiseDeg,
+            this.sprayNoiseDeg - maxSwingDeg,
+            this.sprayNoiseDeg + maxSwingDeg,
+        );
+        this.sprayNoiseDeg += (boundedTarget - this.sprayNoiseDeg) * 0.45;
+        return this.sprayNoiseDeg;
     }
 
     applyQuickswitch(params: {

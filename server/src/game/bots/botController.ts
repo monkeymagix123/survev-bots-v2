@@ -537,8 +537,11 @@ export class BotController {
 
         const movingThisTick =
             msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown;
+        const triggerActiveThisTick = msg.shootHold || msg.shootStart;
         const noiseDeg = this._weaponLogic.computeShotNoiseDeg({
             willShootThisTick: shot.willShootThisTick,
+            triggerActiveThisTick,
+            gunDef,
             profile,
             weaponClass,
             movingThisTick,

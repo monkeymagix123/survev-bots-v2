@@ -264,6 +264,7 @@ Aim/shoot is still separate from movement-state logic.
 - optional simple lead
 - difficulty-based mechanics
 - brain-profile modifiers layered on top
+- automatic-weapon spray now keeps a short persistent visible offset, so AR/SMG/LMG aim drifts more smoothly across a burst instead of snapping to a brand-new random angle every shot
 
 ### Shooting
 - armed bots use weapon-profile-gated shooting behavior

@@ -91,6 +91,9 @@ Bots follow a lightweight priority stack:
 - Healthkits and retreating bandages now have stronger “commit” behavior so bots are less likely to throw away a mostly-good heal
 - Armed bots also soften visible-pressure rules against lone clearly unarmed hostiles, so safe-ish heals are less likely to get blocked by pure visibility alone
 
+### Shooting Feel
+- Automatic weapons now keep a short persistent spray offset instead of re-rolling a completely fresh visible aim angle every shot, so AR/SMG/LMG fire looks less jittery in spectate
+
 ### Performance / Stability
 - Legacy parity-comparison hooks have been removed from the live bot update path
 - Loot/object selection now uses short-lived scorer caches instead of immediately rescanning the same local candidates every time
