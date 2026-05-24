@@ -23,7 +23,7 @@
                 },
                 {
                     "type": "small_arms",
-                    "droppable": true
+                    "droppable": false
                 }
             ],
             "inventory": {
