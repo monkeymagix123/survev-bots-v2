@@ -4,13 +4,15 @@ import { GameObjectDefs } from "../../../shared/defs/gameObjectDefs";
 import { EmoteCategory, type EmoteDef } from "../../../shared/defs/gameObjects/emoteDefs";
 import type { MeleeDef } from "../../../shared/defs/gameObjects/meleeDefs";
 import type { UnlockDef } from "../../../shared/defs/gameObjects/unlockDefs";
-import { EmoteSlot } from "../../../shared/gameConfig";
+import { EmoteSlot, Rarity } from "../../../shared/gameConfig";
+import type { ItemStatus } from "../../../shared/utils/loadout";
+import { type Crosshair, type Loadout, loadout } from "../../../shared/utils/loadout";
 import { util } from "../../../shared/utils/util";
 import type { Account } from "../account";
 import { crosshair } from "../crosshair";
 import { device } from "../device";
 import { helpers } from "../helpers";
-import loadout, { type ItemStatus, type Loadout } from "./loadouts";
+import { SDK } from "../sdk/sdk";
 import type { Localization } from "./localization";
 import { MenuModal } from "./menuModal";
 import type { LoadoutDisplay } from "./opponentDisplay";
@@ -32,15 +34,15 @@ function itemSort(sortFn: (a: Item, b: Item) => void) {
     return function (a: Item, b: Item) {
         // Always put stock items at the front of the list;
         // if not stock, sort by the given sort routine
-        const rarityA = (GameObjectDefs[a.type] as EmoteDef).rarity || 0;
-        const rarityB = (GameObjectDefs[b.type] as EmoteDef).rarity || 0;
-        if (rarityA == 0 && rarityB == 0) {
+        const rarityA = (GameObjectDefs[a.type] as EmoteDef).rarity || Rarity.Stock;
+        const rarityB = (GameObjectDefs[b.type] as EmoteDef).rarity || Rarity.Stock;
+        if (rarityA == Rarity.Stock && rarityB == Rarity.Stock) {
             return sortAlphabetical(a, b);
         }
-        if (rarityA == 0) {
+        if (rarityA == Rarity.Stock) {
             return -1;
         }
-        if (rarityB == 0) {
+        if (rarityB == Rarity.Stock) {
             return 1;
         }
         return sortFn(a, b);
@@ -67,8 +69,8 @@ function sortAlphabetical(a: Item, b: Item) {
 }
 
 function sortRarity(a: Item, b: Item) {
-    const rarityA = (GameObjectDefs[a.type] as EmoteDef).rarity || 0;
-    const rarityB = (GameObjectDefs[b.type] as EmoteDef).rarity || 0;
+    const rarityA = (GameObjectDefs[a.type] as EmoteDef).rarity || Rarity.Stock;
+    const rarityB = (GameObjectDefs[b.type] as EmoteDef).rarity || Rarity.Stock;
     if (rarityA == rarityB) {
         return sortAlphabetical(a, b);
     }
@@ -91,12 +93,12 @@ const sortTypes: Record<string, any> = {
     subcat: itemSort(sortSubcat),
 };
 
-interface Item {
+export interface Item {
     type: string;
     source: string;
-    ackd: number;
     timeAcquired: number;
     status?: ItemStatus;
+    ackd?: ItemStatus.Ackd;
 }
 interface ItemInfo {
     type: string;
@@ -237,12 +239,16 @@ export class LoadoutMenu {
         const displayBlockingElem = function () {
             $("#modal-screen-block").fadeIn(200);
         };
-        const confirmNextNewItem = () => {
-            this.confirmNextItem();
-        };
         this.confirmItemModal = new MenuModal($("#modal-item-confirm"));
         this.confirmItemModal.onShow(displayBlockingElem);
-        this.confirmItemModal.onHide(confirmNextNewItem);
+        this.confirmItemModal.onHide((e) => {
+            const confirmAll = e?.target?.dataset?.confirmAll;
+            if (confirmAll) {
+                this.confirmAllItems();
+                return;
+            }
+            this.confirmNextItem();
+        });
         account.addEventListener("request", this.onRequest.bind(this));
         account.addEventListener("loadout", this.onLoadout.bind(this));
         account.addEventListener("items", this.onItems.bind(this));
@@ -299,7 +305,7 @@ export class LoadoutMenu {
                 const elements = document.getElementsByClassName(
                     "customize-list-item-selected",
                 );
-                if (elements.length > 0) {
+                if (elements.length > 0 && window.self === window.top) {
                     elements[0].scrollIntoView({
                         behavior: "smooth",
                         block: "start",
@@ -374,6 +380,9 @@ export class LoadoutMenu {
         this.tryBeginConfirmingItems();
         $("#start-bottom-right, #start-main").fadeOut(200);
         $("#background").hide();
+        if (!device.mobile) {
+            SDK.showLoadoutAd();
+        }
     }
 
     onHide() {
@@ -385,6 +394,7 @@ export class LoadoutMenu {
         this.modalCustomize.css({
             cursor: "initial",
         });
+        SDK.hideLoadoutAd();
         $("#start-bottom-right, #start-main").fadeIn(200);
         $("#background").show();
     }
@@ -419,8 +429,8 @@ export class LoadoutMenu {
         }
     }
 
-    onItems(items: unknown[]) {
-        this.items = loadout.getUserAvailableItems(items) as unknown as Item[];
+    onItems(items: Item[]) {
+        this.items = loadout.getUserAvailableItems(items) as Item[];
         for (let i = 0; i < this.items.length; i++) {
             const item = this.items[i];
             if (
@@ -446,17 +456,6 @@ export class LoadoutMenu {
         if (this.active) {
             this.tryBeginConfirmingItems();
             this.selectCat(this.selectedCatIdx);
-        }
-
-        // Request the default unlock if we don't have it yet
-        if (this.account.loggedIn) {
-            if (
-                !this.items.find((x) => {
-                    return x.type == "unlock_new_account";
-                })
-            ) {
-                this.account.unlock("unlock_new_account");
-            }
         }
     }
 
@@ -535,6 +534,11 @@ export class LoadoutMenu {
         }
     }
 
+    confirmAllItems() {
+        this.clearConfirmItemModal();
+        $("#modal-screen-block").fadeOut(300);
+    }
+
     confirmNextItem() {
         // Confirm all pending new items in one shot upon displaying
         // the first item
@@ -545,8 +549,10 @@ export class LoadoutMenu {
             const objDef = GameObjectDefs[currentNewItem.type] as EmoteDef;
             const itemInfo = {
                 type: currentNewItem.type,
-                rarity: objDef.rarity || 0,
-                displayName: objDef.name!,
+                rarity: objDef.rarity || Rarity.Stock,
+                displayName:
+                    this.localization.translate(`game-${currentNewItem.type}`) ||
+                    objDef.name!,
                 category: objDef.type,
             };
             const svg = helpers.getSvgFromGameType(currentNewItem.type);
@@ -657,7 +663,7 @@ export class LoadoutMenu {
                 });
 
                 // Trash auto emotes
-                $(".ui-emote-auto-trash").click((e) => {
+                $(".ui-emote-auto-trash").on("click", (e) => {
                     const parent = $(e.currentTarget).parent();
                     this.updateSlot(parent, "", "");
                     this.updateLoadoutFromDOM();
@@ -694,8 +700,8 @@ export class LoadoutMenu {
             this.loadout.crosshair = {
                 type: this.selectedItem.type,
                 color: util.hexToInt(color),
-                size: Number(size.toFixed(2)),
-                stroke: Number(stroke.toFixed(2)),
+                size: size.toFixed(2),
+                stroke: stroke.toFixed(2),
             };
         } else {
             this.loadout[loadoutType as keyof Loadout] = this.selectedItem.type as any;
@@ -764,14 +770,14 @@ export class LoadoutMenu {
 
         // Use the 2nd line on emotes to display the subcategory
         const emoteSubcatNames = {
-            [EmoteCategory.Locked]: "Locked",
-            [EmoteCategory.Faces]: "Faces",
-            [EmoteCategory.Food]: "Food",
-            [EmoteCategory.Animals]: "Animals",
-            [EmoteCategory.Logos]: "Logos",
-            [EmoteCategory.Other]: "Other",
-            [EmoteCategory.Flags]: "Flags",
-            [EmoteCategory.Default]: "Default",
+            [EmoteCategory.Locked]: this.localization.translate("emote-subcat-locked"),
+            [EmoteCategory.Faces]: this.localization.translate("emote-subcat-faces"),
+            [EmoteCategory.Food]: this.localization.translate("emote-subcat-food"),
+            [EmoteCategory.Animals]: this.localization.translate("emote-subcat-animals"),
+            [EmoteCategory.Logos]: this.localization.translate("emote-subcat-logos"),
+            [EmoteCategory.Other]: this.localization.translate("emote-subcat-other"),
+            [EmoteCategory.Flags]: this.localization.translate("emote-subcat-flags"),
+            [EmoteCategory.Default]: this.localization.translate("emote-subcat-default"),
         };
         const localizedLore =
             selectedItem.loadoutType == "emote"
@@ -875,9 +881,11 @@ export class LoadoutMenu {
             const itemInfo: EquippedItem = {
                 loadoutType: "emote",
                 type,
-                rarity: emoteDef.rarity || 0,
-                displayName: emoteDef.name!,
-                displayLore: emoteDef.lore,
+                rarity: emoteDef.rarity || Rarity.Stock,
+                displayName:
+                    this.localization.translate(`game-${type}`) || emoteDef.name!,
+                displayLore:
+                    this.localization.translate(`game-${type}-lore`) || emoteDef.lore,
                 subcat: emoteDef.category,
             };
             this.equippedItems[slotIdx] = itemInfo;
@@ -978,10 +986,12 @@ export class LoadoutMenu {
             const itemInfo: ItemInfo = {
                 loadoutType: category.loadoutType,
                 type: item.type,
-                rarity: objDef.rarity || 0,
-                displayName: objDef.name,
+                rarity: objDef.rarity || Rarity.Stock,
+                displayName:
+                    this.localization.translate(`game-${item.type}`) || objDef.name,
+                displayLore:
+                    this.localization.translate(`game-${item.type}-lore`) || objDef.lore!,
                 displaySource: getItemSourceName(item.source),
-                displayLore: objDef.lore!,
                 timeAcquired: item.timeAcquired,
                 idx: i,
                 subcat: (objDef as unknown as EmoteDef).category,
@@ -1030,7 +1040,7 @@ export class LoadoutMenu {
                     color: 0xffffff,
                     size: 1,
                     stroke: 0,
-                };
+                } as unknown as Crosshair;
                 crosshair.setElemCrosshair(outerDiv, crosshairDef);
             }
 
@@ -1056,7 +1066,9 @@ export class LoadoutMenu {
         }
         this.modalCustomizeList.html("");
         this.modalCustomizeList.append(listItems);
-        this.modalCustomizeList.scrollTop(0);
+        if (window.self === window.top) {
+            this.modalCustomizeList.scrollTop(0);
+        }
 
         // Set itemInfo for equipped emotes
         if (category.loadoutType == "emote") {
@@ -1090,7 +1102,7 @@ export class LoadoutMenu {
             if (category.loadoutType == "crosshair") {
                 this.setSelectedCrosshair();
             }
-            this.modalCustomizeItemName.click();
+            this.modalCustomizeItemName.trigger("click");
         }
 
         // Disable crosshair elements on Edge

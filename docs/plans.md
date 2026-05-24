@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-05
+Last updated: 2026-05-23
 
 ## Done
 
@@ -67,7 +67,37 @@ Last updated: 2026-05-05
 - Refined armed-vs-unarmed danger handling:
   - armed bots now treat lone visibly unarmed hostiles as less dangerous for danger/heal calculations unless they get close or show gun evidence
 - Improved blocked-LOS combat behavior so armed bots reposition instead of passively holding some obscured shots.
-- Added bot stability logging and parity/debug hooks.
+- Added bot stability logging.
+- Finished a low-behavior-shift optimization pass:
+  - removed the legacy parity-comparison path from live bot updates
+  - added short-lived loot/object selection caches
+  - added brief failed-target cooldowns to reduce loot/object retry loops
+  - centralized shared armed tactical snapshot logic for danger/threat derivation
+  - added light same-tick/local reuse in perception and navigation for repeated scans/traces
+- Added a small nav anti-oscillation pass:
+  - detours now keep a short blocker-side commitment
+  - large-wall slide choices now prefer staying on the same chosen side briefly
+- Tightened two practical edge cases:
+  - unarmed bots now back off under very close melee pressure instead of face-hugging
+  - route-blocker redirection now ignores explosive props like oil barrels
+- Refined unarmed visible-melee behavior so bots keep moving toward nearby loot or disengage instead of idling at a short distance
+- Improved normal-mode idle spread:
+  - roaming now prefers nearby loot-bearing destructible objects
+  - otherwise it biases toward nearby buildings before generic random local roam
+- Fixed a real idle-roam stall:
+  - completed waypoints are now refreshed immediately instead of being kept until TTL expiry
+- Fixed armed melee-break recovery:
+  - bots now remember and restore a gun slot after temporarily equipping fists for crate breaking
+- Reduced warehouse doorway oscillation:
+  - warehouse enter/exit routing now keeps a short committed opening target so bots do not immediately flip direction at the threshold
+- Added the next practical exterior-nav step:
+  - when a pursuit route is blocked by a building child obstacle and both bot/goal are outside, nav now tries exterior building-corner detours before tiny generic sidesteps
+- Smoothed automatic-weapon visible aim:
+  - AR/SMG/LMG spray now keeps a short persistent offset instead of snapping to a fresh random visible angle every shot
+- Fixed a melee-break stall:
+  - crate/object punch checks now use intended same-tick aim direction instead of stale previous-tick facing
+- Added configurable melee-break swing planting:
+  - crate punches can briefly plant via `BotTuning.objectInteract.meleeSwingStopSec`, with `0` available as a no-stop option
 
 ## In Progress
 
@@ -80,7 +110,6 @@ Last updated: 2026-05-05
   - bots inside containers can now route toward an exit instead of driving straight into the container shell
   - bots can now route into and out of simple warehouses through their large side openings, with entry targeting pushed inside the threshold
   - large indestructible wall blockers now bias navigation toward sliding/peeling off the wall instead of sitting on it
-- Phase 1 parity verification / eventual legacy comparator removal.
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.
 
 ## Next

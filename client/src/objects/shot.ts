@@ -20,6 +20,8 @@ interface Shot {
     pullDelay: number;
     splinter?: boolean;
     trailSaturated?: boolean;
+    apRounds?: boolean;
+    highVelocity?: boolean;
 }
 
 export function createCasingParticle(
@@ -94,6 +96,8 @@ export class ShotBarn {
             weaponDef.pullDelay !== undefined ? weaponDef.pullDelay * 0.45 : 0;
         shot.splinter = bullet.splinter;
         shot.trailSaturated = bullet.trailSaturated;
+        shot.apRounds = bullet.apRounds;
+        shot.highVelocity = bullet.highVelocity;
     }
 
     m_update(
@@ -163,6 +167,41 @@ export class ShotBarn {
                             detune: 1200,
                             delay: 30,
                             volumeScale: 0.75,
+                        });
+                    }
+
+                    if (shot.apRounds) {
+                        audioManager.playSound(shotSound, {
+                            channel:
+                                shot.playerId == activePlayerId
+                                    ? "activePlayer"
+                                    : "otherPlayers",
+                            soundPos: shot.pos,
+                            layer: player ? player.layer : shot.layer,
+                            filter: "muffled",
+                            fallOff: weaponDef.sound.fallOff
+                                ? weaponDef.sound.fallOff
+                                : 0,
+                            detune: 1000,
+                            delay: 45,
+                            volumeScale: 0.75,
+                        });
+                    }
+
+                    if (shot.highVelocity) {
+                        audioManager.playSound(shotSound, {
+                            channel:
+                                shot.playerId == activePlayerId
+                                    ? "activePlayer"
+                                    : "otherPlayers",
+                            soundPos: shot.pos,
+                            layer: player ? player.layer : shot.layer,
+                            fallOff: weaponDef.sound.fallOff
+                                ? weaponDef.sound.fallOff
+                                : 0,
+                            detune: 800,
+                            delay: 10,
+                            volumeScale: 2,
                         });
                     }
 

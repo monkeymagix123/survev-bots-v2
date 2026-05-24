@@ -6,41 +6,40 @@ import { Potato } from "./potatoDefs";
 const mapDef: PartialMapDef = {
     assets: {
         audio: [
+            { name: "pumpkin_break_01", channel: "sfx" },
+            { name: "potato_01", channel: "sfx" },
+            { name: "potato_02", channel: "sfx" },
+            { name: "potato_pickup_01", channel: "ui" },
+            { name: "club_music_01", channel: "ambient" },
+            { name: "club_music_02", channel: "ambient" },
             {
-                name: "pumpkin_break_01",
-                channel: "sfx",
+                name: "ambient_steam_01",
+                channel: "ambient",
             },
-            {
-                name: "potato_01",
-                channel: "sfx",
-            },
-            {
-                name: "potato_02",
-                channel: "sfx",
-            },
-            {
-                name: "potato_pickup_01",
-                channel: "ui",
-            },
+            { name: "log_11", channel: "sfx" },
+            { name: "log_12", channel: "sfx" },
+            { name: "egg_hit_01", channel: "hits" },
+            { name: "egg_break_01", channel: "sfx" },
         ],
         atlases: ["gradient", "loadout", "shared", "main", "potato"],
     },
     biome: {
         colors: {
-            background: 2118510,
-            water: 3310251,
-            waterRipple: 11792639,
-            beach: 16035400,
-            riverbank: 9079434,
-            grass: 6066442,
-            underground: 1772803,
-            playerSubmerge: 2854052,
+            background: 0x20536e,
+            water: 0x3282ab,
+            waterRipple: 0xb3f0ff,
+            beach: 0xf4ae48,
+            riverbank: 0x8a8a8a,
+            grass: 0x5c910a,
+            underground: 0x1b0d03,
+            playerSubmerge: 0x2b8ca4,
             playerGhillie: 0x5b8e0a,
         },
         particles: {
             camera: "falling_leaf_potato",
         },
     },
+    /* STRIP_FROM_PROD_CLIENT:START */
     lootTable: {
         tier_chrys_case: [
             { name: "", count: 1, weight: 2 }, // ?
@@ -48,8 +47,11 @@ const mapDef: PartialMapDef = {
             { name: "tier_katanas", count: 1, weight: 3 }, // ?
             { name: "naginata", count: 1, weight: 1 }, // ?
         ],
+        tier_airdrop_outfits: [
+            { name: "", count: 1, weight: 4 },
+            { name: "outfitAirdrop", count: 1, weight: 1 },
+        ],
     },
-    /* STRIP_FROM_PROD_CLIENT:START */
     mapGen: {
         densitySpawns: [
             {
@@ -61,7 +63,7 @@ const mapDef: PartialMapDef = {
                 crate_03: 8,
                 bush_01: 78,
                 cache_06: 12,
-                tree_01: 300,
+                tree_07sp: 300,
                 tree_08sp: 30,
                 tree_08spb: 30,
                 tree_07spr: 160,
@@ -70,6 +72,10 @@ const mapDef: PartialMapDef = {
                 potato_01: 50,
                 potato_02: 50,
                 potato_03: 50,
+                egg_01: 15,
+                egg_02: 15,
+                egg_03: 15,
+                egg_04: 15,
                 container_01: 5,
                 container_02: 5,
                 container_03: 5,

@@ -4,7 +4,7 @@ import { MapObjectDefs } from "../../shared/defs/mapObjectDefs";
 import type { BuildingDef, ObstacleDef } from "../../shared/defs/mapObjectsTyping";
 import { GameConfig } from "../../shared/gameConfig";
 import type { GroundPatch, MapMsg } from "../../shared/net/mapMsg";
-import { type CircleWithHeight, type Collider, coldet } from "../../shared/utils/coldet";
+import { type Circle, type Collider, coldet } from "../../shared/utils/coldet";
 import { collider } from "../../shared/utils/collider";
 import { mapHelpers } from "../../shared/utils/mapHelpers";
 import { math } from "../../shared/utils/math";
@@ -15,9 +15,9 @@ import { type Vec2, v2 } from "../../shared/utils/v2";
 import type { Ambiance } from "./ambiance";
 import type { AudioManager } from "./audioManager";
 import type { Camera } from "./camera";
-import type { DebugOptions } from "./config";
-import { renderSpline } from "./debugHelpers";
-import { debugLines } from "./debugLines";
+import type { DebugRenderOpts } from "./config";
+import { renderSpline } from "./debug/debugHelpers";
+import { debugLines } from "./debug/debugLines";
 import { device } from "./device";
 import { Building } from "./objects/building";
 import type { DecalBarn } from "./objects/decal";
@@ -107,6 +107,7 @@ export class Map {
     mapName = "";
     mapDef = {} as MapDef;
     factionMode = false;
+    potatoMode = false;
     perkMode = false;
     turkeyMode = false;
     seed = 0;
@@ -184,6 +185,7 @@ export class Map {
         }
         this.mapDef = util.cloneDeep(mapDef);
         this.factionMode = !!this.mapDef.gameMode.factionMode;
+        this.potatoMode = !!this.mapDef.gameMode.potatoMode;
         this.perkMode = !!this.mapDef.gameMode.perkMode;
         this.turkeyMode = !!this.mapDef.gameMode.turkeyMode;
         this.seed = mapMsg.seed;
@@ -238,7 +240,7 @@ export class Map {
         renderer: Renderer,
         camera: Camera,
         _smokeParticles: SmokeParticle[],
-        debug: DebugOptions,
+        debug: DebugRenderOpts,
     ) {
         const obstacles = this.m_obstaclePool.m_getPool();
         for (let i = 0; i < obstacles.length; i++) {
@@ -253,7 +255,7 @@ export class Map {
                     activePlayer,
                     renderer,
                 );
-                obstacle.render(camera, debug, activePlayer.layer);
+                obstacle.render(dt, camera, debug, activePlayer.layer);
             }
         }
 
@@ -266,7 +268,6 @@ export class Map {
                     this,
                     particleBarn,
                     audioManager,
-                    ambience,
                     activePlayer,
                     renderer,
                     camera,
@@ -307,7 +308,7 @@ export class Map {
             );
         }
 
-        if (IS_DEV && debug.render.rivers) {
+        if (IS_DEV && debug.rivers) {
             for (const river of this.terrain!.rivers) {
                 renderRiverDebug(river, camera.m_pos);
             }
@@ -463,7 +464,7 @@ export class Map {
         let shapes: Array<{
             scale?: number;
             color: number;
-            collider: CircleWithHeight;
+            collider: Circle;
         }> = [];
         if ((def as BuildingDef).map?.shapes !== undefined) {
             // @ts-expect-error stfu
@@ -480,7 +481,7 @@ export class Map {
                           : mapHelpers.getBoundingCollider(obj.type))
             ) {
                 shapes.push({
-                    collider: collider.copy(col) as CircleWithHeight,
+                    collider: collider.copy(col) as Circle,
                     scale: def.map?.scale! || 1,
                     color: def.map?.color!,
                 });

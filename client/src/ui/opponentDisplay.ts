@@ -1,17 +1,18 @@
 import * as PIXI from "pixi.js-legacy";
 import { GameObjectDefs } from "../../../shared/defs/gameObjectDefs";
 import type { OutfitDef } from "../../../shared/defs/gameObjects/outfitDefs";
-import { GameConfig } from "../../../shared/gameConfig";
+import { type Action, type Anim, GameConfig } from "../../../shared/gameConfig";
 import type { MapMsg } from "../../../shared/net/mapMsg";
 import { type ObjectData, ObjectType } from "../../../shared/net/objectSerializeFns";
 import { collider } from "../../../shared/utils/collider";
+import { type Loadout, loadout as loadouts } from "../../../shared/utils/loadout";
 import { math } from "../../../shared/utils/math";
 import { v2 } from "../../../shared/utils/v2";
 import type { Account } from "../account";
 import type { AudioManager } from "../audioManager";
 import { Camera } from "../camera";
-import type { ConfigManager, DebugOptions } from "../config";
-import { debugLines } from "../debugLines";
+import type { ConfigManager, DebugRenderOpts } from "../config";
+import { debugLines } from "../debug/debugLines";
 import { device } from "../device";
 import type { Game } from "../game";
 import type { InputBinds } from "../inputBinds";
@@ -22,8 +23,7 @@ import { ParticleBarn } from "../objects/particles";
 import { type Player, PlayerBarn } from "../objects/player";
 import { SmokeBarn } from "../objects/smoke";
 import { Renderer } from "../renderer";
-import type { LocalDataWithDirty } from "./../../../shared/net/updateMsg";
-import loadouts, { type Loadout } from "./loadouts";
+import type { UiManager2 } from "./ui2";
 
 export class LoadoutDisplay {
     active = false;
@@ -134,45 +134,54 @@ export class LoadoutDisplay {
                 seed: 218051654,
                 shoreInset: 48,
                 width: 720,
-            } as unknown as MapMsg,
+                serialize() {},
+                deserialize() {},
+            } satisfies MapMsg,
             this.camera,
             this.canvasMode,
             this.particleBarn,
         );
 
         this.activePlayer = this.playerBarn.getPlayerById(this.activeId)!;
-        this.activePlayer.m_setLocalData(
-            {
-                boost: 100,
-                boostDirty: true,
-                hasAction: false,
-                health: 100,
-                inventoryDirty: false,
-                scopedIn: false,
-                spectatorCountDirty: false,
-                weapsDirty: true,
-                curWeapIdx: 2,
-                weapons: [
-                    {
-                        name: "",
-                        ammo: 0,
-                    },
-                    {
-                        name: "",
-                        ammo: 0,
-                    },
-                    {
-                        name: "bayonet_rugged",
-                        ammo: 0,
-                    },
-                    {
-                        name: "",
-                        ammo: 0,
-                    },
-                ],
-            } as unknown as LocalDataWithDirty,
-            this.playerBarn,
-        );
+        this.activePlayer.m_setLocalData({
+            boost: 100,
+            boostDirty: true,
+            actionDirty: false,
+            action: {
+                time: 0,
+                duration: 0,
+                targetId: 0,
+            },
+            health: 100,
+            healthDirty: true,
+            inventoryDirty: false,
+            spectatorCountDirty: false,
+            spectatorCount: 0,
+            zoomDirty: false,
+            zoom: 0,
+            scope: "1xscope",
+            inventory: {},
+            weapsDirty: true,
+            curWeapIdx: 2,
+            weapons: [
+                {
+                    type: "",
+                    ammo: 0,
+                },
+                {
+                    type: "",
+                    ammo: 0,
+                },
+                {
+                    type: "bayonet_rugged",
+                    ammo: 0,
+                },
+                {
+                    type: "",
+                    ammo: 0,
+                },
+            ],
+        });
 
         this.activePlayer.layer = this.activePlayer.m_netData.m_layer;
         this.activePlayer.isLoadoutAvatar = true;
@@ -232,10 +241,10 @@ export class LoadoutDisplay {
 
     updateCharDisplay(
         options = {} as Partial<{
-            animType: number;
+            animType: Anim;
             animSeq: number;
             actionSeq: number;
-            actionType: number;
+            actionType: Action;
             actionItem: string;
         }>,
     ) {
@@ -255,7 +264,7 @@ export class LoadoutDisplay {
             this.animIdleTicker = 0;
         }
 
-        const obj = {
+        const obj: ObjectData<ObjectType.Player> = {
             outfit: this.loadout.outfit,
             backpack: "backpack02",
             helmet: "helmet01",
@@ -271,24 +280,20 @@ export class LoadoutDisplay {
             actionItem: options.actionItem || "",
             wearingPan: false,
             healEffect: false,
+            lastStandEffect: false,
             frozen: false,
             frozenOri: 0,
+            frozenType: "",
             hasteType: 0,
             hasteSeq: 0,
             scale: 1,
             role: "",
             perks: [],
-            $r: false,
             pos: v2.create(50, 50),
             dir: v2.create(0, -1),
         };
 
-        this.objectCreator.m_updateObjFull(
-            ObjectType.Player,
-            98,
-            obj as unknown as ObjectData<ObjectType.Player>,
-            ctx,
-        );
+        this.objectCreator.m_updateObjFull(ObjectType.Player, 98, obj, ctx);
 
         this.playerBarn.setPlayerInfo({
             playerId: 98,
@@ -367,9 +372,7 @@ export class LoadoutDisplay {
     }
 
     update(dt: number, hasFocus: boolean) {
-        const debug = {
-            render: {},
-        } as DebugOptions;
+        const debug = {} as DebugRenderOpts;
 
         // Camera
         this.camera.m_pos = v2.sub(this.activePlayer.m_pos, this.cameraOffset);
@@ -436,16 +439,15 @@ export class LoadoutDisplay {
         this.playerBarn.m_update(
             dt,
             this.activeId,
-            // @ts-expect-error not defined locally.
-            this.teamMode,
             this.renderer,
             this.particleBarn,
             this.camera,
             this.map,
             this.inputBinds,
             this.audioManager,
-            // @ts-expect-error big mismatch between params passed and expected, need to debug later;
-            false,
+            // ui2 manager is only used for updating perks, as long as we dont add any perks
+            // it should be fine :)
+            undefined as unknown as UiManager2,
             false,
             false,
         );
@@ -456,18 +458,18 @@ export class LoadoutDisplay {
             this.map,
             this.renderer,
         );
-        this.particleBarn.m_update(dt, this.camera, debug);
-        this.decalBarn.m_update(dt, this.camera, this.renderer, debug);
-        this.renderer.m_update(dt, this.camera, this.map, debug);
+        this.particleBarn.m_update(dt, this.camera);
+        this.decalBarn.m_update(dt, this.camera, this.renderer);
+        this.renderer.m_update(dt, this.camera, this.map);
         this.activePlayer.playActionStartSfx = false;
 
         this.render(dt, debug);
     }
 
-    render(_dt: number, debug: DebugOptions) {
+    render(_dt: number, debug: DebugRenderOpts) {
         const grassColor = this.map.mapLoaded
             ? this.map.getMapDef().biome.colors.grass
-            : 8433481;
+            : 0x80af49;
 
         this.pixi.renderer.background.color = grassColor;
 

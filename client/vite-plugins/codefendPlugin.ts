@@ -1,5 +1,5 @@
 import * as codefend from "codefend";
-import type { Rollup } from "vite";
+import type { Plugin } from "vite";
 
 function randomString() {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -20,7 +20,7 @@ function uniqueString() {
     return string;
 }
 
-export function codefendPlugin(): Rollup.Plugin {
+export function codefendPlugin(): Plugin {
     const runtimeOptions = codefend.buildRuntimeOptions();
     return {
         name: "codefend-plugin",
@@ -46,7 +46,7 @@ export function codefendPlugin(): Rollup.Plugin {
             );
         },
         generateBundle() {
-            codefend.stats({ stats: true }, runtimeOptions);
+            codefend.stats({ stats: false }, runtimeOptions);
         },
     };
 }

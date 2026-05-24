@@ -607,7 +607,6 @@ export class EmoteBarn {
                     ping.playerId,
                     this.activePlayer.__id,
                     this.playerBarn,
-                    factionMode,
                 );
                 let indicator: Indicator | null = null;
                 let pingSound = pingData.sound!;
@@ -631,7 +630,10 @@ export class EmoteBarn {
                         }
                     }
                     const playerStatus = this.playerBarn.getPlayerStatus(ping.playerId);
-                    if (playerStatus && playerStatus.role == "leader") {
+                    if (
+                        playerStatus &&
+                        (playerStatus.role == "leader" || playerStatus.role == "captain")
+                    ) {
                         pingSound = pingData.soundLeader!;
                     }
                 }

@@ -142,6 +142,7 @@ export class UnarmedBotBrain implements BotBrain {
             ? lootScorer.chooseLoot({
                   game,
                   player,
+                  timeNow,
                   mode: "idle",
                   brainType,
                   onlyGuns: true,
@@ -159,6 +160,7 @@ export class UnarmedBotBrain implements BotBrain {
             ? objectInteractionScorer.chooseObject({
                   game,
                   player,
+                  timeNow,
                   mode: "idle",
                   brainType,
                   state: "wander",
@@ -167,10 +169,16 @@ export class UnarmedBotBrain implements BotBrain {
               })
             : undefined;
         const fallbackLoot =
-            !immediateGun && !objectGoal && !gasEmergency && !visibleHostile
+            !immediateGun &&
+            !objectGoal &&
+            !gasEmergency &&
+            (!visibleHostile ||
+                threatContext.hostileAppearsUnarmed ||
+                threatContext.hostileDistracted)
                 ? lootScorer.chooseLoot({
                       game,
                       player,
+                      timeNow,
                       mode: "idle",
                       brainType,
                       unarmedThreat: threatContext,
@@ -194,9 +202,11 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (recentlyDamaged) {
             state = danger >= brainProfile.highDangerMin ? "seek_cover" : "back_off";
             reason = "unarmed_recent_damage";
-        } else if (enemyVeryClose && !threatContext.hostileAppearsUnarmed) {
+        } else if (enemyVeryClose) {
             state = "back_off";
-            reason = "unarmed_enemy_close";
+            reason = threatContext.hostileAppearsUnarmed
+                ? "unarmed_melee_pressure"
+                : "unarmed_enemy_close";
         } else if (immediateGun) {
             state = "loot";
             reason = "unarmed_find_gun";
@@ -206,6 +216,9 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (fallbackLoot) {
             state = "loot";
             reason = fallbackLoot.reason;
+        } else if (visibleHostile && threatContext.hostileAppearsUnarmed) {
+            state = "back_off";
+            reason = "unarmed_visible_melee_disengage";
         } else {
             state = "wander";
             reason = "unarmed_seek_object";

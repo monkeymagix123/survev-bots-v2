@@ -2,21 +2,19 @@ reference/
 
 client/atlas-builder/pngs
 
-# dev files
-plans/
-**/logs/**
-
-# config file
-# legacy
+# old config files
 resurviv-config.json
-# new
 survev-config.json
+
+# new one
+survev-config.hjson
 
 # env file
 .env
 
 # sqlite db
-game.db
+*.db
+lost_game_data/
 
 # Compiled source
 dist/
@@ -68,3 +66,8 @@ Temporary Items
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+todo.md
+
+plans/
+server/logs

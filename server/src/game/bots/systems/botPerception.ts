@@ -48,6 +48,21 @@ export type BotThreatSnapshot = {
     hasRecentEnemy: boolean;
 };
 
+type ScanCacheEntry = {
+    timeNow: number;
+    botId: number;
+    brainType: BotBrainType;
+    layer: number;
+    pos: Vec2;
+    targetId?: number;
+    visible: boolean;
+    targetHasShownGun: boolean;
+    targetAppearsUnarmed: boolean;
+    targetRecentlyFired: boolean;
+    targetDistracted: boolean;
+    threat: BotThreatSnapshot;
+};
+
 export class BotPerception {
     targetId?: number;
     targetVisible = false;
@@ -73,6 +88,7 @@ export class BotPerception {
     private _lastDamagedTime = -Infinity;
     private _lastHeardEnemyTime = -Infinity;
     private readonly _shownGunHostiles = new Set<number>();
+    private _scanCache?: ScanCacheEntry;
 
     /**
      * True when bot has seen an enemy recently (used for retire priority).
@@ -83,20 +99,24 @@ export class BotPerception {
 
     markTargetSeen(timeNow: number): void {
         this.targetSeenTime = timeNow;
+        this._scanCache = undefined;
     }
 
     markTargetVisible(timeNow: number, pos: Vec2): void {
         this.targetSeenTime = timeNow;
         this.lastSeenTime = timeNow;
         this.lastSeenPos = v2.copy(pos);
+        this._scanCache = undefined;
     }
 
     markDamaged(timeNow: number): void {
         this._lastDamagedTime = timeNow;
+        this._scanCache = undefined;
     }
 
     markHeardEnemy(timeNow: number): void {
         this._lastHeardEnemyTime = timeNow;
+        this._scanCache = undefined;
     }
 
     /**
@@ -109,6 +129,11 @@ export class BotPerception {
         timeNow: number,
         brainType: BotBrainType,
     ): { target?: Player; visible: boolean } {
+        const cached = this._getCachedScan(game, player, timeNow, brainType);
+        if (cached) {
+            return cached;
+        }
+
         const profile = getBotBrainProfile(brainType);
         const vision = player.zoom + 6;
         const visionSqr = vision * vision;
@@ -288,6 +313,16 @@ export class BotPerception {
         this.targetRecentlyFired = targetRecentlyFired;
         this.targetDistracted = targetDistracted;
 
+        this._cacheScan({
+            game,
+            player,
+            timeNow,
+            brainType,
+            target: chosen,
+            visible: targetVisible,
+            threat: this.threat,
+        });
+
         return {
             target: chosen,
             visible: targetVisible,
@@ -365,5 +400,80 @@ export class BotPerception {
         if (target.isReloading()) score += profile.targetReloadBonus;
 
         return score;
+    }
+
+    private _getCachedScan(
+        game: Game,
+        player: Player,
+        timeNow: number,
+        brainType: BotBrainType,
+    ): { target?: Player; visible: boolean } | undefined {
+        const cached = this._scanCache;
+        if (!cached) return undefined;
+        if (
+            cached.timeNow !== timeNow ||
+            cached.botId !== player.__id ||
+            cached.brainType !== brainType ||
+            cached.layer !== player.layer
+        ) {
+            return undefined;
+        }
+        if (
+            v2.distance(cached.pos, player.pos) >
+            BotTuning.optimization.selectionCacheMoveDist
+        ) {
+            return undefined;
+        }
+
+        const target = cached.targetId
+            ? game.objectRegister.getById(cached.targetId)
+            : undefined;
+        if (
+            cached.targetId !== undefined &&
+            (!target ||
+                target.__type !== ObjectType.Player ||
+                (target as Player).dead ||
+                (target as Player).disconnected ||
+                !util.sameLayer((target as Player).layer, player.layer))
+        ) {
+            return undefined;
+        }
+
+        this.threat = { ...cached.threat };
+        this.targetHasShownGun = cached.targetHasShownGun;
+        this.targetAppearsUnarmed = cached.targetAppearsUnarmed;
+        this.targetRecentlyFired = cached.targetRecentlyFired;
+        this.targetDistracted = cached.targetDistracted;
+
+        return {
+            target: target && target.__type === ObjectType.Player ? (target as Player) : undefined,
+            visible: cached.visible,
+        };
+    }
+
+    private _cacheScan(params: {
+        game: Game;
+        player: Player;
+        timeNow: number;
+        brainType: BotBrainType;
+        target?: Player;
+        visible: boolean;
+        threat: BotThreatSnapshot;
+    }): void {
+        const { player, timeNow, brainType, target, visible, threat } = params;
+        this._scanCache = {
+            timeNow,
+            botId: player.__id,
+            brainType,
+            layer: player.layer,
+            pos: v2.copy(player.pos),
+            targetId: target?.__id,
+            visible,
+            targetHasShownGun: this.targetHasShownGun,
+            targetAppearsUnarmed: this.targetAppearsUnarmed,
+            targetRecentlyFired: this.targetRecentlyFired,
+            targetDistracted: this.targetDistracted,
+            threat: { ...threat },
+        };
     }
 }

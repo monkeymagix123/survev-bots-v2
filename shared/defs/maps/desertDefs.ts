@@ -2,14 +2,16 @@ import { GameConfig } from "../../gameConfig";
 import { util } from "../../utils/util";
 import { v2 } from "../../utils/v2";
 import type { MapDef } from "../mapDefs";
+import { MapId } from "../types/misc";
 import { Main, type PartialMapDef } from "./baseDefs";
 
 const mapDef: PartialMapDef = {
-    mapId: 1,
+    mapId: MapId.Desert,
     desc: {
         name: "Desert",
         icon: "img/loot/loot-weapon-flare-gun.svg",
         buttonCss: "btn-mode-desert",
+        backgroundImg: "img/main_splash_desert_01.png",
     },
     assets: {
         audio: [
@@ -22,14 +24,14 @@ const mapDef: PartialMapDef = {
     },
     biome: {
         colors: {
-            background: 6976835,
-            water: 9083726,
-            waterRipple: 13756037,
-            beach: 13206586,
-            riverbank: 11689508,
-            grass: 14657367,
-            underground: 4001027,
-            playerSubmerge: 5151631,
+            background: 0x6a7543,
+            water: 0x8a9b4e,
+            waterRipple: 0xd1e685,
+            beach: 0xc9843a,
+            riverbank: 0xb25e24,
+            grass: 0xdfa757,
+            underground: 0x3d0d03,
+            playerSubmerge: 0x4e9b8f,
             playerGhillie: 0xdfa761,
         },
         particles: {},
@@ -66,7 +68,8 @@ const mapDef: PartialMapDef = {
             { name: "ak47", count: 1, weight: 2.7 },
             { name: "scar", count: 1, weight: 0.01 },
             { name: "dp28", count: 1, weight: 0.5 },
-            { name: "mosin", count: 1, weight: 0.1 },
+            { name: "bar", count: 1, weight: 0.05 },
+            { name: "mosin", count: 1, weight: 0.05 },
             { name: "m39", count: 1, weight: 0.1 },
             { name: "m1a1", count: 1, weight: 10 },
             { name: "m870", count: 1, weight: 9 },
@@ -86,12 +89,13 @@ const mapDef: PartialMapDef = {
                 weight: 0.25,
             },
             { name: "groza", count: 1, weight: 0.8 },
-            { name: "scout_elite", count: 1, weight: 0.05 },
+            { name: "scout_elite", count: 1, weight: 0.1 },
+            { name: "mkg45", count: 1, weight: 0.1 },
         ],
         tier_airdrop_uncommon: [
             { name: "mk12", count: 1, weight: 2.5 },
             { name: "scar", count: 1, weight: 0.75 },
-            { name: "mosin", count: 1, weight: 2.5 },
+            { name: "mosin", count: 1, weight: 1.5 },
             { name: "m39", count: 1, weight: 2.5 },
             { name: "saiga", count: 1, weight: 1 },
             { name: "deagle", count: 1, weight: 1 },
@@ -99,14 +103,15 @@ const mapDef: PartialMapDef = {
             { name: "qbb97", count: 1, weight: 1.5 },
             { name: "m9", count: 1, weight: 0.01 },
             { name: "flare_gun", count: 1, weight: 0.5 },
-            { name: "scout_elite", count: 1, weight: 1.5 },
+            { name: "scout_elite", count: 1, weight: 2.5 },
             { name: "model94", count: 1, weight: 2 },
             { name: "colt45", count: 1, weight: 1 },
+            { name: "mkg45", count: 1, weight: 2.5 }, // !
         ],
         tier_airdrop_rare: [
             { name: "garand", count: 1, weight: 6 },
             { name: "awc", count: 1, weight: 3 },
-            { name: "pkp", count: 1, weight: 3 },
+            { name: "pkp", count: 1, weight: 0.08 },
             { name: "m249", count: 1, weight: 0.1 },
             { name: "m4a1", count: 1, weight: 4 },
             { name: "ots38_dual", count: 1, weight: 4.5 },
@@ -155,6 +160,7 @@ const mapDef: PartialMapDef = {
             { name: "ak47", count: 1, weight: 4 },
             { name: "scar", count: 1, weight: 0.27 },
             { name: "dp28", count: 1, weight: 0.55 },
+            { name: "bar", count: 1, weight: 0.27 },
             { name: "mosin", count: 1, weight: 0.55 },
             { name: "m39", count: 1, weight: 0.55 },
             { name: "saiga", count: 1, weight: 0.26 },
@@ -195,18 +201,6 @@ const mapDef: PartialMapDef = {
             { name: "flak_jacket", count: 1, weight: 1 },
             { name: "bonus_45", count: 1, weight: 1 },
         ],
-        tier_eye_stone: [
-            { name: "vector45", count: 1, weight: 1 },
-            { name: "45acp", count: 1, weight: 1 },
-            { name: "garand", count: 1, weight: 1 },
-            { name: "strobe", count: 1, weight: 1 },
-            { name: "healthkit", count: 1, weight: 1 },
-            { name: "painkiller", count: 1, weight: 1 },
-            { name: "m4a1", count: 1, weight: 0.7 },
-            { name: "m249", count: 1, weight: 0.2 },
-            { name: "awc", count: 1, weight: 0.1 },
-            { name: "pkp", count: 1, weight: 0.1 },
-        ],
     },
     mapGen: {
         map: {
@@ -233,6 +227,7 @@ const mapDef: PartialMapDef = {
             {
                 name: "Blood Gulch",
                 pos: v2.create(0.51, 0.5),
+                dontSpawnObjects: true,
             },
             {
                 name: "Southhaven",
@@ -256,7 +251,7 @@ const mapDef: PartialMapDef = {
                     retryOnFailure: false,
                 },
             ],
-            placeSpawns: ["desert_town_01", "desert_town_02"],
+            placeSpawns: ["desert_town_02", "desert_town_01"],
         },
         densitySpawns: [
             {
@@ -288,7 +283,7 @@ const mapDef: PartialMapDef = {
                 barn_01: 1,
                 barn_02d: 1,
                 cache_01: 1,
-                cache_02: 1,
+                cache_02d: 1,
                 bunker_structure_01: { odds: 0.05 },
                 bunker_structure_03: 1,
                 chest_01: 1,
@@ -298,7 +293,6 @@ const mapDef: PartialMapDef = {
                 tree_02: 3,
                 desert_town_01: 1,
                 desert_town_02: 1,
-                river_town_02: 1,
                 greenhouse_02: 1,
                 stone_05: 6,
             },

@@ -1,93 +1,90 @@
-import { defineConfig } from "vite";
+import { resolve } from "node:path";
+import { defineConfig, loadEnv, type Plugin, type ServerOptions } from "vite";
 import stripBlockPlugin from "vite-plugin-strip-block";
+import { getConfig } from "../config";
 import { version } from "../package.json";
-import { Config } from "../server/src/config";
 import { GIT_VERSION } from "../server/src/utils/gitRevision";
+import { atlasBuilderPlugin } from "./atlas-builder/vitePlugin";
 import { codefendPlugin } from "./vite-plugins/codefendPlugin";
-
-export const SplashThemes = {
-    main: {
-        MENU_MUSIC: "audio/ambient/menu_music_01.mp3",
-        SPLASH_BG: "/img/main_splash.png",
-    },
-    easter: {
-        MENU_MUSIC: "audio/ambient/menu_music_01.mp3",
-        SPLASH_BG: "/img/main_splash_easter.png",
-    },
-    halloween: {
-        MENU_MUSIC: "audio/ambient/menu_music_02.mp3",
-        SPLASH_BG: "/img/main_splash_halloween.png",
-    },
-    faction: {
-        MENU_MUSIC: "audio/ambient/menu_music_01.mp3",
-        SPLASH_BG: "/img/main_splash_0_7_0.png",
-    },
-    snow: {
-        MENU_MUSIC: "audio/ambient/menu_music_01.mp3",
-        SPLASH_BG: "/img/main_splash_0_6_10.png",
-    },
-    spring: {
-        MENU_MUSIC: "audio/ambient/menu_music_01.mp3",
-        SPLASH_BG: "/img/main_splash_7_3.png",
-    },
-};
-
-const selectedTheme = SplashThemes[Config.client.theme];
-
-const AdsVars = {
-    VITE_ADIN_PLAY_SCRIPT: `
-    <script async src="//api.adinplay.com/libs/aiptag/pub/SNP/${Config.client.AIP_ID}/tag.min.js"></script>
-    <script>
-        window.aiptag = window.aiptag || { cmd: [] };
-        aiptag.cmd.display = aiptag.cmd.display || [];
-        // CMP tool settings
-        aiptag.cmp = {
-            show: true,
-            position: "centered", // centered, bottom
-            button: false,
-            buttonText: "Privacy settings",
-            buttonPosition: "bottom-left", // bottom-left, bottom-right, top-left, top-right
-        };
-    </script>
-    `,
-    VITE_AIP_PLACEMENT_ID: Config.client.AIP_PLACEMENT_ID,
-};
-
-if (!Config.client.AIP_ID) {
-    for (const key in AdsVars) {
-        AdsVars[key] = "";
-    }
-}
+import { ejsPlugin } from "./vite-plugins/ejsPlugin";
 
 export default defineConfig(({ mode }) => {
-    process.env = {
-        ...process.env,
-        VITE_GAME_VERSION: version,
-        VITE_BACKGROUND_IMG: selectedTheme.SPLASH_BG,
-        ...AdsVars,
-    };
-
+    const viteEnv = loadEnv(mode, process.cwd(), "VITE_");
     const isDev = mode === "development";
 
-    const regions = {
-        ...Config.regions,
-        ...(isDev
-            ? {
-                  local: {
-                      https: false,
-                      address: `${Config.devServer.host}:${Config.devServer.port}`,
-                      l10n: "index-local",
-                  },
-              }
-            : {}),
+    const Config = getConfig(!isDev, "");
+
+    process.env.VITE_TURNSTILE_SCRIPT = "";
+    if (Config.secrets.TURNSTILE_SITE_KEY) {
+        process.env.VITE_TURNSTILE_SCRIPT = `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>`;
+    }
+
+    process.env.VITE_DEBUG_CSS_LINK = isDev
+        ? `<link href='css/dev.css' rel="stylesheet" />`
+        : "";
+    process.env.VITE_GAME_VERSION = version;
+
+    process.env.VITE_SPELLSYNC_PROJECT_ID = Config.secrets.SPELLSYNC_PROJECT_ID;
+    process.env.VITE_SPELLSYNC_PUBLIC_TOKEN = Config.secrets.SPELLSYNC_PUBLIC_TOKEN;
+
+    const plugins: Plugin[] = [ejsPlugin(), ...atlasBuilderPlugin()];
+
+    if (!isDev) {
+        plugins.push(codefendPlugin());
+
+        plugins.push(
+            stripBlockPlugin({
+                start: "STRIP_FROM_PROD_CLIENT:START",
+                end: "STRIP_FROM_PROD_CLIENT:END",
+            }),
+        );
+    }
+
+    const serverOptions: ServerOptions = {
+        port: Config.vite.port,
+        host: Config.vite.host,
+        proxy: {
+            // this redirects /stats to /stats/
+            // because vite is cringe and does not work without trailing slashes at the end of paths 😭
+            "^/stats(?!/$).*": {
+                target: `http://${Config.vite.host}:${Config.vite.port}`,
+                rewrite: (path) => path.replace(/^\/stats(?!\/$).*/, "/stats/"),
+                changeOrigin: true,
+                secure: false,
+            },
+            "/api": {
+                target: `http://${Config.apiServer.host}:${Config.apiServer.port}`,
+                changeOrigin: true,
+                secure: false,
+            },
+            "/team_v2": {
+                target: `http://${Config.apiServer.host}:${Config.apiServer.port}`,
+                changeOrigin: true,
+                secure: false,
+                ws: true,
+            },
+        },
     };
 
     return {
+        appType: "mpa",
         base: "",
         build: {
             target: "es2022",
             chunkSizeWarningLimit: 2000,
             rollupOptions: {
+                input: {
+                    main: resolve(import.meta.dirname, "index.html"),
+                    stats: resolve(import.meta.dirname, "stats/index.html"),
+                    ...(isDev
+                        ? {
+                              "building-editor": resolve(
+                                  import.meta.dirname,
+                                  "building-editor/index.html",
+                              ),
+                          }
+                        : {}),
+                },
                 output: {
                     assetFileNames(assetInfo) {
                         if (assetInfo.names[0]?.endsWith(".css")) {
@@ -95,23 +92,24 @@ export default defineConfig(({ mode }) => {
                         }
                         return "assets/[name]-[hash][extname]";
                     },
-                    entryFileNames: "js/app-[hash].js",
-                    chunkFileNames: "js/[name]-[hash].js",
-                    manualChunks(id, _chunkInfo) {
-                        if (id.includes("node_modules")) {
-                            return "vendor";
-                        }
-                    },
+                    entryFileNames: "js/[hash].js",
+                    chunkFileNames: "js/[hash].js",
                 },
             },
         },
         resolve: {
             extensions: [".ts", ".js"],
+            alias: {
+                "@/sdk":
+                    viteEnv?.VITE_ENABLE_SURVEV_ADS === "true"
+                        ? "./sdk-manager.prod"
+                        : "./sdk-manager",
+            },
         },
         define: {
-            GAME_REGIONS: regions,
+            GAME_REGIONS: Config.regions,
             GIT_VERSION: JSON.stringify(GIT_VERSION),
-            PING_TEST_URLS: Object.entries(regions).map(([key, data]) => {
+            PING_TEST_URLS: Object.entries(Config.regions).map(([key, data]) => {
                 return {
                     region: key,
                     zone: key,
@@ -119,55 +117,20 @@ export default defineConfig(({ mode }) => {
                     https: data.https,
                 };
             }),
-            MENU_MUSIC: JSON.stringify(selectedTheme.MENU_MUSIC),
-            AIP_PLACEMENT_ID: JSON.stringify(Config.client.AIP_PLACEMENT_ID),
+            PASS_TYPE: JSON.stringify(Config.passType),
+            AD_PREFIX: JSON.stringify(Config.secrets.AD_PREFIX),
+            VITE_GAMEMONETIZE_ID: JSON.stringify(Config.secrets.GAMEMONETIZE_ID),
+            SPELLSYNC_PROJECT_ID: JSON.stringify(Config.secrets.SPELLSYNC_PROJECT_ID),
+            SPELLSYNC_PUBLIC_TOKEN: JSON.stringify(Config.secrets.SPELLSYNC_PUBLIC_TOKEN),
             IS_DEV: isDev,
+            PROXY_DEFS: JSON.stringify(Config.proxies),
+            TURNSTILE_SITE_KEY: JSON.stringify(Config.secrets.TURNSTILE_SITE_KEY),
         },
-        plugins: !isDev
-            ? [
-                  codefendPlugin(),
-                  stripBlockPlugin({
-                      start: "STRIP_FROM_PROD_CLIENT:START",
-                      end: "STRIP_FROM_PROD_CLIENT:END",
-                  }),
-              ]
-            : undefined,
+        plugins,
         json: {
             stringify: true,
         },
-        server: {
-            port: 3000,
-            host: "0.0.0.0",
-            proxy: {
-                "/api": {
-                    target: `http://${Config.devServer.host}:${Config.devServer.port}`,
-                    changeOrigin: true,
-                    secure: false,
-                },
-                "/team_v2": {
-                    target: `http://${Config.devServer.host}:${Config.devServer.port}`,
-                    changeOrigin: true,
-                    secure: false,
-                    ws: true,
-                },
-            },
-        },
-        preview: {
-            port: 3000,
-            host: "0.0.0.0",
-            proxy: {
-                "/api": {
-                    target: `http://${Config.apiServer.host}:${Config.apiServer.port}`,
-                    changeOrigin: true,
-                    secure: false,
-                },
-                "/team_v2": {
-                    target: `http://${Config.apiServer.host}:${Config.apiServer.port}`,
-                    changeOrigin: true,
-                    secure: false,
-                    ws: true,
-                },
-            },
-        },
+        server: serverOptions,
+        preview: serverOptions,
     };
 });

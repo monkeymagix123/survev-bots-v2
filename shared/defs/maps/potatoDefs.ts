@@ -2,10 +2,12 @@ import { GameConfig } from "../../gameConfig";
 import { util } from "../../utils/util";
 import { v2 } from "../../utils/v2";
 import type { MapDef } from "../mapDefs";
+import { MapId } from "../types/misc";
 import { Main, type PartialMapDef } from "./baseDefs";
 
 const mapDef: PartialMapDef = {
-    mapId: 4,
+    mapId: MapId.Potato,
+
     desc: {
         name: "Potato",
         icon: "img/loot/loot-throwable-potato.svg",
@@ -30,17 +32,16 @@ const mapDef: PartialMapDef = {
     },
     biome: {
         colors: {
-            background: 2118510,
-            water: 3310251,
-            waterRipple: 11792639,
-            beach: 13480795,
-            riverbank: 9461284,
-            grass: 8433481,
-            underground: 1772803,
-            playerSubmerge: 2854052,
+            background: 0x20536e,
+            water: 0x3282ab,
+            waterRipple: 0xb3f0ff,
+            beach: 0xcdb35b,
+            riverbank: 0x905e24,
+            grass: 0x80af49,
+            underground: 0x1b0d03,
+            playerSubmerge: 0x2b8ca4,
         },
         particles: { camera: "falling_potato" },
-        frozenSprites: ["player-mash-01.img", "player-mash-02.img", "player-mash-03.img"],
     },
     gameMode: { maxPlayers: 80, potatoMode: true },
     /* STRIP_FROM_PROD_CLIENT:START */
@@ -143,11 +144,11 @@ const mapDef: PartialMapDef = {
         ],
         tier_ring_case: [
             { name: "potato_cannon", count: 1, weight: 1 },
-            { name: "spud_gun", count: 1, weight: 0.1 },
+            { name: "potato_smg", count: 1, weight: 0.1 },
         ],
         tier_airdrop_rare: [
             { name: "potato_cannon", count: 1, weight: 1 },
-            { name: "spud_gun", count: 1, weight: 0.1 },
+            { name: "potato_smg", count: 1, weight: 0.1 },
         ],
     },
     mapGen: {
@@ -188,7 +189,6 @@ const mapDef: PartialMapDef = {
         ],
         fixedSpawns: [
             {
-                shilo_01: 1,
                 warehouse_01: 2,
                 house_red_01: { small: 3, large: 4 },
                 house_red_02: { small: 3, large: 4 },

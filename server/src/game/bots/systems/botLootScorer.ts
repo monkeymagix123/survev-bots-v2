@@ -41,18 +41,58 @@ type LootScore = {
     weaponSlot?: number;
 };
 
+type LootChoiceCacheEntry = {
+    until: number;
+    botId: number;
+    brainType: BotBrainType;
+    mode: BotLootMode;
+    onlyGuns: boolean;
+    layer: number;
+    pos: Vec2;
+    unarmedThreatKey: string;
+    choice?: BotLootChoice;
+};
+
 export class BotLootScorer {
+    private _cache?: LootChoiceCacheEntry;
+    private readonly _failedLootIds = new Map<number, number>();
+
     chooseLoot(params: {
         game: Game;
         player: Player;
+        timeNow: number;
         mode: BotLootMode;
         brainType: BotBrainType;
         onlyGuns?: boolean;
         unarmedThreat?: BotUnarmedThreatContext;
     }): BotLootChoice | undefined {
-        const { game, player, mode, brainType, onlyGuns, unarmedThreat } = params;
+        const {
+            game,
+            player,
+            timeNow,
+            mode,
+            brainType,
+            onlyGuns = false,
+            unarmedThreat,
+        } = params;
         const profile = getBotBrainProfile(brainType);
         const maxDist = this._getSearchDistance(mode, profile);
+        this._pruneFailedLootIds(timeNow);
+
+        const cached = this._getCachedChoice({
+            game,
+            player,
+            timeNow,
+            mode,
+            brainType,
+            onlyGuns,
+            unarmedThreat,
+            maxDist,
+        });
+        if (cached !== undefined) {
+            return cached;
+        }
+
         const nearby = game.grid.intersectCollider(
             collider.createCircle(player.pos, maxDist + 1.5),
         );
@@ -66,6 +106,7 @@ export class BotLootScorer {
             if (loot.destroyed) continue;
             if (!util.sameLayer(loot.layer, player.layer)) continue;
             if (loot.ownerId !== 0 && loot.ownerId !== player.__id) continue;
+            if (this._failedLootIds.has(loot.__id)) continue;
 
             const def = GameObjectDefs[loot.type];
             if (!def || !("lootImg" in def)) continue;
@@ -97,7 +138,28 @@ export class BotLootScorer {
             }
         }
 
+        this._cacheChoice({
+            timeNow,
+            player,
+            brainType,
+            mode,
+            onlyGuns,
+            unarmedThreat,
+            choice: best,
+        });
+
         return best;
+    }
+
+    markFailedLootTarget(lootId: number | undefined, timeNow: number): void {
+        if (lootId === undefined) return;
+        this._failedLootIds.set(
+            lootId,
+            timeNow + BotTuning.optimization.failedLootCooldownSec,
+        );
+        if (this._cache?.choice?.lootId === lootId) {
+            this._cache = undefined;
+        }
     }
 
     private _adjustForUnarmedThreat(params: {
@@ -130,6 +192,121 @@ export class BotLootScorer {
         }
 
         return adjusted;
+    }
+
+    private _getCachedChoice(params: {
+        game: Game;
+        player: Player;
+        timeNow: number;
+        mode: BotLootMode;
+        brainType: BotBrainType;
+        onlyGuns: boolean;
+        unarmedThreat?: BotUnarmedThreatContext;
+        maxDist: number;
+    }): BotLootChoice | undefined {
+        const {
+            game,
+            player,
+            timeNow,
+            mode,
+            brainType,
+            onlyGuns,
+            unarmedThreat,
+            maxDist,
+        } = params;
+        const cached = this._cache;
+        if (!cached || cached.until < timeNow) return undefined;
+        if (
+            cached.botId !== player.__id ||
+            cached.brainType !== brainType ||
+            cached.mode !== mode ||
+            cached.onlyGuns !== onlyGuns ||
+            cached.layer !== player.layer ||
+            cached.unarmedThreatKey !== this._getUnarmedThreatKey(unarmedThreat)
+        ) {
+            return undefined;
+        }
+        if (
+            v2.distance(player.pos, cached.pos) >
+            BotTuning.optimization.selectionCacheMoveDist
+        ) {
+            return undefined;
+        }
+        if (!cached.choice) return undefined;
+        if (this._failedLootIds.has(cached.choice.lootId)) return undefined;
+
+        const obj = game.objectRegister.getById(cached.choice.lootId);
+        if (
+            !obj ||
+            obj.__type !== ObjectType.Loot ||
+            obj.destroyed ||
+            !util.sameLayer(obj.layer, player.layer)
+        ) {
+            return undefined;
+        }
+
+        if (v2.distance(player.pos, obj.pos) > maxDist) return undefined;
+
+        return {
+            ...cached.choice,
+            pos: v2.copy(obj.pos),
+        };
+    }
+
+    private _cacheChoice(params: {
+        timeNow: number;
+        player: Player;
+        brainType: BotBrainType;
+        mode: BotLootMode;
+        onlyGuns: boolean;
+        unarmedThreat?: BotUnarmedThreatContext;
+        choice?: BotLootChoice;
+    }): void {
+        const {
+            timeNow,
+            player,
+            brainType,
+            mode,
+            onlyGuns,
+            unarmedThreat,
+            choice,
+        } = params;
+        this._cache = {
+            until: timeNow + BotTuning.optimization.selectionCacheTtlSec,
+            botId: player.__id,
+            brainType,
+            mode,
+            onlyGuns,
+            layer: player.layer,
+            pos: v2.copy(player.pos),
+            unarmedThreatKey: this._getUnarmedThreatKey(unarmedThreat),
+            choice: choice
+                ? {
+                      ...choice,
+                      pos: v2.copy(choice.pos),
+                  }
+                : undefined,
+        };
+    }
+
+    private _getUnarmedThreatKey(unarmedThreat?: BotUnarmedThreatContext): string {
+        if (!unarmedThreat) return "none";
+
+        return [
+            Number(unarmedThreat.visibleHostile),
+            Number(unarmedThreat.hostileHasShownGun),
+            Number(unarmedThreat.hostileAppearsUnarmed),
+            Number(unarmedThreat.hostileRecentlyFired),
+            Number(unarmedThreat.hostileDistracted),
+        ].join(":");
+    }
+
+    private _pruneFailedLootIds(timeNow: number): void {
+        for (const [lootId, until] of this._failedLootIds) {
+            if (until <= timeNow) {
+                this._failedLootIds.delete(lootId);
+            }
+        }
     }
 
     private _getSearchDistance(
@@ -228,7 +405,7 @@ export class BotLootScorer {
         dist: number,
     ): LootScore | undefined {
         const bagSpace = this._getBagSpace(player, loot.type);
-        const held = player.inventory[loot.type] ?? 0;
+        const held = (player.inventory as Record<string, number>)[loot.type] ?? 0;
         if (bagSpace <= held) return undefined;
 
         const desired = this._getDesiredHealCount(player, loot.type);
@@ -254,7 +431,7 @@ export class BotLootScorer {
         dist: number,
     ): LootScore | undefined {
         const bagSpace = this._getBagSpace(player, loot.type);
-        const held = player.inventory[loot.type] ?? 0;
+        const held = (player.inventory as Record<string, number>)[loot.type] ?? 0;
         if (bagSpace <= held) return undefined;
 
         const desired = this._getDesiredBoostCount(player, loot.type);
@@ -275,7 +452,7 @@ export class BotLootScorer {
 
     private _scoreAmmo(player: Player, loot: Loot, dist: number): LootScore | undefined {
         const bagSpace = this._getBagSpace(player, loot.type);
-        const held = player.inventory[loot.type] ?? 0;
+        const held = (player.inventory as Record<string, number>)[loot.type] ?? 0;
         if (bagSpace <= 0 || held >= bagSpace) return undefined;
 
         let matchingGuns = 0;
@@ -406,7 +583,9 @@ export class BotLootScorer {
     }
 
     private _getBagSpace(player: Player, itemType: string): number {
-        const bag = player.bagSizes[itemType];
+        const bag = (player.game.playerBarn.bagSizes as Record<string, number[]>)[
+            itemType
+        ];
         if (!bag) return 0;
         return bag[player.getGearLevel(player.backpack)] ?? 0;
     }

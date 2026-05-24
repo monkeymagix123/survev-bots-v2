@@ -1,3 +1,4 @@
+import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import { math } from "../../../../shared/utils/math";
@@ -9,18 +10,15 @@ import type { Loot } from "../objects/loot";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import {
-    computeBotDanger,
+    getBotTacticalSnapshot,
     getBotReloadSnapshot,
-    getBotThreatBands,
     isBotUnarmed,
-    shouldSoftenVisibleUnarmedThreat,
 } from "./botDecisionSupport";
 import {
     getBotBrainProfile,
     getDecisionDelaySec,
     type BotBrainProfile,
 } from "./botBrainProfiles";
-import { logBotStability } from "./botStabilityLogger";
 import { BotCombatMemory } from "./botCombat";
 import {
     applyLootInputs,
@@ -44,7 +42,6 @@ import { PracticeBotBrain } from "./brains/practiceBotBrain";
 import { RealisticBotBrain } from "./brains/realisticBotBrain";
 import { UnarmedBotBrain } from "./brains/unarmedBotBrain";
 import { BotTuning } from "./botTuning";
-import { LegacyBotController } from "./legacy/legacyBotController";
 import { BotAimController } from "./systems/botAimController";
 import { BotLootScorer } from "./systems/botLootScorer";
 import { BotNavigationLite } from "./systems/botNavigationLite";
@@ -71,15 +68,15 @@ export class BotController {
     private readonly _unarmedInputController: UnarmedBotInputController;
     private readonly _brainProfile: BotBrainProfile;
 
-    // TEMP (Phase 1 parity verification)
-    private readonly _legacy?: LegacyBotController;
-    private _parityMismatchCount = 0;
-
     private _lastPos: Vec2;
     private _lastMovedTime = 0;
     private _lastHealth = 0;
     private _lastIdleReason?: string;
     private _wasUnarmedLastUpdate: boolean;
+    private _meleeSwingStopUntil = -Infinity;
+    private _resumeGunSlot?:
+        | typeof GameConfig.WeaponSlot.Primary
+        | typeof GameConfig.WeaponSlot.Secondary;
 
     constructor(
         readonly game: Game,
@@ -103,12 +100,10 @@ export class BotController {
             this._navigation,
             this._combat,
             this._aim,
+            this._lootScorer,
+            this._objectInteractionScorer,
         );
         this._nextDecisionDelaySec = getDecisionDelaySec(brainType);
-
-        if (Config.bots.debugParity) {
-            this._legacy = new LegacyBotController(game, player, difficulty);
-        }
     }
 
     /**
@@ -183,14 +178,6 @@ export class BotController {
               })
             : this._buildInput(dt);
 
-        // TEMP (Phase 1 parity verification): compare outputs vs legacy controller
-        if (this._legacy && this._parityMismatchCount < 30) {
-            const legacyStep = this._legacy.step(dt);
-            if (legacyStep) {
-                this._compareParity(msg, legacyStep.msg, legacyStep.aimAngleRad);
-            }
-        }
-
         player.handleInput(msg);
         this._wasUnarmedLastUpdate = isBotUnarmed(player);
     }
@@ -227,6 +214,7 @@ export class BotController {
         const gas = this.game.gas;
         const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
 
+        const previousObjectTargetId = this._combat.objectTargetId;
         let objectTarget = getObjectTarget(this.game, this._combat);
         if (
             objectTarget &&
@@ -234,6 +222,10 @@ export class BotController {
                 objectTarget.dead ||
                 !isObjectTargetStillValid(this._combat, objectTarget))
         ) {
+            this._objectInteractionScorer.markFailedObstacleTarget(
+                previousObjectTargetId,
+                this._time,
+            );
             clearObjectInteraction(this._combat);
             objectTarget = undefined;
         }
@@ -242,6 +234,13 @@ export class BotController {
             this._combat.state === "interact_object" &&
             this._combat.objectInteractionMode === "melee_break" &&
             !!objectTarget;
+        if (
+            meleeBreakActive &&
+            (player.curWeapIdx === GameConfig.WeaponSlot.Primary ||
+                player.curWeapIdx === GameConfig.WeaponSlot.Secondary)
+        ) {
+            this._resumeGunSlot = player.curWeapIdx;
+        }
         const meleeApproachGoal =
             meleeBreakActive && objectTarget
                 ? getMeleeApproachGoal(this.game, player, objectTarget)
@@ -292,6 +291,15 @@ export class BotController {
             gunDef,
         });
 
+        const meleeBreakInRange =
+            meleeBreakActive &&
+            !!objectTarget &&
+            player.curWeapIdx === GameConfig.WeaponSlot.Melee &&
+            isInMeleeRange(player, objectTarget, aimUpdate.aimDir);
+        const holdStillForMeleeBreak =
+            BotTuning.objectInteract.meleeSwingStopSec > 0 &&
+            (meleeBreakInRange || this._time < this._meleeSwingStopUntil);
+
         msg.toMouseLen = math.clamp(aimUpdate.aimLen, 0, net.Constants.MouseMaxDist);
 
         const strafeSign =
@@ -312,9 +320,10 @@ export class BotController {
                 !gasEmergency,
             strafeSign,
             anchor:
-                this._combat.movementStyle === "anchor" &&
-                !gasEmergency &&
-                !weakLosAnchor,
+                holdStillForMeleeBreak ||
+                ((this._combat.movementStyle === "anchor" &&
+                    !gasEmergency &&
+                    !weakLosAnchor)),
             aimDir: aimUpdate.aimDir,
             dt,
             moveDeadzone: meleeBreakActive
@@ -355,23 +364,15 @@ export class BotController {
             moveDown: msg.moveDown,
         });
 
+        const previousLootTargetId = this._combat.lootTargetId;
         const lootTarget = resolveLootTarget(this.game, this._combat, player);
+        if (!lootTarget && previousLootTargetId !== undefined) {
+            this._lootScorer.markFailedLootTarget(previousLootTargetId, this._time);
+        }
         applyLootInputs(msg, this._combat, player, lootTarget);
 
         const threat = this._perception.threat;
-        const enemyDist = threat.nearestNearbyHostileDist;
-        const { enemyVeryClose, enemyClose } = getBotThreatBands(enemyDist);
-        const softenVisibleThreat = shouldSoftenVisibleUnarmedThreat({
-            targetVisible: !!validTarget && this._perception.targetVisible,
-            targetHasShownGun: this._perception.targetHasShownGun,
-            targetAppearsUnarmed: this._perception.targetAppearsUnarmed,
-            targetRecentlyFired: this._perception.targetRecentlyFired,
-            nearbyHostileCount: threat.nearbyHostileCount,
-            enemyClose,
-            enemyVeryClose,
-        });
-        // Explicit reload discipline: press reload when empty and it's safe/out-of-range.
-        const danger = computeBotDanger({
+        const tactical = getBotTacticalSnapshot({
             targetVisible: !!validTarget && this._perception.targetVisible,
             hasTarget: !!validTarget,
             distToTarget: aimUpdate.distToTarget,
@@ -380,16 +381,24 @@ export class BotController {
             isReloading,
             recentlyDamaged,
             gasEmergency,
-            visibleThreatSoftened: softenVisibleThreat,
+            nearestNearbyHostileDist: threat.nearestNearbyHostileDist,
+            nearbyHostileCount: threat.nearbyHostileCount,
+            targetHasShownGun: this._perception.targetHasShownGun,
+            targetAppearsUnarmed: this._perception.targetAppearsUnarmed,
+            targetRecentlyFired: this._perception.targetRecentlyFired,
         });
         const abortObjectInteraction = shouldAbortObjectInteraction({
             combatState: this._combat.state,
             anyHostileVisible: threat.anyHostileVisible,
             recentlyDamaged,
-            danger,
+            danger: tactical.danger,
             unarmedThreatRules: false,
         });
         if (abortObjectInteraction) {
+            this._objectInteractionScorer.markFailedObstacleTarget(
+                this._combat.objectTargetId,
+                this._time,
+            );
             clearObjectInteraction(this._combat);
             objectTarget = undefined;
         }
@@ -403,11 +412,11 @@ export class BotController {
             combatState: this._combat.state,
             movingNow:
                 msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown,
-            danger,
-            enemyClose,
-            enemyVeryClose,
+            danger: tactical.danger,
+            enemyClose: tactical.enemyClose,
+            enemyVeryClose: tactical.enemyVeryClose,
             anyHostileVisible: threat.anyHostileVisible,
-            visibleThreatSoftened: softenVisibleThreat,
+            visibleThreatSoftened: tactical.softenVisibleThreat,
         });
 
         const wantsReload =
@@ -422,7 +431,7 @@ export class BotController {
                 ((!validTarget ||
                     this._perception.targetVisible === false ||
                     outOfEngage) &&
-                    danger <= this._brainProfile.reloadDangerMax)
+                    tactical.danger <= this._brainProfile.reloadDangerMax)
             ) {
                 msg.addInput(GameConfig.Input.Reload);
             }
@@ -441,12 +450,12 @@ export class BotController {
             veryLowHp,
             wantsBoost,
             veryLowBoost,
-            danger,
+            danger: tactical.danger,
             recentlyDamaged,
-            enemyClose,
-            enemyVeryClose,
+            enemyClose: tactical.enemyClose,
+            enemyVeryClose: tactical.enemyVeryClose,
             anyHostileVisible: threat.anyHostileVisible,
-            visibleThreatSoftened: softenVisibleThreat,
+            visibleThreatSoftened: tactical.softenVisibleThreat,
         });
 
         const usingItemThisTick =
@@ -504,9 +513,24 @@ export class BotController {
         ) {
             if (player.curWeapIdx !== GameConfig.WeaponSlot.Melee) {
                 msg.addInput(GameConfig.Input.EquipMelee);
-            } else if (isInMeleeRange(player, objectTarget)) {
+            } else if (meleeBreakInRange) {
+                if (BotTuning.objectInteract.meleeSwingStopSec > 0) {
+                    this._meleeSwingStopUntil =
+                        this._time + BotTuning.objectInteract.meleeSwingStopSec;
+                }
                 msg.shootHold = false;
                 msg.shootStart = true;
+            }
+        }
+
+        if (!meleeBreakActive && player.curWeapIdx === GameConfig.WeaponSlot.Melee) {
+            const resumeGunSlot = this._getResumeGunSlot(player);
+            if (resumeGunSlot !== undefined) {
+                msg.addInput(
+                    resumeGunSlot === GameConfig.WeaponSlot.Primary
+                        ? GameConfig.Input.EquipPrimary
+                        : GameConfig.Input.EquipSecondary,
+                );
             }
         }
 
@@ -528,8 +552,11 @@ export class BotController {
 
         const movingThisTick =
             msg.moveLeft || msg.moveRight || msg.moveUp || msg.moveDown;
+        const triggerActiveThisTick = msg.shootHold || msg.shootStart;
         const noiseDeg = this._weaponLogic.computeShotNoiseDeg({
             willShootThisTick: shot.willShootThisTick,
+            triggerActiveThisTick,
+            gunDef,
             profile,
             weaponClass,
             movingThisTick,
@@ -552,64 +579,33 @@ export class BotController {
         return msg;
     }
 
-    private _compareParity(
-        msgNew: net.InputMsg,
-        msgLegacy: net.InputMsg,
-        legacyAimAngleRad: number,
-    ): void {
-        const epsLen = 1e-4;
-        const epsAngleRad = 1e-4;
+    private _getResumeGunSlot(
+        player: Player,
+    ):
+        | typeof GameConfig.WeaponSlot.Primary
+        | typeof GameConfig.WeaponSlot.Secondary
+        | undefined {
+        const rememberedSlot = this._resumeGunSlot;
+        if (rememberedSlot !== undefined) {
+            const rememberedType = player.weapons[rememberedSlot].type;
+            if (rememberedType && GameObjectDefs[rememberedType]?.type === "gun") {
+                return rememberedSlot;
+            }
+        }
 
-        const angleNew = Math.atan2(msgNew.toMouseDir.y, msgNew.toMouseDir.x);
-        const angleLegacy = Math.atan2(msgLegacy.toMouseDir.y, msgLegacy.toMouseDir.x);
-        const angleDiff = Math.atan2(
-            Math.sin(angleLegacy - angleNew),
-            Math.cos(angleLegacy - angleNew),
-        );
+        for (const slot of [
+            GameConfig.WeaponSlot.Primary,
+            GameConfig.WeaponSlot.Secondary,
+        ] as const) {
+            const type = player.weapons[slot].type;
+            if (type && GameObjectDefs[type]?.type === "gun") {
+                return slot;
+            }
+        }
 
-        const inputsNew = msgNew.inputs;
-        const inputsLegacy = msgLegacy.inputs;
-
-        const mismatch =
-            msgNew.moveLeft !== msgLegacy.moveLeft ||
-            msgNew.moveRight !== msgLegacy.moveRight ||
-            msgNew.moveUp !== msgLegacy.moveUp ||
-            msgNew.moveDown !== msgLegacy.moveDown ||
-            msgNew.shootHold !== msgLegacy.shootHold ||
-            msgNew.shootStart !== msgLegacy.shootStart ||
-            msgNew.useItem !== msgLegacy.useItem ||
-            Math.abs(msgNew.toMouseLen - msgLegacy.toMouseLen) > epsLen ||
-            Math.abs(angleDiff) > epsAngleRad ||
-            inputsNew.length !== inputsLegacy.length ||
-            inputsNew.some((v, i) => v !== inputsLegacy[i]);
-
-        if (!mismatch) return;
-
-        this._parityMismatchCount++;
-        const aimAngleDiff = Math.atan2(
-            Math.sin(legacyAimAngleRad - this._aim.aimAngleRad),
-            Math.cos(legacyAimAngleRad - this._aim.aimAngleRad),
-        );
-
-        // eslint-disable-next-line no-console
-        console.warn(
-            `[bots][parity] mismatch#${this._parityMismatchCount} ` +
-                `id=${this.player.__id} name=${this.player.name} ` +
-                `t=${this._time.toFixed(3)} ` +
-                `move=${Number(msgNew.moveLeft)}${Number(msgNew.moveRight)}${Number(
-                    msgNew.moveUp,
-                )}${Number(msgNew.moveDown)} vs ${Number(msgLegacy.moveLeft)}${Number(
-                    msgLegacy.moveRight,
-                )}${Number(msgLegacy.moveUp)}${Number(msgLegacy.moveDown)} ` +
-                `shoot=${Number(msgNew.shootHold)}${Number(msgNew.shootStart)} vs ${Number(
-                    msgLegacy.shootHold,
-                )}${Number(msgLegacy.shootStart)} ` +
-                `mouseLen=${msgNew.toMouseLen.toFixed(2)} vs ${msgLegacy.toMouseLen.toFixed(2)} ` +
-                `mouseAngDeg=${(math.rad2deg(angleDiff)).toFixed(3)} ` +
-                `aimAngDeg=${(math.rad2deg(aimAngleDiff)).toFixed(3)} ` +
-                `inputs=${inputsNew.join(",")} vs ${inputsLegacy.join(",")}`,
-        );
+        return undefined;
     }
+
 }
 
 export type { BotDifficulty } from "./botDifficulty";

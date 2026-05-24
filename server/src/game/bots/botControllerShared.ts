@@ -185,8 +185,12 @@ export function tryUseInteractObject(
     return false;
 }
 
-export function isInMeleeRange(player: Player, obstacle: Obstacle): boolean {
-    const meleeCollider = getBotMeleeCollider(player);
+export function isInMeleeRange(
+    player: Player,
+    obstacle: Obstacle,
+    aimDir?: Vec2,
+): boolean {
+    const meleeCollider = getBotMeleeCollider(player, aimDir);
     return !!collider.intersectCircle(
         obstacle.collider,
         meleeCollider.pos,
@@ -489,9 +493,13 @@ export function chooseSupportUseItem(params: {
     });
 }
 
-function getBotMeleeCollider(player: Player): { pos: Vec2; rad: number } {
+function getBotMeleeCollider(
+    player: Player,
+    aimDir?: Vec2,
+): { pos: Vec2; rad: number } {
     const meleeDef = getBotMeleeDef(player);
-    const rot = Math.atan2(player.dir.y, player.dir.x);
+    const facing = aimDir && v2.lengthSqr(aimDir) > 0.0001 ? aimDir : player.dir;
+    const rot = Math.atan2(facing.y, facing.x);
     const offset = v2.add(
         meleeDef.attack.offset,
         v2.mul(v2.create(1, 0), player.scale - 1),

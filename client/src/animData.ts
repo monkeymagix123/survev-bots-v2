@@ -4,6 +4,7 @@ import { GameConfig } from "../../shared/gameConfig";
 import { math } from "../../shared/utils/math";
 import { assert } from "../../shared/utils/util";
 import { type Vec2, v2 } from "../../shared/utils/v2";
+import type { AnimCtx, Player } from "./objects/player";
 
 function frame(time: number, bones: Partial<Record<Bones, Pose>>) {
     return {
@@ -11,7 +12,22 @@ function frame(time: number, bones: Partial<Record<Bones, Pose>>) {
         bones,
     };
 }
-function effect(time: number, fn: string, args?: Record<string, unknown>) {
+
+type AnimKeys = {
+    [K in keyof Player]: ((
+        this: Player,
+        ctx: AnimCtx,
+        arg: Record<string, unknown>,
+    ) => void) extends Player[K]
+        ? K
+        : never;
+}[keyof Player];
+
+function effect<K extends AnimKeys>(
+    time: number,
+    fn: K,
+    args?: Parameters<Player[K]>[1],
+) {
     return {
         time,
         fn,
@@ -90,6 +106,10 @@ export const IdlePoses: Record<string, Partial<Record<Bones, Pose>>> = {
         [Bones.HandL]: new Pose(v2.create(14, -12.25)),
         [Bones.HandR]: new Pose(v2.create(1, 17.75)),
     },
+    cutlass: {
+        [Bones.HandL]: new Pose(v2.create(14, -12.25)),
+        [Bones.HandR]: new Pose(v2.create(6, 16)),
+    },
     rifle: {
         [Bones.HandL]: new Pose(v2.create(28, 5.25)),
         [Bones.HandR]: new Pose(v2.create(14, 1.75)),
@@ -101,6 +121,10 @@ export const IdlePoses: Record<string, Partial<Record<Bones, Pose>>> = {
     bullpup: {
         [Bones.HandL]: new Pose(v2.create(28, 5.25)),
         [Bones.HandR]: new Pose(v2.create(24, 1.75)),
+    },
+    minigun: {
+        [Bones.HandL]: new Pose(v2.create(18, 7.25)),
+        [Bones.HandR]: new Pose(v2.create(44, 0)),
     },
     launcher: {
         [Bones.HandL]: new Pose(v2.create(20, 10)),
@@ -128,6 +152,12 @@ export const IdlePoses: Record<string, Partial<Record<Bones, Pose>>> = {
 
 const def = GameObjectDefs as unknown as Record<string, MeleeDef>;
 
+interface Effect<K extends AnimKeys = AnimKeys> {
+    time: number;
+    fn: K;
+    args?: Parameters<Player[K]>[1];
+}
+
 export const Animations: Record<
     string,
     {
@@ -135,11 +165,7 @@ export const Animations: Record<
             time: number;
             bones: Partial<Record<Bones, Pose>>;
         }>;
-        effects: Array<{
-            time: number;
-            fn: string;
-            args?: Record<string, unknown>;
-        }>;
+        effects: Effect[];
     }
 > = {
     none: {

@@ -7,17 +7,22 @@ import { GameConfig, type Input } from "../../shared/gameConfig";
 import * as net from "../../shared/net/net";
 import {
     type ObjectData,
-    ObjectType,
     type ObjectsPartialData,
+    ObjectType,
 } from "../../shared/net/objectSerializeFns";
 import type { LocalData } from "../../shared/net/updateMsg";
+import type {
+    FindGameBody,
+    FindGameMatchData,
+    FindGameResponse,
+} from "../../shared/types/api";
 import { util } from "../../shared/utils/util";
 import { v2 } from "../../shared/utils/v2";
-import type { FindGameResponse } from "./gameServer";
+import { Config } from "./config";
 
 const config = {
-    address: "http://127.0.0.1:8001",
-    region: "local",
+    address: Config.gameServer.apiServerUrl,
+    region: Config.gameServer.thisRegion,
     gameModeIdx: 0,
     botCount: 79,
     joinDelay: 100,
@@ -68,7 +73,7 @@ class ObjectCreator {
             const err = {
                 id,
                 ids: Object.keys(this.idToObj),
-                stream: s._view._view,
+                stream: s.view.view,
             };
             console.error("objectPoolErr", `getTypeById${JSON.stringify(err)}`);
             return ObjectType.Invalid;
@@ -151,7 +156,7 @@ class Bot {
 
     weapons: LocalData["weapons"] = [];
 
-    constructor(id: number, res: FindGameResponse["res"][0]) {
+    constructor(id: number, res: FindGameMatchData) {
         this.id = id;
 
         assert("gameId" in res);
@@ -184,6 +189,7 @@ class Bot {
                     break;
                 }
                 this.onMsg(type, stream.getStream());
+                stream.stream.readAlignToNextByte();
             }
         };
     }
@@ -249,9 +255,11 @@ class Bot {
                 console.log(
                     `Bot ${this.id} ${msg.gameOver ? "won" : "died"} | kills: ${msg.playerStats[0].kills} | rank: ${msg.teamRank}`,
                 );
-                this.disconnect = true;
-                this.connected = false;
-                this.ws.close();
+                if (!msg.gameOver) {
+                    this.disconnect = true;
+                    this.connected = false;
+                    this.ws.close();
+                }
                 break;
             }
             case net.MsgType.Pickup: {
@@ -411,22 +419,27 @@ class Bot {
     }
 }
 
-void (async () => {
+void (() => {
     for (let i = 1; i <= config.botCount; i++) {
         setTimeout(async () => {
             const response = (await (
                 await fetch(`${config.address}/api/find_game`, {
                     method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
                     body: JSON.stringify({
                         region: config.region,
                         autoFill: true,
                         gameModeIdx: config.gameModeIdx,
                         playerCount: 1,
-                    }),
+                        version: GameConfig.protocolVersion,
+                        zones: [config.region],
+                    } satisfies FindGameBody),
                 })
             ).json()) as FindGameResponse;
-            if ("err" in response.res[0]) {
-                console.log("Failed finding game, err:", response.res[0].err);
+            if ("error" in response || "banned" in response) {
+                console.log("Failed finding game, error:", response.error);
                 return;
             }
 

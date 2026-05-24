@@ -1,34 +1,15 @@
 import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
 import type { GunDef } from "../../../../shared/defs/gameObjects/gunDefs";
+import type { WaveConfig, WaveEntry } from "../../../../shared/defs/mapDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import type { Vec2 } from "../../../../shared/utils/v2";
 import { Config } from "../../config";
 import type { Game } from "../game";
-import type { Group } from "../group";
-import type { Team } from "../team";
+import type { Group, Team } from "../group";
 import { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import { BotController, type BotDifficulty } from "./botController";
-import * as fs from "fs";
-import * as path from "path";
-
-// ─── Wave config types ────────────────────────────────────────────────────────
-
-interface WaveEntry {
-    count: number;
-    /**
-     * Optional exact counts per brain type.
-     * Values are treated as counts, not weights.
-     * If omitted or counts don't sum to `count`, remaining slots use random brain selection.
-     */
-    brains?: Partial<Record<BotBrainType, number>>;
-    difficulty?: BotDifficulty;
-}
-
-interface WaveConfig {
-    waves: WaveEntry[];
-}
 
 // ─── Brain weight helpers ─────────────────────────────────────────────────────
 
@@ -140,8 +121,8 @@ interface WaveState {
     brainQueue: BotBrainType[];
 }
 
-/** Seconds to pause between waves. Adjust to taste. */
-const WAVE_INTER_DELAY_S = 3;
+/** Seconds to pause between waves if a map does not override it. */
+const DEFAULT_WAVE_INTER_DELAY_S = 3;
 
 // ─── BotManager ──────────────────────────────────────────────────────────────
 
@@ -154,9 +135,10 @@ export class BotManager {
     private readonly _controllers = new Map<number, BotController>();
 
     // ── Wave mode ──
-    /** Null when wave mode is disabled, or waves.json is absent/malformed */
+    /** Null when wave mode is disabled, or the active map has no valid wave data */
     private readonly _waveConfig: WaveConfig | null;
     private _wave: WaveState | null = null;
+    private _wavesComplete = false;
     /** Countdown timer used for the inter-wave delay */
     private _waveDelayRemaining = 0;
     /** True when waves are paused due to insufficient connected humans */
@@ -178,47 +160,28 @@ export class BotManager {
         }
     }
 
+    get wavesComplete(): boolean {
+        return this._wavesComplete;
+    }
+
     // ── Wave config loading ──────────────────────────────────────────────────
 
     private _loadWaveConfig(): WaveConfig | null {
-        // Look for waves.json next to this file (server/src/game/bots/waves.json)
-        const candidates = [
-            path.resolve(__dirname, "waves.json"),
-            path.resolve(process.cwd(), "../waves.json"),
-            path.resolve(process.cwd(), "waves.json"),
-        ];
+        const config = this.game.map.mapDef.wave;
 
-        for (const filePath of candidates) {
-            if (!fs.existsSync(filePath)) continue;
-
-            try {
-                const raw = fs.readFileSync(filePath, "utf8");
-                const parsed = JSON.parse(raw) as WaveConfig;
-
-                if (
-                    !Array.isArray(parsed.waves) ||
-                    parsed.waves.length === 0 ||
-                    parsed.waves.some(
-                        (w) => typeof w.count !== "number" || w.count < 1,
-                    )
-                ) {
-                    console.warn(
-                        `[BotManager] waves.json at ${filePath} is invalid — ignoring.`,
-                    );
-                    return null;
-                }
-
-                console.log(`[BotManager] Loaded waves.json from ${filePath}`);
-                return parsed;
-            } catch (err) {
-                console.warn(
-                    `[BotManager] Failed to parse waves.json at ${filePath}:`,
-                    err,
-                );
-            }
+        if (
+            !config ||
+            !Array.isArray(config.waves) ||
+            config.waves.length === 0 ||
+            config.waves.some((w) => typeof w.count !== "number" || w.count < 1)
+        ) {
+            console.warn(
+                `[BotManager] Wave map '${this.game.mapName}' has no valid map-driven wave data.`,
+            );
+            return null;
         }
 
-        return null;
+        return config;
     }
 
     // ── Wave lifecycle ───────────────────────────────────────────────────────
@@ -229,10 +192,13 @@ export class BotManager {
         if (index >= this._waveConfig.waves.length) {
             console.log("[BotManager] All waves complete.");
             this._wave = null;
+            this._wavesComplete = true;
+            this.game.checkGameOver();
             return;
         }
 
         this._cleanupDeadInternalBots();
+        this._wavesComplete = false;
 
         const entry = this._waveConfig.waves[index];
         const brainQueue = buildBrainQueue(entry, () => this._pickBrainType());
@@ -286,6 +252,7 @@ export class BotManager {
         this._wavePausedForNoHumans = true;
 
         this._wave = null;
+        this._wavesComplete = false;
         this._waveDelayRemaining = 0;
         this._spawnBudget = 0;
     }
@@ -417,11 +384,13 @@ export class BotManager {
 
             if (!anyAlive) {
                 this._cleanupWaveBots(wave.botIds);
+                const delay =
+                    this._waveConfig?.interWaveDelay ?? DEFAULT_WAVE_INTER_DELAY_S;
                 console.log(
-                    `[BotManager] Wave ${wave.index + 1} cleared — next wave in ${WAVE_INTER_DELAY_S}s.`,
+                    `[BotManager] Wave ${wave.index + 1} cleared — next wave in ${delay}s.`,
                 );
                 wave.waitingForNext = true;
-                this._waveDelayRemaining = WAVE_INTER_DELAY_S;
+                this._waveDelayRemaining = delay;
             }
         }
 
@@ -489,11 +458,11 @@ export class BotManager {
     private _computePendingJoinSlots(now: number): number {
         let pendingJoinSlots = 0;
         for (const [token, data] of this.game.joinTokens) {
-            if (data.expiresAt < now || data.availableUses <= 0) {
+            if (data.expiresAt < now) {
                 this.game.joinTokens.delete(token);
                 continue;
             }
-            pendingJoinSlots += data.availableUses;
+            pendingJoinSlots += 1;
         }
         return pendingJoinSlots;
     }
@@ -592,7 +561,7 @@ export class BotManager {
             if (isWaveMap) {
                 // Wave map: internal bots always spawn on Team 2 (Blue).
                 team =
-                    playerBarn.teams.find((t) => t.teamId === 2) ??
+                    playerBarn.teams.find((t) => t.id === 2) ??
                     playerBarn.teams[1] ??
                     playerBarn.getSmallestTeam();
             } else {
@@ -624,36 +593,20 @@ export class BotManager {
         joinMsg.bot = false; // internal bot, not an external websocket bot
 
         const socketId = `ai:${this.game.id}:${++this._nextBotId}`;
-        const bot = new Player(this.game, pos, layer, socketId, joinMsg);
+        const bot = new Player(
+            this.game,
+            pos,
+            layer,
+            joinMsg.name,
+            socketId,
+            joinMsg,
+            "",
+            "",
+            null,
+        );
 
         bot.isAi = true;
         bot.hasClient = false;
-
-        if (team && group) {
-            team.addPlayer(bot);
-            group.addPlayer(bot);
-        } else if (!team && group) {
-            group.addPlayer(bot);
-            bot.teamId = group.groupId;
-        } else if (team && !group) {
-            team.addPlayer(bot);
-            bot.groupId = playerBarn.groupIdAllocator.getNextId();
-        } else {
-            bot.groupId = playerBarn.groupIdAllocator.getNextId();
-            bot.teamId = bot.groupId;
-        }
-
-        if (bot.game.map.factionMode) {
-            bot.playerStatusDirty = true;
-        }
-
-        if (bot.game.map.perkMode) {
-            bot.roleMenuTicker = GameConfig.player.perkModeRoleSelectDuration + 5;
-        }
-
-        if (!bot.game.map.perkMode && group && !group.spawnLeader) {
-            group.spawnLeader = bot;
-        }
 
         // Register the controller immediately with the resolved brain type so
         // wave-assigned brain types are used rather than falling back to random
@@ -669,18 +622,7 @@ export class BotManager {
         this._controllers.set(bot.__id, controller);
 
         this._applyStartingLoadout(bot);
-
-        playerBarn.newPlayers.push(bot);
-        this.game.objectRegister.register(bot);
-        playerBarn.players.push(bot);
-        playerBarn.livingPlayers.push(bot);
-
-        if (!this.game.modeManager.isSolo) {
-            playerBarn.livingPlayers.sort((a, b) => a.teamId - b.teamId);
-        }
-        playerBarn.aliveCountDirty = true;
-
-        this.game.pluginManager.emit("playerJoin", bot);
+        playerBarn.activatePlayer(bot, group, team);
 
         // Ensure a started transition when internal bots bring alive contexts above 1
         if (!this.game.started) {
@@ -717,8 +659,6 @@ export class BotManager {
             bot.weaponManager.setCurWeapIndex(
                 GameConfig.WeaponSlot.Primary,
                 true,
-                true,
-                true,
             );
             // Spawn holding the gun immediately (avoid a draw delay on first tick)
             bot.weapons[GameConfig.WeaponSlot.Primary].cooldown = 0;
@@ -728,10 +668,9 @@ export class BotManager {
     private _pickLootGun(exclude: Set<string>): string | undefined {
         const tier = this.game.map.mapDef.lootTable["tier_guns"] ? "tier_guns" : "tier_world";
         for (let attempt = 0; attempt < 30; attempt++) {
-            const items = this.game.lootBarn.getLootTable(tier);
-            if (!items.length) return undefined;
+            const item = this.game.lootBarn.getLootTable(tier);
+            if (!item) return undefined;
 
-            const item = items[0];
             const type = item.name;
             if (!type) continue;
             if (exclude.has(type)) continue;
@@ -750,20 +689,22 @@ export class BotManager {
         if (def?.type !== "gun") return;
 
         const gunDef = def as GunDef;
-        const trueMaxClip = bot.weaponManager.getTrueAmmoStats(gunDef).trueMaxClip;
+        const trueMaxClip = bot.weaponManager.getAmmoStats(gunDef).maxClip;
         bot.weaponManager.setWeapon(slot, gunType, trueMaxClip);
 
         const ammoType = gunDef.ammo;
         const backpackLevel = bot.getGearLevel(bot.backpack);
-        const bagSpace = bot.bagSizes[ammoType]
-            ? bot.bagSizes[ammoType][backpackLevel]
+        const bagSizes = this.game.playerBarn.bagSizes as Record<string, number[]>;
+        const bagSpace = bagSizes[ammoType]
+            ? bagSizes[ammoType][backpackLevel]
             : 0;
         if (!bagSpace) return;
 
         const extraAmmo = Math.max(gunDef.ammoSpawnCount - trueMaxClip, 0);
         if (!extraAmmo) return;
 
-        bot.inventory[ammoType] = Math.min(bagSpace, bot.inventory[ammoType] + extraAmmo);
+        const inventory = bot.inventory as Record<string, number>;
+        inventory[ammoType] = Math.min(bagSpace, (inventory[ammoType] ?? 0) + extraAmmo);
         bot.inventoryDirty = true;
     }
 

@@ -8,7 +8,6 @@ interface TerrainSpawnDef {
     grass?: boolean;
     beach?: boolean;
     riverShore?: boolean;
-    lakeCenter?: boolean;
     spawnPriority?: number;
     bridge?: {
         nearbyWidthMult: number;
@@ -26,6 +25,7 @@ interface TerrainSpawnDef {
         radMax: number;
         facingOri: number;
     };
+    minDistanceFromSameType?: number;
 }
 
 export interface LootSpawnDef {

@@ -1,4 +1,4 @@
-import type { AABBWithHeight, ColliderWithHeight } from "../../utils/coldet";
+import type { AABB, Collider } from "../../utils/coldet";
 import type { Vec2 } from "../../utils/v2";
 import type { TerrainSpawnDef } from "../mapObjectsTyping";
 
@@ -9,18 +9,18 @@ export interface BuildingDef {
         color?: number;
         scale?: number;
         shapes?: Array<{
-            collider: ColliderWithHeight;
+            collider: Collider;
             color: number;
         }>;
         displayType?: string;
     };
     terrain: TerrainSpawnDef;
-    mapObstacleBounds?: ColliderWithHeight[];
+    mapObstacleBounds?: Collider[];
     zIdx?: number;
     floor: {
         surfaces: Array<{
             type: string;
-            collision: AABBWithHeight[];
+            collision: AABB[];
             data?: {
                 isBright: boolean;
             };
@@ -29,9 +29,10 @@ export interface BuildingDef {
     };
     ceiling: {
         zoomRegions: Array<{
-            zoomIn?: AABBWithHeight;
-            zoomOut?: AABBWithHeight;
+            zoomIn?: AABB;
+            zoomOut?: AABB;
             zoom?: number;
+            noZoom?: boolean;
         }>;
         vision?: {
             dist?: number;
@@ -50,23 +51,25 @@ export interface BuildingDef {
             residue: string;
             sound?: string;
         };
-        collision?: AABBWithHeight[];
+        collision?: AABB[];
     };
     mapObjects: Array<{
-        type?: string | (() => string);
+        type?: string | Record<string, number>;
         pos: Vec2;
         scale: number;
         ori: number;
         ignoreMapSpawnReplacement?: boolean;
         inheritOri?: boolean;
         puzzlePiece?: string;
+        layer?: number;
     }>;
     porch_01?: string;
     stand?: string;
-    tree?: string;
+    tree?: string | Record<string, number>;
     tree_scale?: number;
     tree_loot?: string;
     bush_chance?: number;
+    bush?: string | Record<string, number>;
     decoration_01?: string;
     decoration_02?: string;
     mid_obs_01?: string;
@@ -97,22 +100,22 @@ export interface BuildingDef {
     botRightObs?: string;
     ignoreMapSpawnReplacement?: boolean;
     mapGroundPatches?: Array<{
-        bound: AABBWithHeight;
+        bound: AABB;
         color: number;
         order?: number;
         roughness?: number;
         offsetDist?: number;
         useAsMapShape?: boolean;
     }>;
-    bridgeLandBounds?: AABBWithHeight[];
+    bridgeLandBounds?: AABB[];
     groundTintLt?: number;
     groundTintDk?: number;
-    bridgeWaterBounds?: AABBWithHeight[];
+    bridgeWaterBounds?: AABB[];
     bonus_room?: string;
     bonus_door?: string;
-    goreRegion?: AABBWithHeight;
+    goreRegion?: AABB;
     tree_08c?: string;
-    crate?: string;
+    crate?: string | Record<string, number>;
     oris?: number[];
     vault?: string;
     scale?: {
@@ -136,7 +139,7 @@ export interface BuildingDef {
         volume: number;
     }>;
     healRegions?: Array<{
-        collision: AABBWithHeight;
+        collision: Collider;
         healRate: number;
     }>;
     center_loot?: string;
@@ -145,7 +148,7 @@ export interface BuildingDef {
     entry_loot?: string;
     obs?: string;
     ceilingImg?: string;
-    specialLoot?: string;
+    specialLoot?: string | Record<string, number>;
     basement?: string;
     grass_color?: number;
     tree_small?: string;

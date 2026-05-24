@@ -3,9 +3,11 @@ import {
     type BulletDef,
     BulletDefs,
 } from "../../../../shared/defs/gameObjects/bulletDefs";
+import { PerkProperties } from "../../../../shared/defs/gameObjects/perkDefs";
 import { MapObjectDefs } from "../../../../shared/defs/mapObjectDefs";
 import type { ObstacleDef } from "../../../../shared/defs/mapObjectsTyping";
-import { GameConfig } from "../../../../shared/gameConfig";
+import { type DamageType, GameConfig } from "../../../../shared/gameConfig";
+import { Constants } from "../../../../shared/net/net";
 import { ObjectType } from "../../../../shared/net/objectSerializeFns";
 import { coldet } from "../../../../shared/utils/coldet";
 import { collider } from "../../../../shared/utils/collider";
@@ -15,18 +17,10 @@ import { type Vec2, v2 } from "../../../../shared/utils/v2";
 import type { Game } from "../game";
 import type { DamageParams, GameObject } from "./gameObject";
 import type { Obstacle } from "./obstacle";
-import { Player } from "./player";
+import type { Player } from "./player";
 
 // NOTE: most of this code was copied from surviv client and bit heroes arena client
 // to get bullet collision the most accurate possible
-
-function transformSegment(p0: Vec2, p1: Vec2, pos: Vec2, dir: Vec2) {
-    const ang = Math.atan2(dir.y, dir.x);
-    return {
-        p0: v2.add(pos, v2.rotate(p0, ang)),
-        p1: v2.add(pos, v2.rotate(p1, ang)),
-    };
-}
 
 interface BulletCollision {
     type: "obstacle" | "player" | "pan";
@@ -48,11 +42,14 @@ export interface BulletParams {
     dir: Vec2;
     layer: number;
     damageMult: number;
-    damageType: number;
+    damageType: DamageType;
     shotFx?: boolean;
     shotOffhand?: boolean;
     lastShot?: boolean;
     splinter?: boolean;
+    apRounds?: boolean;
+    highVelocity?: boolean;
+    combatStims?: boolean;
     shotAlt?: boolean;
     trailSaturated?: boolean;
     trailSmall?: boolean;
@@ -64,6 +61,9 @@ export interface BulletParams {
     onHitFx?: string;
     clipDistance?: boolean;
     distance?: number;
+    hasModifier?: boolean;
+    speedMult?: number;
+    distanceMult?: number;
 }
 
 export class BulletBarn {
@@ -158,6 +158,9 @@ export class Bullet {
     hasSpecialFx!: boolean;
     shotAlt!: boolean;
     splinter!: boolean;
+    apRounds!: boolean;
+    highVelocity!: boolean;
+    combatStims!: boolean;
     trailSaturated!: boolean;
     trailSmall!: boolean;
     trailThick!: boolean;
@@ -166,12 +169,16 @@ export class Bullet {
     damageSelf!: boolean;
     damage!: number;
     damageMult!: number;
+    hasModifier!: boolean;
+    speedMult!: number;
+    distanceMult!: number;
     onHitFx?: string;
     hasOnHitFx!: boolean;
-    damageType!: number;
+    damageType!: DamageType;
     isShrapnel!: boolean;
     skipCollision!: boolean;
     reflected!: boolean;
+    canReflect!: boolean;
 
     constructor(public bulletManager: BulletBarn) {}
 
@@ -197,12 +204,16 @@ export class Bullet {
         this.reflectObjId = params.reflectObjId ?? 0;
         this.reflected = false;
         this.lastShot = params.lastShot ?? false;
-        this.speed = bulletDef.speed * variance;
+        this.speedMult = params.speedMult ?? 1;
+        this.speed = bulletDef.speed * this.speedMult * variance;
+        this.hasModifier = this.speedMult !== 1 || this.distanceMult !== 1;
         this.onHitFx = bulletDef.onHit ?? params.onHitFx;
+        this.canReflect = this.onHitFx !== "explosion_rounds";
+
         this.hasOnHitFx = !!this.onHitFx;
 
         const player = this.bulletManager.game.objectRegister.getById(this.playerId);
-        if (player instanceof Player) {
+        if (player?.__type === ObjectType.Player) {
             this.player = player;
         } else {
             this.player = undefined;
@@ -214,17 +225,21 @@ export class Bullet {
         // Don't apply the jitter on shotguns as they have inherent jitter
         // due to how the player computes the shot start position.
         const distAdjIdxMax = 16;
-        const distAdjIdx =
-            params.bulletType !== "bullet_shotgun" && params.bulletType !== "bullet_frag"
-                ? util.randomInt(0, distAdjIdxMax)
-                : distAdjIdxMax / 2;
+        const distAdjIdx = !bulletDef.noDistAdj
+            ? util.randomInt(0, distAdjIdxMax)
+            : distAdjIdxMax / 2;
         const distAdj = math.remap(distAdjIdx, 0, distAdjIdxMax, -1.0, 1.0);
 
         let distance =
             bulletDef.distance /
             Math.pow(GameConfig.bullet.reflectDistDecay, this.reflectCount);
         if (params.clipDistance) {
-            distance = math.min(bulletDef.distance, params.distance!);
+            distance = math.min(
+                bulletDef.distance * (params.distanceMult ?? 1),
+                params.distance!,
+            );
+            // we don't want it to be multiplied twice
+            params.distanceMult = 1;
         }
 
         this.shotSourceType = params.gameSourceType;
@@ -235,12 +250,20 @@ export class Bullet {
         this.shotOffhand = params.shotOffhand ?? false;
         this.shotAlt = params.shotAlt ?? false;
         this.splinter = params.splinter ?? false;
+        this.apRounds = params.apRounds ?? false;
+        this.highVelocity = params.highVelocity ?? false;
+        this.combatStims = params.combatStims ?? false;
         this.trailSaturated = params.trailSaturated ?? false;
         this.trailSmall = params.trailSmall ?? false;
         this.trailThick = params.trailThick ?? false;
         this.varianceT = params.varianceT ?? 1;
         this.distAdjIdx = distAdjIdx;
-        this.distance = this.maxDistance = distance * variance + distAdj;
+        this.distanceMult = params.distanceMult ?? 1;
+        this.distance = this.maxDistance = math.clamp(
+            distance * this.distanceMult * variance + distAdj,
+            0,
+            Constants.MaxPosition,
+        );
         this.clipDistance = !!params.clipDistance;
         this.endPos = v2.add(params.pos, v2.mul(this.dir, this.distance));
         this.clientEndPos = v2.copy(this.endPos);
@@ -252,6 +275,9 @@ export class Bullet {
         this.hasSpecialFx =
             this.shotAlt ||
             this.splinter ||
+            this.apRounds ||
+            this.highVelocity ||
+            this.combatStims ||
             this.trailSaturated ||
             this.trailSmall ||
             this.trailThick;
@@ -354,15 +380,24 @@ export class Bullet {
         }
 
         if (!this.alive && !this.reflected && this.onHitFx) {
+            const def = GameObjectDefs[this.bulletType] as BulletDef;
+            // explosion_rounds_sg has lower volume and is used for shotguns
+            // since they spawn a bunch of explosions at once
+            if (this.onHitFx === "explosion_rounds" && def.useExplosiveRoundsAlt) {
+                this.onHitFx = "explosion_rounds_sg";
+            }
             this.bulletManager.game.explosionBarn.addExplosion(
                 this.onHitFx,
                 // spawn the explosion a bit behind the bullet so it won't spawn inside obstacles
-                v2.sub(this.pos, v2.mul(this.dir, 0.01)),
+                v2.sub(this.pos, v2.mul(this.dir, 0.1)),
                 this.layer,
-                this.shotSourceType,
-                this.mapSourceType,
-                this.damageType,
-                this.player,
+                {
+                    source: this.player,
+                    gameSourceType: this.shotSourceType,
+                    weaponSourceType: this.shotSourceType,
+                    mapSourceType: this.mapSourceType,
+                    damageType: this.damageType,
+                },
             );
         }
 
@@ -435,13 +470,13 @@ export class Bullet {
                 if (obj.hasActivePan()) {
                     const p = obj;
                     const panSeg = p.getPanSegment()!;
-                    const oldSegment = transformSegment(
+                    const oldSegment = math.transformSegment(
                         panSeg.p0,
                         panSeg.p1,
                         p.posOld,
                         p.dirOld,
                     );
-                    const newSegment = transformSegment(
+                    const newSegment = math.transformSegment(
                         panSeg.p0,
                         panSeg.p1,
                         p.pos,
@@ -556,18 +591,24 @@ export class Bullet {
                 const mapDef = MapObjectDefs[col.obstacleType!] as ObstacleDef;
 
                 const def = GameObjectDefs[this.bulletType] as BulletDef;
+                // AP Obstacle Multiplier Buff
+                let obstacleMult = def.obstacleDamage;
+                if (this.apRounds) {
+                    obstacleMult *= PerkProperties.ap_rounds.obstacleMult;
+                }
 
                 this.bulletManager.damages.push({
                     obj: col.obj!,
                     gameSourceType: this.shotSourceType,
+                    weaponSourceType: this.shotSourceType,
                     mapSourceType: this.mapSourceType,
                     damageType: this.damageType,
                     source: this.player,
-                    amount: finalDamage * def.obstacleDamage,
+                    amount: finalDamage * obstacleMult,
                     dir: this.dir,
                 });
 
-                if (mapDef.reflectBullets && this.onHitFx !== "explosion_rounds") {
+                if (mapDef.reflectBullets) {
                     this.reflect(col.point, col.normal, col.obj!.__id);
                 }
 
@@ -586,12 +627,16 @@ export class Bullet {
                     this.bulletManager.damages.push({
                         obj: col.player!,
                         gameSourceType: this.shotSourceType,
+                        weaponSourceType: this.shotSourceType,
                         mapSourceType: this.mapSourceType,
                         source: this.player,
                         damageType: this.damageType,
                         amount: multiplier * finalDamage,
                         dir: this.dir,
                         isExplosion: this.isShrapnel,
+                        armorPenetration: this.apRounds
+                            ? PerkProperties.ap_rounds.armorPenetration
+                            : undefined,
                     });
                 }
                 hit = col.collidable;
@@ -608,6 +653,7 @@ export class Bullet {
     }
 
     reflect(pos: Vec2, normal: Vec2, objId: number) {
+        if (!this.canReflect) return;
         if (this.reflectCount >= GameConfig.bullet.maxReflect) return;
         if (this.reflected) return;
         this.reflected = true;
@@ -629,7 +675,10 @@ export class Bullet {
             pos,
             dir,
             layer: this.layer,
+            hasModifier: this.hasModifier,
             damageMult: this.damageMult,
+            speedMult: this.speedMult,
+            distanceMult: this.distanceMult,
             shotFx: false,
             reflectCount: this.reflectCount + 1,
             reflectObjId: objId,
@@ -637,6 +686,9 @@ export class Bullet {
             damageType: this.damageType,
             shotAlt: this.shotAlt,
             splinter: this.splinter,
+            apRounds: this.apRounds,
+            highVelocity: this.highVelocity,
+            combatStims: this.combatStims,
             trailSaturated: this.trailSaturated,
             trailSmall: this.trailSmall,
             trailThick: this.trailThick,

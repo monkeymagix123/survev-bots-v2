@@ -1,4 +1,3 @@
-import { SpecialAirdropConfig } from "../../../../shared/defs/maps/factionDefs";
 import { GameConfig, GasMode } from "../../../../shared/gameConfig";
 import { math } from "../../../../shared/utils/math";
 import { util } from "../../../../shared/utils/util";
@@ -11,11 +10,6 @@ interface StageData {
     rad: number;
     damage: number;
 }
-
-// Wave maps use the gas stage counter as a "lobby closed" gate (`stage >= 2`),
-// but we don't want the circle to keep shrinking (bots will die in the red zone).
-// Freeze gas progression once we reach this stage.
-const WAVE_GAS_STOP_STAGE = 2;
 
 const GasStages: StageData[] = [
     {
@@ -260,74 +254,7 @@ export class Gas {
         }
     }
 
-    handleSpecialAirdrop(): void {
-        const specialAirdrop = this.game.planeBarn.specialAirdrop;
-        if (!specialAirdrop) return;
-        if (specialAirdrop.dropped) return;
-
-        if (
-            !specialAirdrop.canDrop &&
-            this.circleIdx == SpecialAirdropConfig.startCircle
-        ) {
-            specialAirdrop.canDrop = true;
-        }
-
-        if (!specialAirdrop.canDrop || this.circleIdx != SpecialAirdropConfig.endCircle)
-            return;
-
-        specialAirdrop.dropped = true;
-        specialAirdrop.canDrop = false;
-
-        const red = this.game.playerBarn.teams[0];
-        const redMean = v2.create(0, 0);
-        for (let i = 0; i < red.livingPlayers.length; i++) {
-            const player = red.livingPlayers[i];
-            if (player.disconnected) continue;
-            redMean.x += player.pos.x;
-            redMean.y += player.pos.y;
-        }
-
-        redMean.x /= red.livingPlayers.length;
-        redMean.y /= red.livingPlayers.length;
-
-        const blue = this.game.playerBarn.teams[1];
-        const blueMean = v2.create(0, 0);
-        for (let i = 0; i < blue.livingPlayers.length; i++) {
-            const player = blue.livingPlayers[i];
-            if (player.disconnected) continue;
-            blueMean.x += player.pos.x;
-            blueMean.y += player.pos.y;
-        }
-
-        blueMean.x /= blue.livingPlayers.length;
-        blueMean.y /= blue.livingPlayers.length;
-
-        const r = v2.mul(v2.randomUnit(), 5);
-        const pos = v2.add(v2.midpoint(redMean, blueMean), r);
-        this.game.planeBarn.addAirdrop(pos, "airdrop_crate_04"); //golden airdrop
-    }
-
     advanceGasStage() {
-        if (this.game.map.isWaveMap && this.stage >= WAVE_GAS_STOP_STAGE) {
-            // Snap to the current safe-zone circle and stop advancing.
-            // Ensure old/new circles match so clients render a stable ring.
-            this._running = false;
-            this.mode = GasMode.Waiting;
-            this.duration = 0;
-            this._gasTicker = 0;
-            this.gasT = 0;
-
-            this.posOld = v2.copy(this.posNew);
-            this.currentPos = v2.copy(this.posNew);
-            this.radOld = this.radNew;
-            this.currentRad = this.radNew;
-
-            this.dirty = true;
-            this.timeDirty = true;
-            this.game.updateData();
-            return;
-        }
-
         this.stage++;
         this._running = true;
 
@@ -367,16 +294,6 @@ export class Gas {
         }
 
         if (this.circleIdx !== circleIdxOld) {
-            if (this.game.map.isFactionPvp) {
-                if (this.circleIdx == 1) {
-                    const red = this.game.playerBarn.teams[0];
-                    const blue = this.game.playerBarn.teams[1];
-                    red.highestAliveCount = red.livingPlayers.length;
-                    blue.highestAliveCount = blue.livingPlayers.length;
-                }
-                this.handleSpecialAirdrop();
-            }
-
             if (this.game.map.mapDef.gameConfig.roles) {
                 this.game.playerBarn.scheduleRoleAssignments();
             }

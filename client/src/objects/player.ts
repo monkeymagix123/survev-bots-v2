@@ -1,5 +1,13 @@
 import * as PIXI from "pixi.js-legacy";
 import { GameObjectDefs, type LootDef } from "../../../shared/defs/gameObjectDefs";
+import type { ExplosionDef } from "../../../shared/defs/gameObjects/explosionsDefs";
+import type {
+    BackpackDef,
+    BoostDef,
+    ChestDef,
+    HealDef,
+    HelmetDef,
+} from "./../../../shared/defs/gameObjects/gearDefs";
 import type { GunDef } from "../../../shared/defs/gameObjects/gunDefs";
 import type { MeleeDef } from "../../../shared/defs/gameObjects/meleeDefs";
 import type { OutfitDef } from "../../../shared/defs/gameObjects/outfitDefs";
@@ -18,10 +26,10 @@ import {
 import type { ObjectData, ObjectType } from "../../../shared/net/objectSerializeFns";
 import {
     type GroupStatus,
+    getPlayerStatusUpdateRate,
     type LocalDataWithDirty,
     type PlayerInfo,
     type PlayerStatus,
-    getPlayerStatusUpdateRate,
 } from "../../../shared/net/updateMsg";
 import { coldet } from "../../../shared/utils/coldet";
 import { collider } from "../../../shared/utils/collider";
@@ -33,23 +41,18 @@ import { type Vec2, v2 } from "../../../shared/utils/v2";
 import { Animations, Bones, IdlePoses, Pose } from "../animData";
 import type { AudioManager } from "../audioManager";
 import type { Camera } from "../camera";
-import type { DebugOptions } from "../config";
-import { debugLines } from "../debugLines";
+import type { DebugRenderOpts } from "../config";
+import { debugLines } from "../debug/debugLines";
 import { device } from "../device";
+import { errorLogManager } from "../errorLogs";
 import type { Ctx } from "../game";
 import { helpers } from "../helpers";
+import type { InputHandler } from "../input";
+import type { InputBinds } from "./../inputBinds";
 import type { SoundHandle } from "../lib/createJS";
 import type { Map } from "../map";
 import type { Renderer } from "../renderer";
 import type { UiManager2 } from "../ui/ui2";
-import type {
-    BackpackDef,
-    BoostDef,
-    ChestDef,
-    HealDef,
-    HelmetDef,
-} from "./../../../shared/defs/gameObjects/gearDefs";
-import type { InputBinds } from "./../inputBinds";
 import { Pool } from "./objectPool";
 import type { Obstacle } from "./obstacle";
 import type { Emitter, ParticleBarn } from "./particles";
@@ -102,8 +105,8 @@ function createSprite() {
     return sprite;
 }
 
-const desktopZoomRads = Object.values(GameConfig.scopeZoomRadius.desktop) as number[];
-const mobileZoomRads = Object.values(GameConfig.scopeZoomRadius.mobile) as number[];
+const desktopZoomRads = Object.values(GameConfig.scopeZoomRadius.desktop);
+const mobileZoomRads = Object.values(GameConfig.scopeZoomRadius.mobile);
 
 class Gun {
     gunBarrel = createSprite();
@@ -161,7 +164,7 @@ class Gun {
     }
 }
 
-interface AnimCtx {
+export interface AnimCtx {
     playerBarn: PlayerBarn;
     map: Map;
     audioManager: AudioManager;
@@ -273,6 +276,7 @@ export class Player implements AbstractObject {
     useItemEmitter: Emitter | null = null;
     hasteEmitter: Emitter | null = null;
     passiveHealEmitter: Emitter | null = null;
+    adrenalineEmitter: Emitter | null = null;
     downed = false;
     wasDowned = false;
     bleedTicker = 0;
@@ -333,9 +337,11 @@ export class Player implements AbstractObject {
         m_actionSeq: number;
         m_wearingPan: boolean;
         m_healEffect: boolean;
+        m_adrenalineEffect: boolean;
         m_frozen: boolean;
         m_frozenOri: number;
-        m_hasteType: HasteType;
+        m_frozenType: string;
+        m_hasteType: Exclude<HasteType, HasteType.Count>;
         m_hasteSeq: number;
         m_actionItem: string;
         m_scale: number;
@@ -486,8 +492,10 @@ export class Player implements AbstractObject {
             m_actionSeq: 0,
             m_wearingPan: false,
             m_healEffect: false,
+            m_adrenalineEffect: false,
             m_frozen: false,
             m_frozenOri: 0,
+            m_frozenType: "",
             m_hasteType: HasteType.None,
             m_hasteSeq: 0,
             m_actionItem: "",
@@ -525,6 +533,10 @@ export class Player implements AbstractObject {
             this.passiveHealEmitter.stop();
             this.passiveHealEmitter = null;
         }
+        if (this.adrenalineEmitter) {
+            this.adrenalineEmitter.stop();
+            this.adrenalineEmitter = null;
+        }
     }
 
     m_updateData(
@@ -560,8 +572,13 @@ export class Player implements AbstractObject {
             this.m_netData.m_actionSeq = data.actionSeq;
             this.m_netData.m_wearingPan = data.wearingPan;
             this.m_netData.m_healEffect = data.healEffect;
+            this.m_netData.m_adrenalineEffect = data.lastStandEffect;
             this.m_netData.m_frozen = data.frozen;
             this.m_netData.m_frozenOri = data.frozenOri;
+            if (this.m_netData.m_frozenType !== data.frozenType) {
+                this.updateFrozenImage = true;
+            }
+            this.m_netData.m_frozenType = data.frozenType;
             this.m_netData.m_hasteType = data.hasteType;
             this.m_netData.m_hasteSeq = data.hasteSeq;
             this.m_netData.m_actionItem = data.actionItem;
@@ -590,7 +607,7 @@ export class Player implements AbstractObject {
         }
     }
 
-    m_setLocalData(data: LocalDataWithDirty, _playerBarn: unknown) {
+    m_setLocalData(data: LocalDataWithDirty) {
         const scopeOld = this.m_localData.m_scope;
 
         if (data.healthDirty) {
@@ -690,7 +707,7 @@ export class Player implements AbstractObject {
         );
         const pos = v2.add(this.m_pos, v2.rotate(off, ang));
         const rad = meleeDef.attack.rad;
-        return collider.createCircle(pos, rad, 0);
+        return collider.createCircle(pos, rad);
     }
 
     m_hasActivePan() {
@@ -702,7 +719,27 @@ export class Player implements AbstractObject {
 
     m_getPanSegment() {
         const panSurface = this.m_netData.m_wearingPan ? "unequipped" : "equipped";
-        return (GameObjectDefs.pan as MeleeDef).reflectSurface?.[panSurface];
+        let surface = (GameObjectDefs.pan as MeleeDef).reflectSurface![panSurface];
+
+        const scale = this.m_netData.m_scale;
+
+        if (scale !== 1) {
+            if (panSurface === "unequipped") {
+                surface = {
+                    p0: v2.mul(surface.p0, scale),
+                    p1: v2.mul(surface.p1, scale),
+                };
+            } else {
+                const s = (scale - 1) * 0.75;
+                const off = v2.create(s, -s);
+                surface = {
+                    p0: v2.add(surface.p0, off),
+                    p1: v2.add(surface.p1, off),
+                };
+            }
+        }
+
+        return surface;
     }
 
     canInteract(map: Map) {
@@ -805,14 +842,20 @@ export class Player implements AbstractObject {
             this.posInterpTicker += dt;
             const posT = math.clamp(this.posInterpTicker / camera.m_interpInterval, 0, 1);
             this.m_visualPos = v2.lerp(posT, this.m_visualPosOld, this.m_pos);
-
-            this.dirInterpolationTicker += dt;
-            const dirT = math.clamp(
-                this.dirInterpolationTicker / camera.m_interpInterval,
-                0,
-                1,
-            );
-            this.m_visualDir = v2.lerp(dirT, this.m_visualDirOld, this.m_dir);
+            if (
+                !camera.m_localRotationEnabled ||
+                !isActivePlayer ||
+                isSpectating ||
+                displayingStats
+            ) {
+                this.dirInterpolationTicker += dt;
+                const dirT = math.clamp(
+                    this.dirInterpolationTicker / camera.m_interpInterval,
+                    0,
+                    1,
+                );
+                this.m_visualDir = v2.lerp(dirT, this.m_visualDirOld, this.m_dir);
+            }
         } else {
             this.m_visualPos = v2.copy(this.m_pos);
             this.m_visualDir = v2.copy(this.m_dir);
@@ -859,25 +902,33 @@ export class Player implements AbstractObject {
         let insideObstacle: Obstacle | null = null;
         let doorErrorObstacle = null;
         const obstacles = map.m_obstaclePool.m_getPool();
-        for (let N = 0; N < obstacles.length; N++) {
-            const H = obstacles[N];
-            if (H.active && !H.dead && H.layer == this.m_netData.m_layer) {
-                if (H.isBush) {
+        for (let i = 0; i < obstacles.length; i++) {
+            const obstacle = obstacles[i];
+            if (
+                obstacle.active &&
+                !obstacle.dead &&
+                obstacle.layer == this.m_netData.m_layer
+            ) {
+                if (obstacle.isBush) {
                     const rad = this.m_rad * 0.25;
-                    if (collider.intersectCircle(H.collider, this.m_pos, rad)) {
-                        insideObstacle = H;
+                    if (collider.intersectCircle(obstacle.collider, this.m_pos, rad)) {
+                        insideObstacle = obstacle;
                     }
-                } else if (H.isDoor) {
+                } else if (obstacle.isDoor) {
                     const rad = this.m_rad + 0.25;
-                    const toDoor = v2.sub(H.pos, this.m_pos);
-                    const doorDir = v2.rotate(v2.create(1, 0), H.rot);
-                    const res = collider.intersectCircle(H.collider, this.m_pos, rad);
+                    const toDoor = v2.sub(obstacle.pos, this.m_pos);
+                    const doorDir = v2.rotate(v2.create(1, 0), obstacle.rot);
+                    const res = collider.intersectCircle(
+                        obstacle.collider,
+                        this.m_pos,
+                        rad,
+                    );
                     if (
                         res &&
-                        (H.door.locked ||
-                            (H.door.openOneWay && v2.dot(toDoor, doorDir) < 0))
+                        (obstacle.door.locked ||
+                            (obstacle.door.openOneWay && v2.dot(toDoor, doorDir) < 0))
                     ) {
-                        doorErrorObstacle = H;
+                        doorErrorObstacle = obstacle;
                     }
                 }
             }
@@ -1172,6 +1223,32 @@ export class Player implements AbstractObject {
             this.passiveHealEmitter.layer = this.renderLayer;
             this.passiveHealEmitter.zOrd = this.renderZOrd + 1;
         }
+
+        const adrenalineEmitterType = (
+            GameObjectDefs[playerInfo.loadout.boost] as BoostDef
+        ).emitter;
+        if (
+            this.m_netData.m_adrenalineEffect &&
+            (!this.adrenalineEmitter ||
+                this.adrenalineEmitter.type !== adrenalineEmitterType)
+        ) {
+            this.adrenalineEmitter?.stop();
+            this.adrenalineEmitter = particleBarn.addEmitter(adrenalineEmitterType, {
+                color: 0x4da6ff,
+                pos: this.m_pos,
+                layer: this.layer,
+                rateMult: 0.33,
+            });
+        } else if (!this.m_netData.m_adrenalineEffect && this.adrenalineEmitter) {
+            this.adrenalineEmitter.stop();
+            this.adrenalineEmitter = null;
+        }
+        if (this.adrenalineEmitter) {
+            this.adrenalineEmitter.pos = v2.add(this.m_pos, v2.create(0, 0.1));
+            this.adrenalineEmitter.layer = this.renderLayer;
+            this.adrenalineEmitter.zOrd = this.renderZOrd + 1;
+        }
+
         if (isActivePlayer && !isSpectating) {
             const curWeapIdx = this.m_localData.m_curWeapIdx;
             const curWeap = this.m_localData.m_weapons[curWeapIdx];
@@ -1249,7 +1326,13 @@ export class Player implements AbstractObject {
 
         this.updateAura(dt, isActivePlayer, activePlayer);
 
-        this.Zr();
+        this.updateRotation(
+            inputBinds.input,
+            camera,
+            isActivePlayer,
+            isSpectating,
+            displayingStats,
+        );
 
         // @NOTE: There's an off-by-one frame issue for effects spawned earlier
         // in this frame that reference renderLayer / zOrd / zIdx. This issue is
@@ -1283,7 +1366,7 @@ export class Player implements AbstractObject {
         this.isNew = false;
     }
 
-    render(camera: Camera, debug: DebugOptions) {
+    render(camera: Camera, debug: DebugRenderOpts) {
         const screenPos = camera.m_pointToScreen(this.m_visualPos);
         const screenScale = camera.m_pixels(1);
         this.container.position.set(screenPos.x, screenPos.y);
@@ -1292,7 +1375,7 @@ export class Player implements AbstractObject {
         this.auraContainer.position.set(screenPos.x, screenPos.y);
         this.auraContainer.scale.set(screenScale, screenScale);
 
-        if (IS_DEV && debug.render.players) {
+        if (IS_DEV && debug.players) {
             debugLines.addCircle(this.m_pos, this.m_rad, 0xff0000, 0);
 
             const weapDef = GameObjectDefs[this.m_netData.m_activeWeapon];
@@ -1314,6 +1397,16 @@ export class Player implements AbstractObject {
             } else if (weapDef.type === "melee") {
                 const coll = this.getMeleeCollider();
                 debugLines.addCollider(coll, 0xff0000, 0.1);
+            }
+            if (this.m_netData.m_wearingPan || this.m_netData.m_activeWeapon == "pan") {
+                const pan = this.m_getPanSegment();
+                const { p1, p0 } = math.transformSegment(
+                    pan.p0,
+                    pan.p1,
+                    this.m_pos,
+                    this.m_dir,
+                );
+                debugLines.addLine(p0, p1, 0xff00ff);
             }
         }
     }
@@ -1420,8 +1513,13 @@ export class Player implements AbstractObject {
         this.bodySprite.scale.set(0.25, 0.25);
         this.bodySprite.visible = true;
 
-        if (this.m_netData.m_frozen && this.updateFrozenImage) {
-            const frozenSprites = map.getMapDef().biome.frozenSprites || [];
+        if (
+            this.m_netData.m_frozen &&
+            this.updateFrozenImage &&
+            this.m_netData.m_frozenType
+        ) {
+            const frozenDef = GameObjectDefs[this.m_netData.m_frozenType] as ExplosionDef;
+            const frozenSprites = frozenDef.frozenSprites || [];
             if (frozenSprites.length > 0) {
                 const sprite =
                     frozenSprites[Math.floor(Math.random() * frozenSprites.length)];
@@ -1440,16 +1538,26 @@ export class Player implements AbstractObject {
         if (map.factionMode && !outfitDef.ghillie) {
             const playerInfo = playerBarn.getPlayerInfo(this.__id);
             const teamId = playerInfo.teamId;
-            const teamSprites = ["player-patch-01.img", "player-patch-02.img"];
+
+            const teamSprites = map.potatoMode
+                ? ["player-patch-01po.img", "player-patch-02po.img"]
+                : ["player-patch-01.img", "player-patch-02.img"];
+
             const teamIdx = (teamId - 1) % teamSprites.length;
             const sprite = teamSprites[teamIdx];
-            const tint = GameConfig.teamColors[teamIdx];
             const rot = math.oriToRad(3) + Math.PI * 0.5;
+
             this.patchSprite.texture = PIXI.Texture.from(sprite);
             this.patchSprite.rotation = rot;
-            this.patchSprite.tint = tint;
             this.patchSprite.scale.set(0.25, 0.25);
             this.patchSprite.visible = true;
+
+            if (map.potatoMode) {
+                this.patchSprite.tint = 0xffffff;
+            } else {
+                const tint = GameConfig.teamColors[teamIdx];
+                this.patchSprite.tint = tint;
+            }
         } else {
             this.patchSprite.visible = false;
         }
@@ -1725,8 +1833,8 @@ export class Player implements AbstractObject {
 
         // Class visors
         if (
-            map.perkMode &&
             this.m_netData.m_role != "" &&
+            (GameObjectDefs[this.m_netData.m_role] as RoleDef)?.visorImg &&
             this.m_netData.m_helmet != "" &&
             !outfitDef.ghillie
         ) {
@@ -1780,7 +1888,13 @@ export class Player implements AbstractObject {
         }
     }
 
-    Zr() {
+    updateRotation(
+        inputManager: InputHandler,
+        camera: Camera,
+        isActivePlayer: boolean,
+        isSpectating: boolean,
+        displayingStats: boolean,
+    ) {
         const e = function (e: PIXI.Container, t: Pose) {
             e.position.set(t.pos.x, t.pos.y);
             e.pivot.set(-t.pivot.x, -t.pivot.y);
@@ -1799,7 +1913,27 @@ export class Player implements AbstractObject {
         }
         this.handLContainer.position.x -= this.gunRecoilL * 1.125;
         this.handRContainer.position.x -= this.gunRecoilR * 1.125;
-        this.bodyContainer.rotation = -Math.atan2(this.m_visualDir.y, this.m_visualDir.x);
+
+        // Local Rotation
+        const mouseY = inputManager.mousePos.y;
+        const mouseX = inputManager.mousePos.x;
+        if (
+            !device.mobile &&
+            camera.m_localRotationEnabled &&
+            isActivePlayer &&
+            !isSpectating &&
+            !displayingStats
+        ) {
+            this.bodyContainer.rotation = Math.atan2(
+                mouseY - window.innerHeight / 2,
+                mouseX - window.innerWidth / 2,
+            );
+        } else {
+            this.bodyContainer.rotation = -Math.atan2(
+                this.m_visualDir.y,
+                this.m_visualDir.x,
+            );
+        }
     }
 
     playActionStartEffect(
@@ -1994,6 +2128,8 @@ export class Player implements AbstractObject {
                 idlePose = "bullpup";
             } else if (curWeapDef.isLauncher) {
                 idlePose = "launcher";
+            } else if (curWeapDef.isMinigun) {
+                idlePose = "minigun";
             } else {
                 idlePose = curWeapDef.isDual ? "dualRifle" : "rifle";
             }
@@ -2110,10 +2246,10 @@ export class Player implements AbstractObject {
             for (let i = 0; i < anim.effects.length; i++) {
                 const effect = anim.effects[i];
                 if (effect.time >= ticker && effect.time < f) {
-                    (this[effect.fn as keyof this] as any).apply(this, [
+                    (this[effect.fn] as (ctx: AnimCtx, args: unknown) => void)(
                         AnimCtx,
                         effect.args,
-                    ]);
+                    );
                 }
             }
             if (w) {
@@ -2136,7 +2272,7 @@ export class Player implements AbstractObject {
         }
     }
 
-    animSetThrowableState(_animCtx: unknown, args: { state: string }) {
+    animSetThrowableState(_animCtx: Partial<AnimCtx>, args: { state: string }) {
         this.throwableState = args.state;
     }
 
@@ -2177,7 +2313,7 @@ export class Player implements AbstractObject {
         }
     }
 
-    animMeleeCollision(animCtx: Partial<AnimCtx>, args: { playerHit: string }) {
+    animMeleeCollision(animCtx: Partial<AnimCtx>, args: { playerHit?: string }) {
         const meleeDef = GameObjectDefs[this.m_netData.m_activeWeapon] as MeleeDef;
         if (meleeDef && meleeDef.type == "melee") {
             const meleeCol = this.getMeleeCollider();
@@ -2214,7 +2350,7 @@ export class Player implements AbstractObject {
                             this.m_pos,
                             meleeDir,
                             meleeDist,
-                            GameConfig.player.meleeHeight,
+                            obstacle.height,
                             this.layer,
                             false,
                         );
@@ -2289,7 +2425,7 @@ export class Player implements AbstractObject {
                             ((Math.random() - 0.5) * Math.PI) / 3,
                         );
                         const hitSound =
-                            meleeDef.sound[args.playerHit] || meleeDef.sound.playerHit;
+                            meleeDef.sound[args.playerHit!] || meleeDef.sound.playerHit;
                         hits.push({
                             pen: col.pen,
                             prio: teamId == ourTeamId ? 2 : 0,
@@ -2477,12 +2613,9 @@ export class PlayerBarn {
     playerStatus: Record<number, PlayerStatus> = {};
     anonPlayerNames = false;
 
-    onMapLoad(_e: unknown) {}
-
     m_update(
         dt: number,
         activeId: number,
-        _r: unknown,
         renderer: Renderer,
         particleBarn: ParticleBarn,
         camera: Camera,
@@ -2590,7 +2723,7 @@ export class PlayerBarn {
         }
     }
 
-    m_render(camera: Camera, debug: DebugOptions) {
+    m_render(camera: Camera, debug: DebugRenderOpts) {
         const players = this.playerPool.m_getPool();
         for (let i = 0; i < players.length; i++) {
             const p = players[i];
@@ -2703,7 +2836,7 @@ export class PlayerBarn {
 
     updatePlayerStatus(
         teamId: number,
-        playerStatus: { players: PlayerStatus[] },
+        playerStatus: PlayerStatus[],
         factionMode: boolean,
     ) {
         // In factionMode, playerStatus refers to all playerIds in the game.
@@ -2711,16 +2844,16 @@ export class PlayerBarn {
         const team = this.getTeamInfo(teamId);
         const playerIds = factionMode ? this.playerIds : team.playerIds;
 
-        if (playerIds.length != playerStatus.players.length) {
-            console.error(
-                `PlayerIds and playerStatus.players out of sync. OurLen: ${playerIds.length} MsgLen: ${playerStatus.players.length} FactionMode: ${factionMode}`,
+        if (playerIds.length != playerStatus.length) {
+            errorLogManager.logError(
+                `PlayerIds and playerStatus out of sync. OurLen: ${playerIds.length} MsgLen: ${playerStatus.length} FactionMode: ${factionMode}`,
             );
             return;
         }
 
         for (let i = 0; i < playerIds.length; i++) {
             const playerId = playerIds[i];
-            const status = playerStatus.players[i];
+            const status = playerStatus[i];
             if (status.hasData) {
                 this.setPlayerStatus(playerId, status);
             }
@@ -2776,15 +2909,15 @@ export class PlayerBarn {
         return this.playerStatus[playerId];
     }
 
-    updateGroupStatus(groupId: number, groupStatus: { players: GroupStatus[] }) {
+    updateGroupStatus(groupId: number, groupStatus: GroupStatus[]) {
         const info = this.getGroupInfo(groupId);
-        if (info.playerIds.length != groupStatus.players.length) {
-            console.error("PlayerIds and groupStatus.players out of sync");
+        if (info.playerIds.length != groupStatus.length) {
+            errorLogManager.logError("PlayerIds and groupStatus out of sync");
             return;
         }
         for (let i = 0; i < info.playerIds.length; i++) {
             const playerId = info.playerIds[i];
-            const playerStatus = groupStatus.players[i];
+            const playerStatus = groupStatus[i];
 
             // Stash groupStatus values into playerStatus
             const status = this.getPlayerStatus(playerId);
@@ -2841,7 +2974,6 @@ export class PlayerBarn {
     addDeathEffect(
         targetId: number,
         killerId: number,
-        _sourceType: unknown,
         audioManager: AudioManager,
         particleBarn: ParticleBarn,
     ) {

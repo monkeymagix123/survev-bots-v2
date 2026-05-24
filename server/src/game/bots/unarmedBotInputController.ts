@@ -28,11 +28,12 @@ import {
 } from "./botControllerShared";
 import type { BotBrainType } from "./botBrain";
 import type { BotBrainProfile } from "./botBrainProfiles";
-import { logBotStability } from "./botStabilityLogger";
 import { type BotCombatMemory } from "./botCombat";
 import { BotTuning } from "./botTuning";
 import { BotAimController } from "./systems/botAimController";
+import type { BotLootScorer } from "./systems/botLootScorer";
 import { BotNavigationLite } from "./systems/botNavigationLite";
+import type { BotObjectInteractionScorer } from "./systems/botObjectInteractionScorer";
 import { BotPerception } from "./systems/botPerception";
 
 type BuildInputParams = {
@@ -43,6 +44,7 @@ type BuildInputParams = {
 
 export class UnarmedBotInputController {
     private _lastIdleReason?: string;
+    private _meleeSwingStopUntil = -Infinity;
 
     constructor(
         private readonly game: Game,
@@ -53,6 +55,8 @@ export class UnarmedBotInputController {
         private readonly navigation: BotNavigationLite,
         private readonly combat: BotCombatMemory,
         private readonly aim: BotAimController,
+        private readonly lootScorer: BotLootScorer,
+        private readonly objectInteractionScorer: BotObjectInteractionScorer,
     ) {}
 
     buildInput(params: BuildInputParams): net.InputMsg {
@@ -67,6 +71,7 @@ export class UnarmedBotInputController {
         const gas = this.game.gas;
         const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
 
+        const previousObjectTargetId = this.combat.objectTargetId;
         let objectTarget = getObjectTarget(this.game, this.combat);
         if (
             objectTarget &&
@@ -74,6 +79,10 @@ export class UnarmedBotInputController {
                 objectTarget.dead ||
                 !isObjectTargetStillValid(this.combat, objectTarget))
         ) {
+            this.objectInteractionScorer.markFailedObstacleTarget(
+                previousObjectTargetId,
+                timeNow,
+            );
             clearObjectInteraction(this.combat);
             objectTarget = undefined;
         }
@@ -122,6 +131,15 @@ export class UnarmedBotInputController {
             target: validTarget,
         });
 
+        const meleeBreakInRange =
+            meleeBreakActive &&
+            !!objectTarget &&
+            player.curWeapIdx === GameConfig.WeaponSlot.Melee &&
+            isInMeleeRange(player, objectTarget, aimUpdate.aimDir);
+        const holdStillForMeleeBreak =
+            BotTuning.objectInteract.meleeSwingStopSec > 0 &&
+            (meleeBreakInRange || timeNow < this._meleeSwingStopUntil);
+
         msg.toMouseLen = math.clamp(aimUpdate.aimLen, 0, net.Constants.MouseMaxDist);
         msg.toMouseDir = aimUpdate.aimDir;
 
@@ -142,9 +160,10 @@ export class UnarmedBotInputController {
                 (this.combat.movementStyle === "strafe" || weakLosAnchor) && !gasEmergency,
             strafeSign,
             anchor:
-                this.combat.movementStyle === "anchor" &&
-                !gasEmergency &&
-                !weakLosAnchor,
+                holdStillForMeleeBreak ||
+                ((this.combat.movementStyle === "anchor" &&
+                    !gasEmergency &&
+                    !weakLosAnchor)),
             aimDir: aimUpdate.aimDir,
             dt,
             moveDeadzone: meleeBreakActive
@@ -166,7 +185,11 @@ export class UnarmedBotInputController {
             moveDown: msg.moveDown,
         });
 
+        const previousLootTargetId = this.combat.lootTargetId;
         const lootTarget = resolveLootTarget(this.game, this.combat, player);
+        if (!lootTarget && previousLootTargetId !== undefined) {
+            this.lootScorer.markFailedLootTarget(previousLootTargetId, timeNow);
+        }
         applyLootInputs(msg, this.combat, player, lootTarget);
 
         const danger = computeBotDanger({
@@ -195,6 +218,10 @@ export class UnarmedBotInputController {
             targetAppearsUnarmed: this.perception.targetAppearsUnarmed,
         });
         if (abortObjectInteraction) {
+            this.objectInteractionScorer.markFailedObstacleTarget(
+                this.combat.objectTargetId,
+                timeNow,
+            );
             clearObjectInteraction(this.combat);
             objectTarget = undefined;
         }
@@ -265,7 +292,11 @@ export class UnarmedBotInputController {
         ) {
             if (player.curWeapIdx !== GameConfig.WeaponSlot.Melee) {
                 msg.addInput(GameConfig.Input.EquipMelee);
-            } else if (isInMeleeRange(player, objectTarget)) {
+            } else if (meleeBreakInRange) {
+                if (BotTuning.objectInteract.meleeSwingStopSec > 0) {
+                    this._meleeSwingStopUntil =
+                        timeNow + BotTuning.objectInteract.meleeSwingStopSec;
+                }
                 msg.shootHold = false;
                 msg.shootStart = true;
             }

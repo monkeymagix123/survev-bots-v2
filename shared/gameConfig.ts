@@ -1,6 +1,3 @@
-import { util } from "./utils/util";
-import gameConfig from "../game-config.json";
-
 export enum TeamMode {
     Solo = 1,
     Duo = 2,
@@ -31,6 +28,16 @@ export enum Action {
     ReloadAlt,
     UseItem,
     Revive,
+    Count,
+}
+
+export enum Rarity {
+    Stock,
+    Common,
+    Uncommon,
+    Rare,
+    Epic,
+    Mythic,
 }
 
 export enum WeaponSlot {
@@ -55,6 +62,7 @@ export enum Anim {
     CrawlForward,
     CrawlBackward,
     Revive,
+    Count,
 }
 
 export enum Plane {
@@ -67,6 +75,7 @@ export enum HasteType {
     Windwalk,
     Takedown,
     Inspire,
+    Count,
 }
 
 export enum Input {
@@ -109,12 +118,12 @@ export enum Input {
     Count,
 }
 
-const GameConfigBase = {
+export const GameConfig = {
     // started with 1000 to distinguish us from the original surviv protocol
     // the protocol we originated from was 78
     // remember to bump this every time a serialization function is changed
     // or a definition item added, removed or moved
-    protocolVersion: 1000,
+    protocolVersion: 1018,
     Input,
     EmoteSlot,
     WeaponSlot,
@@ -140,9 +149,9 @@ const GameConfigBase = {
         health: 100,
         reviveHealth: 24,
         minActiveTime: 10,
-        boostDecay: 0.33,
+        boostDecay: 0.375,
         boostMoveSpeed: 1.85,
-        boostHealAmount: 0.33,
+        boostHealAmounts: [0.5, 1.25, 1.5, 1.75],
         boostBreakpoints: [1, 1, 1.5, 0.5],
         scopeDelay: 0.25,
         baseSwitchDelay: 0.25,
@@ -156,7 +165,7 @@ const GameConfigBase = {
         bleedTickRate: 1,
         downedMoveSpeed: 4,
         downedRezMoveSpeed: 2,
-        downedDamageBuffer: 0.1, //time buffer after being downed where a player can't take damage
+        downedDamageBuffer: 0.1, // time buffer after being downed where a player can't take damage
         keepZoomWhileDowned: false,
         reviveDuration: 8,
         reviveRange: 5,
@@ -206,6 +215,8 @@ const GameConfigBase = {
                 mirv: 0,
                 snowball: 0,
                 potato: 0,
+                tomato: 0,
+                coconut: 0,
                 bandage: 0,
                 healthkit: 0,
                 soda: 0,
@@ -215,7 +226,7 @@ const GameConfigBase = {
                 "4xscope": 0,
                 "8xscope": 0,
                 "15xscope": 0,
-            } as Record<string, number>,
+            },
         },
         /* STRIP_FROM_PROD_CLIENT:END */
     },
@@ -251,8 +262,8 @@ const GameConfigBase = {
         soundRangeMax: 48,
         fallOff: 1.25,
     },
-    groupColors: [16776960, 16711935, 65535, 16733184],
-    teamColors: [13369344, 32511],
+    groupColors: [0xffff00, 0xff00ff, 0xffff, 0xff5400],
+    teamColors: [0xcc0000, 0x7eff],
     bullet: {
         maxReflect: 3,
         reflectDistDecay: 1.5,
@@ -265,70 +276,84 @@ const GameConfigBase = {
     structureLayerCount: 2,
     tracerColors: {
         "9mm": {
-            regular: 16704198,
-            saturated: 16767411,
-            chambered: 16744192,
+            regular: 0xfee2c6,
+            saturated: 0xffd9b3,
+            chambered: 0xff7f00,
+            apSaturated: 0xa54b0b,
             alphaRate: 0.92,
             alphaMin: 0.14,
         },
         "9mm_suppressed_bonus": {
-            regular: 16704198,
-            saturated: 16767411,
-            chambered: 16744192,
+            regular: 0xfee2c6,
+            saturated: 0xffd9b3,
+            chambered: 0xff7f00,
+            apSaturated: 0xa54b0b,
             alphaRate: 0.96,
             alphaMin: 0.28,
         },
         "9mm_cursed": {
-            regular: 1247488,
-            saturated: 1247488,
-            chambered: 1247488,
+            regular: 0x130900,
+            saturated: 0x130900,
+            chambered: 0x130900,
+            apSaturated: 0x130900,
             alphaRate: 0.92,
             alphaMin: 0.14,
         },
         "762mm": {
-            regular: 12965630,
-            saturated: 11257087,
-            chambered: 19711,
+            regular: 0xc5d6fe,
+            saturated: 0xabc4ff,
+            chambered: 0x4cff,
+            apSaturated: 0x0000c8,
             alphaRate: 0.94,
             alphaMin: 0.2,
         },
         "12gauge": {
-            regular: 16702684,
-            saturated: 16702684,
-            chambered: 16711680,
+            regular: 0xfedcdc,
+            saturated: 0xfedcdc,
+            chambered: 0xff0000,
+            apSaturated: 0x9f0000,
         },
         "556mm": {
-            regular: 11141010,
-            saturated: 11141010,
-            chambered: 3604224,
+            regular: 0xa9ff92,
+            saturated: 0xa9ff92,
+            chambered: 0x36ff00,
+            apSaturated: 0x308000,
             alphaRate: 0.92,
             alphaMin: 0.14,
         },
         "50AE": {
-            regular: 16773256,
-            saturated: 16773256,
-            chambered: 16768768,
+            regular: 0xfff088,
+            saturated: 0xfff088,
+            chambered: 0xffdf00,
+            apSaturated: 0xff8000,
         },
         "308sub": {
-            regular: 2435840,
-            saturated: 4608e3,
-            chambered: 1250816,
+            regular: 0x252b00,
+            saturated: 0x465000,
+            chambered: 0x131600,
+            apSaturated: 0x000a02,
             alphaRate: 0.92,
             alphaMin: 0.07,
         },
         flare: {
-            regular: 14869218,
-            saturated: 14869218,
-            chambered: 12895428,
+            regular: 0xe2e2e2,
+            saturated: 0xe2e2e2,
+            chambered: 0xc4c4c4,
+            apSaturated: 0xc4c4c4,
         },
         "45acp": {
-            regular: 15515391,
-            saturated: 15183103,
-            chambered: 11862271,
+            regular: 0xecbeff,
+            saturated: 0xe7acff,
+            chambered: 0xb500ff,
+            apSaturated: 0x470349,
         },
-        shrapnel: { regular: 3355443, saturated: 3355443 },
-        frag: { regular: 13303808, saturated: 13303808 },
-        invis: { regular: 0, saturated: 0, chambered: 0 },
+        shrapnel: {
+            regular: 0x333333,
+            saturated: 0x333333,
+            chambered: 0x660900,
+        },
+        frag: { regular: 0xcb0000, saturated: 0xcb0000, apSaturated: 0xcb0000 },
+        invis: { regular: 0, saturated: 0, chambered: 0, apSaturated: 0 },
     },
     scopeZoomRadius: {
         desktop: {
@@ -352,7 +377,7 @@ const GameConfigBase = {
         "556mm": [90, 180, 240, 300],
         "12gauge": [15, 30, 60, 90],
         "50AE": [49, 98, 147, 196],
-        "308sub": [10, 20, 40, 80],
+        "308sub": [20, 40, 60, 80],
         flare: [2, 4, 6, 8],
         "45acp": [90, 180, 240, 300],
         frag: [3, 6, 9, 12],
@@ -361,6 +386,8 @@ const GameConfigBase = {
         mirv: [2, 4, 6, 8],
         snowball: [10, 20, 30, 40],
         potato: [10, 20, 30, 40],
+        tomato: [10, 20, 30, 40],
+        coconut: [3, 6, 9, 12],
         bandage: [5, 10, 15, 30],
         healthkit: [1, 2, 3, 4],
         soda: [2, 5, 10, 15],
@@ -370,7 +397,7 @@ const GameConfigBase = {
         "4xscope": [1, 1, 1, 1],
         "8xscope": [1, 1, 1, 1],
         "15xscope": [1, 1, 1, 1],
-    } as Record<string, number[]>,
+    },
     lootRadius: {
         outfit: 1,
         melee: 1.25,
@@ -388,4 +415,4 @@ const GameConfigBase = {
     } as Record<string, number>,
 };
 
-export const GameConfig = util.mergeDeep({}, GameConfigBase, gameConfig);
+export type InventoryItem = keyof (typeof GameConfig)["bagSizes"];

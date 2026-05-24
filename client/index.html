@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
-    %VITE_ADIN_PLAY_SCRIPT%
+    %VITE_TURNSTILE_SCRIPT%
     <!-- Meta Properties -->
     <meta charset="UTF-8">
     <title>survev.io - 2d battle royale game</title>
@@ -29,12 +29,7 @@
 
     <link href="css/app.css" rel="stylesheet">
     <link href="css/game.css" rel="stylesheet">
-
-    <style type="text/css">
-      #background {
-        background-image: url(%VITE_BACKGROUND_IMG%);
-      }
-    </style>
+    %VITE_DEBUG_CSS_LINK%
   </head>
   <body>
     <div id="preroll-wrapper">
@@ -217,7 +212,7 @@
             <div id="ui-loot-healthkit" class="ui-loot ui-outline-hover ui-scale-hover ui-medical tooltip">
               <div class="tooltip-text">
                 <div class="tooltip-title" data-l10n="game-healthkit">Med Kit</div>
-                <div class="tooltip-description"><span data-l10n="game-healthkit-tooltip">Left-click to restore 100 health.</div>
+                <div class="tooltip-description"><span data-l10n="game-healthkit-tooltip">Left-click to restore 100 health.</span></div>
               </div>
               <div class="ui-loot-count">0</div>
               <img class="ui-loot-image" src="">
@@ -233,7 +228,7 @@
             <div id="ui-loot-painkiller" class="ui-loot ui-outline-hover ui-scale-hover ui-medical tooltip">
               <div class="tooltip-text">
                 <div class="tooltip-title" data-l10n="game-painkiller">Pills</div>
-                <div class="tooltip-description"><span data-l10n="game-painkiller-tooltip">Left-click to boost adrenaline by 50.</div>
+                <div class="tooltip-description"><span data-l10n="game-painkiller-tooltip">Left-click to boost adrenaline by 50.</span></div>
               </div>
               <div class="ui-loot-count">0</div>
               <img class="ui-loot-image" src="">
@@ -526,6 +521,13 @@
             </div>
             <img class="ui-armor-image ui-loot-image" src="">
           </div>
+          <div id="ui-perk-3" class="ui-armor-counter tooltip-perk ui-outline-hover">
+            <div class="tooltip-text">
+              <div class="tooltip-title"></div>
+              <div class="tooltip-desc"></div>
+            </div>
+            <img class="ui-armor-image ui-loot-image" src="">
+          </div>
         </div>
         <div id="ui-bottom-center-right" class="js-ui-map-hidden">
           <div id="ui-armor-helmet" class="ui-armor-counter ui-outline-hover">
@@ -611,11 +613,11 @@
             <div id="ui-stats-logo"></div>
           </div>
           <div id="ui-stats-ad-container-desktop" class="ui-stats-ad-container">
-            <div id="%VITE_AIP_PLACEMENT_ID%_300x250_2"></div>
+            <div id="nitro-died-mrec" data-fuse="died_mrec" style="min-height: 90px;"></div>
           </div>
-          <!-- <div id="ui-stats-ad-container-mobile" class="ui-stats-ad-container">
-            <div id="%VITE_AIP_PLACEMENT_ID%_300x250_mobile_2"></div>
-          </div> -->
+          <div id="ui-stats-ad-container-mobile" class="ui-stats-ad-container">
+            <div id="nitro-died-mrec-mobile" data-fuse="died_mrec_mobile" style="min-height: 200px;"></div>
+          </div>
         </div>
       </div>
       <div id="ui-editor" style="display: none">
@@ -623,9 +625,6 @@
           <div class="ui-editor-header">EDIT MODE</div>
         </div>
         <div id="ui-editor-top-right">
-          <div class="ui-editor-info">
-            <ul id="ui-editor-info-list" class="ui-editor-list"></ul>
-          </div>
         </div>
       </div>
     </div>
@@ -637,6 +636,7 @@
       <div id="start-main">
         <div id="start-top-left">
           <div id="btn-hamburger" class="icon-hamburger"></div>
+          <a id="btn-discord-top-right" style="display: none;" href="https://discord.gg/75RAK3p3K2" target="_blank" class="btn-social btn-darken btn-discord"></a>
           <div id="start-top-left-desktop">
             <div id="featured-streamers">
               <div class="streaming-header">
@@ -655,6 +655,15 @@
               <a href="" target="_blank" class="btn-youtuber btn-darken"></a>
             </div>
           </div>
+        </div>
+        <div class="ad-block-header hide-on-mobile">
+          <div id="nitro-header" data-fuse="header" style="min-height: 90px;"></div>
+        </div>
+        <div class="ad-block-left-center hide-on-mobile">
+          <div id="nitro-home-vrec" data-fuse="home_vrec" style="min-height: 250px;"></div>
+        </div>
+        <div class="ad-block-right-center hide-on-mobile" style="min-height: 250px;">
+          <div id="nitro-home-mrec" data-fuse="home_mrec"></div>
         </div>
         <!-- Accounts Modals -->
         <div id="modal-account-name-change" class="modal modal-account">
@@ -721,23 +730,23 @@
               <div class="account-buttons-settings account-buttons-wrapper account-block-arrow modal-close">
                 <div class="account-buttons">
                   <div class="account-stats-link btn-player-stats-link menu-option btn-darken btn-standard " data-l10n="index-my-stats">My Stats</div>
-                  <div class="btn-account-link btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-link-account">Link Account</div>
+                  <!-- <div class="btn-account-link btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-link-account">Link Account</div> -->
                   <div class="btn-account-change-name btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-change-account-name">Change Account Name</div>
                   <div class="btn-account-reset-stats btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-reset-stats">Reset Stats</div>
                   <div class="btn-account-delete btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-delete-account">Delete Account</div>
                   <div class="btn-account-logout btn-account-grey menu-option btn-darken btn-standard" data-l10n="index-log-out">Log Out</div>
                 </div>
               </div>
-              <!--              <div id="account-login-options-mobile" class="account-buttons-link-account account-buttons-wrapper account-block-arrow modal-close">
+              <div id="account-login-options-mobile" class="account-buttons-link-account account-buttons-wrapper account-block-arrow modal-close">
                 <div class="login-options-content"></div>
-              </div> -->
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Accounts -->
-        <!-- <div id="start-top-right">
-          <div class="account-block">
+        <div id="start-top-right">
+          <div class="account-block" style="display: none;">
             <div class="account-details-top">
               <div class="account-details-top-buttons">
                 <div class="account-details-button-wrapper account-details-button-loadout menu-option btn-darken-alt">
@@ -760,7 +769,7 @@
                 </div>
               </div>
             </div>
-             <div class="account-overview">
+            <div class="account-overview">
               <div class="account-details-user account-details-block">
                 <div class="account-details">
                   <div class="account-avatar"></div>
@@ -774,41 +783,32 @@
             </div>
             <div class="account-buttons-settings account-buttons-wrapper account-block-arrow modal-close hide-on-mobile">
               <div class="account-buttons">
-                <div class="btn-account-link btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-link-account">Link Account</div>
+                <!-- <div class="btn-account-link btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-link-account">Link Account</div> -->
                 <div class="btn-account-change-name btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-change-account-name">Change Account Name</div>
                 <div class="btn-account-reset-stats btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-reset-stats">Reset Stats</div>
                 <div class="btn-account-delete btn-account-turq menu-option btn-darken btn-standard" data-l10n="index-delete-account">Delete Account</div>
                 <div class="btn-account-logout btn-account-grey menu-option btn-darken btn-standard" data-l10n="index-log-out">Log Out</div>
               </div>
             </div>
-            <div id="account-login-options" class="account-buttons-link-account account-buttons-wrapper account-block-arrow modal-close hide-on-mobile">
+            <div id="account-login-options" class="account-buttons-link-account account-buttons-wrapper account-block-arrow modal-close">
               <div class="login-options-content"></div>
             </div>
           </div>
-        </div> -->
+        </div>
 
         <div id="start-main-center">
           <div id="start-row-header">
             <div id="server-warning"></div>
           </div>
+          <div id="start-turnstile-container"></div>
           <div id="start-row-top">
             <div id="start-rotate-reminder" class="menu-column menu-block">
-              <span>Rotate to landscape for a better experience.</span>
+              <span data-l10n="index-rotate-reminder">Rotate to landscape for a better experience.</span>
             </div>
             <div id="left-column" class="menu-column">
               <div id="ad-block-left">
                 <div class="surviv-shirts">
-                  <a href="https://ko-fi.com/survev" target="_blank"></a>
                 </div>
-                <!--
-                <div class="adblock-plea">
-                  <span>Please consider supporting us by disabling your adblocker.</span>
-                </div>
-                -->
-                <!--
-                <div class="ad-block-med-rect" id="%VITE_AIP_PLACEMENT_ID%_300x250">
-                </div>
-                -->
               </div>
               <div id="social-share-block-wrapper">
                 <div id="social-share-block" class="menu-block">
@@ -818,8 +818,9 @@
                     <a href="https://twitter.com/survev" target="_blank" class="btn-social btn-darken btn-twitter"></a>
                     <a href="https://www.instagram.com/survev/" target="_blank" class="btn-social btn-darken btn-instagram"></a>
                     -->
-                    <a href="https://discord.gg/6uRdCdkTPt" target="_blank" class="btn-social btn-darken btn-discord"></a>
-                    <a href="https://ko-fi.com/survev" target="_blank" class="btn-social btn-darken btn-kofi"></a>
+                    <a href="https://discord.gg/75RAK3p3K2" target="_blank" class="btn-social btn-darken btn-discord"></a>
+                    <a href="https://ko-fi.com/survev" target="_blank" style="display: none;" class="btn-social btn-darken btn-kofi"></a>
+                    <a href="https://survev.wiki.gg/" target="_blank" class="btn-social btn-darken btn-wiki"></a>
                     <!--
                     <a href="https://www.youtube.com/c/survev?sub_confirmation=1" target="_blank" class="btn-social btn-darken btn-youtube"></a>
                     -->
@@ -835,7 +836,7 @@
               </div>
               <div class="play-button-container">
                 <div id="player-options">
-                  <input type="text" class="menu-option player-name-input" tabindex="0" placeholder="Enter your name here" id="player-name-input-solo" maxlength="16" />
+                  <input type="text" class="menu-option player-name-input" tabindex="0" placeholder="Enter your name here" data-l10n="index-enter-name-here" id="player-name-input-solo" maxlength="16" />
                   <a class="btn-darken menu-option player-options-btn" id="btn-customize"></a>
                 </div>
                 <select id="server-select-main" class="server-select menu-option btn-hollow btn-hollow-selected">
@@ -937,7 +938,7 @@
               <a class="btn-darken menu-option" id="btn-team-mobile-link-leave" data-l10n="index-back-to-main">Back to Main Menu</a>
             </div>
             <div id="right-column" class="menu-column">
-              <div id="pass-wrapper" style="display: none!important;">
+              <div id="pass-wrapper">
                 <div id="pass-unlock-tooltip">
                   <div class="tooltip-pass-title"></div>
                   <div class="tooltip-pass-desc"></div>
@@ -1034,45 +1035,83 @@
                   </div>
                 </div>
               </div>
-              <div id="news-wrapper" style="display: block!important;">
-                <div class="right-column-toggle pass-toggle" style="display: none!important;"></div>
+              <div id="news-wrapper">
+                <div class="right-column-toggle pass-toggle"></div>
                 <div id="news-block" class="menu-block">
                   <div id="news">
                     <h3 class="news-header">What's New!</h3>
-                    <div id="news-current" data-date="2025-27-05">
-                      <small class="news-date">March 15, 2025</small>
-                      <p class="news-paragraph"><strong>Spring Hunting</strong></p>
-                      <p class="news-paragraph">Spring has sprung once again on the island, enjoy the cherry trees! And it doesn't come alone, <span class="highlight">woods mode</span> is also back to crown more kings!</p>
-                      <p class="news-paragraph">We also made a few adjustments and balancing changes to the base game. Check the <a href="changelogRec.html" target="_blank">changelog</a>.</p>
+                    <div id="news-current" data-date="2026-05-11">
+                      <small class="news-date">May 11th, 2026</small>
+                      <p class="news-paragraph"><strong>Precursor</strong></p>
+                      <p class="news-paragraph">Before the Soviet incursion and brutal fighting that ensued, PARMA scientists were given a directive: create the strongest survevr they possibly could. Their work now lies deep within the Twins...</p>
+                      <p class="news-paragraph">Project: COBALT has returned! Along with much-needed adjustments for the Medic and Demo classes, PARMA is proud to announce a new perk: <span class="highlight">Indomitable Spirit</span>, allowing survevrs to shrug off fatal injuries through (quite literally) pure adrenaline.</p>
+                      <p class="news-paragraph">Additionally, the long-anticipated <span class="highlight">Survevr Pass 1</span> has arrived, allowing you to flex your style with over 20 different cosmetics! The pass is completely <span class="highlight">free</span>; just <span class="highlight">log in</span> and complete two quests per day! If you don't like a quest, you can refresh it for a new one.</p>
                     </div>
-                    <div data-date="2025-27-05">
-                      <small class="news-date">January 27, 2025</small>
-                      <p class="news-paragraph"><strong>Desert Rain</strong></p>
-                      <p class="news-paragraph">PARMA supplies have reached critical levels again, but this time, they've also got way too much sand! It's coarse and rough and irritating and it's getting everywhere. For a limited time only, squad mode will once more feature massively increased flare gun spawns.</p>
-                      <p class="news-paragraph">This time around, you'll have a few new weapons for the final shootout at Ranchito Pollo. The Model 94 lever-action repeating rifle, chambered in .45 ACP, fires a speedy, accurate and decently powerful bullet.</p>
-                      <p class="news-paragraph">It's companion gun is the Peacemaker revolver, also chambered in .45 ACP. The Peacemaker is deadly accurate when tap-firing, but it's real strength shows when you hold down fire and "fan the hammer." All remaining rounds in the revolver will empty at an insane pace, albeit, with a steep accuracy penalty.</p>
+                    <div data-date="2026-04-13">
+                      <small class="news-date">April 13th, 2026</small>
+                      <p class="news-paragraph"><strong>IntElegance</strong></p>
+                      <p class="news-paragraph">As both sides exhaust their nightshade and weapon supplies, the Island rests again... what could have prompted such fierce fighting?</p>
+                      <p class="news-paragraph">Over the past couple of years, PARMA has relied on third-party archives to train newbie survevrs, many of which were either misleading or hard to navigate. We've taken matters into our own hands and begun developing a comprehensive guide: the <a href="https://survev.wiki.gg">Survev.io Wiki</a>!</p>
+                      <p class="news-paragraph">However, many of the sections are still yet to be filled, so we're welcoming our veterans to help contribute! For easier communication between survevrs, be sure to join the <a href="https://discord.gg/75RAK3p3K2">Discord Server</a>!</p>
                     </div>
-                    <div data-date="2025-17-05">
-                      <small class="news-date">January 17, 2025</small>
-                      <p class="news-paragraph"><strong>Incursion recursion</strong></p>
-                      <p class="news-paragraph">50 vs 50 has arrived. To commemorate one of the bloodiest days in Island history, we're holding a field day (or week) of massive team versus team battles.</p>
-                      <p class="news-paragraph">Join up alone or with a squad, and you'll be drafted into the Red Army or the Blue Group. Once both teams have locked in, one Leader will be randomly chosen for each side. Leader get a variety of perks, including a new gun and a new melee weapon! Leader pings are also visible and audible to every member of your team.</p>
-                      <p class="news-paragraph">The enemy team isn't the only new danger in 50v50. Strike aircraft have been tasked with making frequent air strikes and you do not want to be caught in the bombing zone. Head indoors for relative safety, or attempt your best safety dance as the bombs fall around you.</p>
-                      <p class="news-paragraph">Will you rout the Red Army with a devastating flanking maneuver? Or will the Blue Group be crushed under the weight of a decisive pincer attack? Tell us your best war story on our <a href="https://discord.gg/6uRdCdkTPt">Discord server</a></p>
+                    <div data-date="2026-04-01">
+                      <small class="news-date">April 1st, 2026</small>
+                      <p class="news-paragraph"><strong>Potato vs. Tomato</strong></p>
+                      <p class="news-paragraph">While survevrs have since become accustomed to the periodical spuddy incursions on the island, life was not always this way. Once, botanist brothers Spud and Percy Solanum worked in tandem, seeking to uncover the mysteries of the <span class="highlight">[REDACTED]</span>. In an act of betrayal, the Soviets obtained their precious research secrets, fragmenting their partnership forever. Join the fight of potato vs <span class="highlight">tomato</span>... and may the best nightshade win!</p>
+                      <p class="news-paragraph">Additionally, PARMA's FSTMS division is proud to present their latest concoction: the <span class="highlight">PMG-134</span> (Potato Minigun 134), using a six-barrel rotary machine gun to blast tater tots at insane firerates. It's perfect for mowing down your local Soviet!</p>
                     </div>
-                    <div data-date="2025-01-05">
-                      <small class="news-date">January 5, 2025</small>
-                      <p class="news-paragraph"><strong>It's snover</strong></p>
-                      <p class="news-paragraph">The snow drifts no more, once more. As previously mentioned, the Red Army and the Blue Group will soon start drafting ...</p>
-                      <p class="news-paragraph">We've also upgraded the servers in Asia, join our <a href="https://discord.gg/6uRdCdkTPt">Discord server</a> to squad up with people from there!</p>
+                    <div data-date="2026-03-24">
+                      <small class="news-date">March 24th, 2026</small>
+                      <p class="news-paragraph"><strong>Spring Blossoms</strong></p>
+                      <p class="news-paragraph">As PARMA continues to work on their research, the snow has melted and spring has returned to the island! Enjoy the cherry blossoms!</p>
+                      <p class="news-paragraph">For the latest leeks and developments, be sure to join the <a href="https://discord.gg/75RAK3p3K2">Discord Server</a>!</p>
                     </div>
-                    <div data-date="2024-12-04">
-                      <small class="news-date">December 4, 2024</small>
-                      <p class="news-paragraph"><strong>Cold take</strong></p>
-                      <p class="news-paragraph">Winter has once again come to the Island! And with snowfall, comes <span class="highlight">snowballs</span>.</p>
-                      <p class="news-paragraph">Hitting an enemy with a snowball deals a little damage, slows them briefly, and also causes them to drop a random item! "Cook" or charge a snowball for a heavy hitting throwable that deals more damage and slows for a longer duration.</p>
-                      <p class="news-paragraph">Look out, as hidden somewhere in the snow lies the <span class="highlight">OTs-38 revolver</span>.</p>
-                      <p class="news-paragraph">Looking for squads? Join our <a href="https://discord.gg/6uRdCdkTPt">Discord server</a> to find the perfect squadmates!</p>
+                    <div data-date="2026-03-09">
+                      <small class="news-date">March 9th, 2026</small>
+                      <p class="news-paragraph"><strong>Snow, Smoke, & Shells</strong></p>
+                      <p class="news-paragraph">As we head into the final stretch of winter, our favourite arboreal mode has returned with a fresh coat of snow! For those who have been fighting through the winter weather, seek refuge at the <span class="highlight">campfires</span> spread out across the island.</p>
+                      <p class="news-paragraph">In addition, PARMA's Department of Advanced Weaponry would be proud to present the new <span class="highlight">SPAS-16</span>, capable of unloading heavy damage... if they could find where their prototype went, that is.</p>
+                      <p class="news-paragraph">The standard-issue <span class="highlight">IMD-2</span> is great for surpressing enemies with its high fire rate, but will have you asking your squad for ammo more often than not.</p>
+                      <p class="news-paragraph">As PARMA attempts to defrost their simulation equipment, those who persist will be rewarded with the first blossoms of spring.</p>                    
+                    </div>
+                    <div data-date="2026-02-02">
+                      <small class="news-date">February 2nd, 2026</small>
+                      <p class="news-paragraph"><strong>High-Speed Hunting</strong></p>
+                      <p class="news-paragraph">A new structure, lootable perks, and an open map: welcome back to the Savannah hallucination! For the brave, the bold, and the bloodthirsty, a secondary 'perk' is given to the kill leader: <span class="highlight">The Hunted</span>, revealing your position to all enemies.</p>
+                      <p class="news-paragraph">Ever wanted your bullets to travel at absurd speeds? Look no further than PARMA's new perk: <span class="highlight">High-Velocity Rounds</span>! This perk greatly increases bullet speed & range.</p>
+                      <p class="news-paragraph">Additionally, a new <span class="highlight">warehouse</span> has been constructed, offering a more <span><s>dangerous</s></span> secure place to store valuables, such as the new <span class="highlight">construction case</span>.</p>
+                      <p class="news-paragraph">If you need hunting partners, look no further than our <a href="https://discord.gg/75RAK3p3K2">Discord Server</a>!</p>
+                    </div>
+                    <div data-date="2026-01-18">
+                      <small class="news-date">January 18th, 2026</small>
+                      <p class="news-paragraph"><strong>The Palms Sway</strong></p>
+                      <p class="news-paragraph">Tired of the snow and ice? PARMA is providing a limited-time opportunity for Survevrs to escape... to a tropical island! Grab a <span class="highlight">Coconut</span> from the swaying <span class="highlight">Palm Trees</span> and throw it at a friend or foe, or set sail for the new <span class="highlight">Pirate Hut</span> to obtain the mythical <span class="highlight">Golden Cutlass</span>. Legend says those who wield the sword will never fail to find bountiful loot with each enemy they slay.</p>
+                      <p class="news-paragraph">Surprises also await those who choose to tough out the winter weather. Trudge through the snow to find an <span class="highlight">Iced Hardstone Block</span>, which can only be broken by the new <span class="highlight">Ice Axe</span>. Enjoy some gun model redesigns and Winter recolors, some minor balance adjustments, and a plethora of bugfixes and improvements!</p>
+                      <p class="news-paragraph">For an exclusive look at what's happening on the island, and to connect with the player community, check out our <a href="https://discord.gg/75RAK3p3K2">Discord Server!</a>!</p>
+                    </div>
+                    <div data-date="2025-10-21">
+                      <small class="news-date">October 21st, 2025</small>
+                      <p class="news-paragraph"><strong>Anniversary Harvest</strong></p>
+                      <p class="news-paragraph">A strange irregularity emanating from the center of the island has led to the temporal displacement of survevrs back to <span class="highlight">October 2017</span>... perfectly coinciding with <span class="highlight">surviv's birthday!</span></p>
+                      <p class="news-paragraph">Celebrate eight years of chicken dinners with a new limited-time gamemode simulating the Early Access version of the game, featuring <span class="highlight">silos, boxes, trees...</span> and the key to victory: <span class="highlight">weapons</span>! Note that our lack of research funds back then also means that the <span class="highlight">barrels don't explode.</span></p>
+                      <p class="news-paragraph">On top of that, a new and improved <span class="highlight">fall map</span> has returned, with additional obstacles and a <span class="highlight">new type of squash</span>, providing even more loot for you.</p>
+                      <p class="news-paragraph">Thanks to everyone for being a part of this community, and go hunting for the chicken dinner! Beware of the approaching gloom...</p>
+                    </div>
+                    <div data-date="2025-09-09">
+                      <small class="news-date">September 9th, 2025</small>
+                      <p class="news-paragraph"><strong>Remnants</strong></p>
+                      <p class="news-paragraph">The war goes quiet once more after both sides exhausted their weaponry (and scheduled fighter flights).</p>
+                      <p class="news-paragraph">Luckily, there's still tons of reserve airdrops, so go get rid of them in the <span class="highlight">Desert</span>!</p>
+                      <p class="news-paragraph">The <span class="highlight">Mk45G</span> and <span class="highlight">Desert Camo</span> have also been made more common.</p>
+                      <p class="news-paragraph">Stay tuned for new content, with the return of our <span class="highlight">arboreal</span> and <span class="highlight">veld</span> landscapes...</p>
+                    </div>
+                    <div data-date="2025-07-23">
+                      <small class="news-date">July 23, 2025</small>
+                      <p class="news-paragraph"><strong>New Leadership</strong></p>
+                      <p class="news-paragraph">50v50 is back for another round, and getting straight to fighting is easier than ever: select guns are now <span class="highlight">bundled with ammo</span>.</p>
+                      <p class="news-paragraph">Additionally, if a team leader fails to fire their flare soon after being promoted, it will now be <span class="highlight">auto-fired</span>.</p>
+                      <p class="news-paragraph">A new role, the <span class="highlight">Captain</span>, has joined the ranks, but promotion to this role is not as easy as it seems. Lone Survivrs have also picked up a new perk: <span class="highlight">AP Rounds</span>.</p>
+                      <p class="news-paragraph">Enjoy a selection of role buffs and new gun world images. Let us know your thoughts by hopping into our <a href="https://discord.gg/75RAK3p3K2">Discord server!</a></p>
                     </div>
                   </div>
                 </div>
@@ -1082,7 +1121,7 @@
 
         </div>
 
-		<div class="ad-block-leaderboard-bottom" id="%VITE_AIP_PLACEMENT_ID%_728x90"></div>
+        <div class="ad-block-leaderboard-bottom" id="survevio_728x90"></div>
         <div id="start-bottom-left">
           <div id="mobile-settings-front">
             <div class="btn-settings menu-option btn-darken btn-start-option"></div>
@@ -1095,9 +1134,8 @@
           <a href="changelog.html" target="_blank" class="footer-after">ver 0.8.82</a>
           <a href="proxy.txt" target="_blank" data-l10n="index-proxy-sites">proxy sites</a>
           -->
+          <a href="privacy.html" class="footer-after" target="_blank">Privacy Policy</a>
         </div>
-
-		<a href="privacy.html" id="TOS" target="_blank">Privacy Policy</a>
 
         <div id="start-bottom-right-wrapper">
           <div id="start-bottom-right">
@@ -1148,7 +1186,9 @@
       </div>
       <!-- Loadouts -->
       <div id="modal-customize" class="modal">
-        <!-- <div class="ad-block-loadouts-left hide-on-mobile" id="%VITE_AIP_PLACEMENT_ID%_300x600"></div> -->
+        <div class="ad-block-loadouts-left hide-on-mobile">
+          <div id="nitro-loadout-vrec" data-fuse="loadout_vrec" style="min-height: 600px;"></div>
+        </div>
         <div id="modal-customize-wrapper" class="modal-close">
           <div id="modal-content-left" class="modal-content-shadow">
             <div id="modal-customize-cat-title"></div>
@@ -1280,6 +1320,9 @@
             <div id="modal-settings-interp" class="modal-settings-item">
               <input id="interpolation" type="checkbox"><p class="modal-settings-checkbox-text" data-l10n="index-client-side-interp">Client side interpolation</p>
             </div>
+              <div id="modal-settings-rotation" class="modal-settings-item hide-on-mobile">
+              <input id="localRotation" type="checkbox"><p class="modal-settings-checkbox-text" data-l10n="index-client-side-rotation">Client side player rotation</p>
+            </div>
             <div class="modal-settings-item hide-on-mobile">
               <input id="screenShake" type="checkbox"><p class="modal-settings-checkbox-text" data-l10n="index-screen-shake">Screen shake</p>
             </div>
@@ -1368,6 +1411,21 @@
           </div>
         </div>
       </div>
+      <div id="modal-ip-banned" class="modal">
+        <div class="modal-content modal-close">
+          <div class="modal-header">
+            <span class="close close-corner"></span>
+            <h2 data-l10n="index-ip-banned">Your IP has been banned.</h2>
+          </div>
+          <div class="modal-body">
+            <div id="modal-ip-banned-reason"></div>
+            <div id="modal-ip-banned-expiration"></div>
+          </div>
+          <div class="modal-footer modal-footer-round">
+            <h3 id="force-refresh" class="close close-footer">OK</h3>
+          </div>
+        </div>
+      </div>
       <div id="modal-create-account" class="modal modal-account">
         <div class="modal-content modal-close">
           <div class="modal-header modal-header-name">
@@ -1399,10 +1457,22 @@
             </div>
             <div class="modal-footer modal-footer-name modal-footer-round">
               <h3 class="close close-footer" data-l10n="index-confirm">Confirm</h3>
+              <h3 class='close close-footer' data-l10n='index-confirm-all' data-confirm-all="true">Confirm All</h3>
             </div>
           </div>
         </div>
       </div>
     </div>
+    <script>
+      // load a cached background image as earlier as possible
+      // so we dont have to wait for API to reply to show a background
+      const config = JSON.parse(localStorage.getItem("surviv_config") || "{}");
+      const bgImg = config.cachedBgImg || "img/main_splash.png";
+      const bg = document.getElementById("background");
+      if (bg) {
+          bg.style.backgroundImage = `url(${bgImg})`;
+      }
+    </script>
     <script type="module" src="src/main.ts"></script>
+  </body>
 </html>

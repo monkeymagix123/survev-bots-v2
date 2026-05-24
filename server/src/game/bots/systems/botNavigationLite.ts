@@ -1,3 +1,5 @@
+import { MapObjectDefs } from "../../../../../shared/defs/mapObjectDefs";
+import type { ObstacleDef } from "../../../../../shared/defs/mapObjectsTyping";
 import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
 import { coldet } from "../../../../../shared/utils/coldet";
 import { collisionHelpers } from "../../../../../shared/utils/collisionHelpers";
@@ -23,6 +25,14 @@ type RouteTrace = {
     hitObstacle?: Obstacle;
 };
 
+type WarehouseTransition = {
+    buildingId: number;
+    mode: "enter" | "exit";
+    goal: Vec2;
+    opening: Vec2;
+    until: number;
+};
+
 export class BotNavigationLite {
     waypoint?: Vec2;
     waypointTtl = 0;
@@ -33,6 +43,9 @@ export class BotNavigationLite {
     private _detourWaypoint?: Vec2;
     private _detourGoal?: Vec2;
     private _detourUntil = -Infinity;
+    private _detourCommitUntil = -Infinity;
+    private _detourBlockerId?: number;
+    private _detourSideSign?: -1 | 1;
     private _failedWaypoints: FailedWaypoint[] = [];
     private _forceDetourGoal?: Vec2;
     private _forceDetourUntil = -Infinity;
@@ -42,6 +55,8 @@ export class BotNavigationLite {
     private _nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
     private _fallbackGoal?: Vec2;
     private _fallbackMode?: "waypoint" | "center";
+    private _warehouseTransition?: WarehouseTransition;
+    private readonly _routeTraceCache = new Map<string, RouteTrace>();
 
     tick(dt: number, hasTarget: boolean): void {
         this._time += dt;
@@ -56,15 +71,25 @@ export class BotNavigationLite {
         if (this._forceDetourGoal && this._time >= this._forceDetourUntil) {
             this._clearForcedDetour();
         }
+        if (
+            this._warehouseTransition &&
+            this._time >= this._warehouseTransition.until
+        ) {
+            this._clearWarehouseTransition();
+        }
 
         this._failedWaypoints = this._failedWaypoints.filter(
             (entry) => entry.until > this._time,
         );
     }
 
-    ensureWaypoint(game: Game, _player: Player): void {
-        if (!this.waypoint || this.waypointTtl <= 0) {
-            this.waypoint = this._pickWaypoint(game);
+    ensureWaypoint(game: Game, player: Player): void {
+        const waypointReached =
+            !!this.waypoint &&
+            v2.distance(player.pos, this.waypoint) <= BotTuning.navigation.arriveDist;
+
+        if (!this.waypoint || this.waypointTtl <= 0 || waypointReached) {
+            this.waypoint = this._pickWaypoint(game, player);
             this.waypointTtl = util.random(5, 10);
         }
     }
@@ -77,6 +102,8 @@ export class BotNavigationLite {
         overrideGoal?: Vec2,
         arriveDist: number = BotTuning.navigation.arriveDist,
     ): Vec2 | undefined {
+        this._routeTraceCache.clear();
+
         const desiredGoal = this._getDesiredGoal(
             game,
             gasEmergency,
@@ -91,6 +118,7 @@ export class BotNavigationLite {
             this._clearDetour();
             this._clearFallback();
             this._clearForcedDetour();
+            this._clearWarehouseTransition();
         }
 
         if (
@@ -104,6 +132,16 @@ export class BotNavigationLite {
             this._reachedPoint(player.pos, this._fallbackGoal, arriveDist)
         ) {
             this._clearFallback();
+        }
+        if (
+            this._warehouseTransition &&
+            this._reachedPoint(
+                player.pos,
+                this._warehouseTransition.opening,
+                arriveDist,
+            )
+        ) {
+            this._clearWarehouseTransition();
         }
 
         const routeGoal = this._fallbackMode
@@ -124,6 +162,7 @@ export class BotNavigationLite {
         const directTrace = this._traceRoute(game, player, player.pos, activeGoal);
         const forceDetour = this._shouldForceDetour(activeGoal);
 
+        const detourCommitted = this._time < this._detourCommitUntil;
         if (
             this._detourWaypoint &&
             this._detourGoal &&
@@ -131,7 +170,7 @@ export class BotNavigationLite {
             this._isNavPointValid(game, player, this._detourWaypoint, gasEmergency) &&
             !this._isRecentlyFailed(this._detourWaypoint) &&
             !this._traceRoute(game, player, player.pos, this._detourWaypoint).blocked &&
-            (directTrace.blocked || forceDetour)
+            (directTrace.blocked || forceDetour || detourCommitted)
         ) {
             return this._detourWaypoint;
         }
@@ -149,10 +188,14 @@ export class BotNavigationLite {
             gasEmergency,
         );
         if (detour) {
-            this._detourWaypoint = detour;
+            this._detourWaypoint = detour.pos;
             this._detourGoal = v2.copy(activeGoal);
             this._detourUntil = this._time + BotTuning.navigation.detourTtlSec;
-            return detour;
+            this._detourCommitUntil =
+                this._time + BotTuning.navigation.detourCommitSec;
+            this._detourBlockerId = detour.blockerId;
+            this._detourSideSign = detour.sideSign;
+            return detour.pos;
         }
 
         return activeGoal;
@@ -234,7 +277,7 @@ export class BotNavigationLite {
             !this._fallbackMode
         ) {
             this._fallbackMode = "waypoint";
-            this._fallbackGoal = this._pickWaypoint(game);
+            this._fallbackGoal = this._pickWaypoint(game, player);
             this._clearDetour();
             this._clearForcedDetour();
         }
@@ -329,7 +372,19 @@ export class BotNavigationLite {
         }
     }
 
-    private _pickWaypoint(game: Game): Vec2 {
+    private _pickWaypoint(game: Game, player?: Player): Vec2 {
+        if (player) {
+            const interesting = this._pickLocalInterestWaypoint(game, player);
+            if (interesting) {
+                return interesting;
+            }
+
+            const localRoam = this._pickLocalRoamWaypoint(game, player);
+            if (localRoam) {
+                return localRoam;
+            }
+        }
+
         const map = game.map;
         const gas = game.gas;
 
@@ -349,6 +404,95 @@ export class BotNavigationLite {
         }
 
         return v2.copy(center);
+    }
+
+    private _pickLocalInterestWaypoint(game: Game, player: Player): Vec2 | undefined {
+        const obstacleCandidates: Vec2[] = [];
+        const buildingCandidates: Vec2[] = [];
+        const nearby = game.grid.intersectCollider(
+            collider.createCircle(player.pos, BotTuning.navigation.waypointBuildingSearchDist),
+        );
+        const currentBuildingId = this._getContainingBuildingId(game, player.pos, player.layer);
+
+        for (const obj of nearby) {
+            if (!obj || !("pos" in obj)) continue;
+            if (!util.sameLayer(obj.layer, player.layer)) continue;
+
+            if (obj.__type === ObjectType.Obstacle) {
+                const obstacle = obj as Obstacle;
+                if (this._isInterestingRoamObstacle(obstacle, player)) {
+                    obstacleCandidates.push(v2.copy(obstacle.pos));
+                }
+                continue;
+            }
+
+            if (obj.__type === ObjectType.Building) {
+                const building = obj as Building;
+                if (building.__id === currentBuildingId) continue;
+                if (
+                    v2.distance(player.pos, building.pos) <=
+                    BotTuning.navigation.waypointBuildingSearchDist
+                ) {
+                    buildingCandidates.push(v2.copy(building.pos));
+                }
+            }
+        }
+
+        const obstacleChoice = this._pickRandomValidWaypoint(
+            game,
+            player,
+            obstacleCandidates,
+        );
+        if (obstacleChoice) return obstacleChoice;
+
+        return this._pickRandomValidWaypoint(game, player, buildingCandidates);
+    }
+
+    private _pickLocalRoamWaypoint(game: Game, player: Player): Vec2 | undefined {
+        for (let attempts = 0; attempts < 10; attempts++) {
+            const candidate = v2.add(
+                player.pos,
+                util.randomPointInCircle(BotTuning.navigation.waypointLocalRoamDist),
+            );
+            game.map.clampToMapBounds(candidate, player.rad);
+            if (
+                v2.distance(player.pos, candidate) <
+                BotTuning.navigation.waypointLocalRoamMinStep
+            ) {
+                continue;
+            }
+            if (!this._isNavPointValid(game, player, candidate, false)) continue;
+            return candidate;
+        }
+        return undefined;
+    }
+
+    private _pickRandomValidWaypoint(
+        game: Game,
+        player: Player,
+        candidates: Vec2[],
+    ): Vec2 | undefined {
+        if (candidates.length === 0) return undefined;
+
+        const shuffled = [...candidates];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        for (const candidate of shuffled) {
+            game.map.clampToMapBounds(candidate, player.rad);
+            if (!this._isNavPointValid(game, player, candidate, false)) continue;
+            if (
+                v2.distance(player.pos, candidate) <
+                BotTuning.navigation.waypointLocalRoamMinStep
+            ) {
+                continue;
+            }
+            return candidate;
+        }
+
+        return undefined;
     }
 
     private _getDesiredGoal(
@@ -389,7 +533,18 @@ export class BotNavigationLite {
         goal: Vec2,
         directTrace: RouteTrace,
         gasEmergency: boolean,
-    ): Vec2 | undefined {
+    ): { pos: Vec2; blockerId?: number; sideSign?: -1 | 1 } | undefined {
+        const buildingCornerWaypoint = this._pickBuildingCornerWaypoint(
+            game,
+            player,
+            goal,
+            directTrace,
+            gasEmergency,
+        );
+        if (buildingCornerWaypoint) {
+            return buildingCornerWaypoint;
+        }
+
         const wallSlideWaypoint = this._pickWallSlideWaypoint(
             game,
             player,
@@ -415,6 +570,13 @@ export class BotNavigationLite {
 
         let bestPos: Vec2 | undefined;
         let bestScore = -Infinity;
+        let bestSideSign: -1 | 1 | undefined;
+        const preferCommittedSide =
+            directTrace.hitObstacle &&
+            this._detourBlockerId === directTrace.hitObstacle.__id &&
+            this._time < this._detourCommitUntil
+                ? this._detourSideSign
+                : undefined;
 
         const sideDists = [
             BotTuning.navigation.detourSideShortDist,
@@ -459,16 +621,98 @@ export class BotNavigationLite {
                         (len - distToGoal) * 6 -
                         distFromBot * 1.5 -
                         distToGoal * 0.25;
+                    const sideCommitBonus =
+                        preferCommittedSide !== undefined &&
+                        preferCommittedSide === sideSign
+                            ? BotTuning.navigation.detourSameSideBonus
+                            : 0;
 
-                    if (score > bestScore) {
-                        bestScore = score;
+                    if (score + sideCommitBonus > bestScore) {
+                        bestScore = score + sideCommitBonus;
                         bestPos = v2.copy(candidate);
+                        bestSideSign = sideSign;
                     }
                 }
             }
         }
 
-        return bestPos;
+        return bestPos
+            ? {
+                  pos: bestPos,
+                  blockerId: directTrace.hitObstacle?.__id,
+                  sideSign: bestSideSign,
+              }
+            : undefined;
+    }
+
+    private _pickBuildingCornerWaypoint(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+        directTrace: RouteTrace,
+        gasEmergency: boolean,
+    ): { pos: Vec2; blockerId?: number } | undefined {
+        const blocker = directTrace.hitObstacle;
+        const building = blocker?.parentBuilding;
+        if (!blocker || !building) {
+            return undefined;
+        }
+        if (
+            this._isPointInsideBuilding(building, player.pos, player.layer) ||
+            this._isPointInsideBuilding(building, goal, player.layer)
+        ) {
+            return undefined;
+        }
+
+        const bounds = this._getBuildingLocalSurfaceBounds(building);
+        const cornerInset = BotTuning.navigation.buildingCornerOutsideDist;
+        const localCandidates = [
+            v2.create(bounds.min.x - cornerInset, bounds.min.y - cornerInset),
+            v2.create(bounds.min.x - cornerInset, bounds.max.y + cornerInset),
+            v2.create(bounds.max.x + cornerInset, bounds.min.y - cornerInset),
+            v2.create(bounds.max.x + cornerInset, bounds.max.y + cornerInset),
+        ];
+
+        const directCoverage = directTrace.hitDist / Math.max(directTrace.len, 0.001);
+        let bestPos: Vec2 | undefined;
+        let bestScore = -Infinity;
+
+        for (const local of localCandidates) {
+            const candidate = this._toWorldPoint(building, local);
+            game.map.clampToMapBounds(candidate, player.rad);
+
+            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
+            if (this._isRecentlyFailed(candidate)) continue;
+
+            const firstLeg = this._traceRoute(game, player, player.pos, candidate);
+            if (firstLeg.blocked) continue;
+
+            const secondLeg = this._traceRoute(game, player, candidate, goal);
+            const secondCoverage = secondLeg.hitDist / Math.max(secondLeg.len, 0.001);
+            if (secondLeg.blocked && secondCoverage <= directCoverage + 0.12) {
+                continue;
+            }
+
+            const distFromBot = v2.distance(player.pos, candidate);
+            const distToGoal = v2.distance(candidate, goal);
+            const score =
+                (secondLeg.blocked ? 0 : 1200) +
+                secondCoverage * 220 -
+                distFromBot * 1.2 -
+                distToGoal * 0.2;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestPos = v2.copy(candidate);
+            }
+        }
+
+        return bestPos
+            ? {
+                  pos: bestPos,
+                  blockerId: blocker.__id,
+              }
+            : undefined;
     }
 
     private _traceRoute(
@@ -477,13 +721,21 @@ export class BotNavigationLite {
         start: Vec2,
         goal: Vec2,
     ): RouteTrace {
+        const cacheKey = this._getRouteTraceCacheKey(player.layer, start, goal);
+        const cached = this._routeTraceCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const len = v2.distance(start, goal);
         if (len <= 0.0001) {
-            return {
+            const result = {
                 blocked: false,
                 hitDist: 0,
                 len,
             };
+            this._routeTraceCache.set(cacheKey, result);
+            return result;
         }
 
         const dir = v2.normalizeSafe(v2.sub(goal, start), v2.create(1, 0));
@@ -509,12 +761,14 @@ export class BotNavigationLite {
             ? obstacles.find((obstacle) => obstacle.__id === hit.id)
             : undefined;
 
-        return {
+        const result = {
             blocked: hitDist < len - 0.05,
             hitDist,
             len,
             hitObstacle,
         };
+        this._routeTraceCache.set(cacheKey, result);
+        return result;
     }
 
     private _resolveStructuredGoal(
@@ -577,6 +831,14 @@ export class BotNavigationLite {
         goal: Vec2,
         gasEmergency: boolean,
     ): Vec2 | undefined {
+        const committedTransition = this._getCommittedWarehouseTransition(
+            player,
+            goal,
+        );
+        if (committedTransition) {
+            return committedTransition;
+        }
+
         const currentWarehouse = this._getContainingWarehouse(
             game,
             player.pos,
@@ -586,7 +848,7 @@ export class BotNavigationLite {
             currentWarehouse &&
             !this._isPointInsideBuilding(currentWarehouse, goal, player.layer)
         ) {
-            return this._pickWarehouseOpeningGoal(
+            const opening = this._pickWarehouseOpeningGoal(
                 game,
                 player,
                 currentWarehouse,
@@ -594,11 +856,20 @@ export class BotNavigationLite {
                 gasEmergency,
                 "exit",
             );
+            if (opening) {
+                this._setWarehouseTransition(
+                    currentWarehouse.__id,
+                    "exit",
+                    goal,
+                    opening,
+                );
+            }
+            return opening;
         }
 
         const goalWarehouse = this._getContainingWarehouse(game, goal, player.layer);
         if (!currentWarehouse && goalWarehouse) {
-            return this._pickWarehouseOpeningGoal(
+            const opening = this._pickWarehouseOpeningGoal(
                 game,
                 player,
                 goalWarehouse,
@@ -606,9 +877,46 @@ export class BotNavigationLite {
                 gasEmergency,
                 "enter",
             );
+            if (opening) {
+                this._setWarehouseTransition(
+                    goalWarehouse.__id,
+                    "enter",
+                    goal,
+                    opening,
+                );
+            }
+            return opening;
         }
 
+        this._clearWarehouseTransition();
         return undefined;
+    }
+
+    private _getCommittedWarehouseTransition(
+        player: Player,
+        goal: Vec2,
+    ): Vec2 | undefined {
+        const transition = this._warehouseTransition;
+        if (!transition) return undefined;
+        if (this._time >= transition.until) {
+            this._clearWarehouseTransition();
+            return undefined;
+        }
+        if (!this._sameGoal(goal, transition.goal)) {
+            this._clearWarehouseTransition();
+            return undefined;
+        }
+        if (
+            this._reachedPoint(
+                player.pos,
+                transition.opening,
+                BotTuning.navigation.arriveDist,
+            )
+        ) {
+            this._clearWarehouseTransition();
+            return undefined;
+        }
+        return transition.opening;
     }
 
     private _getContainingWarehouse(
@@ -642,6 +950,37 @@ export class BotNavigationLite {
         }
 
         return best;
+    }
+
+    private _getContainingBuildingId(
+        game: Game,
+        point: Vec2,
+        layer: number,
+    ): number | undefined {
+        return this._getContainingStructuredBuilding(game, point, layer, () => true)?.__id;
+    }
+
+    private _isInterestingRoamObstacle(obstacle: Obstacle, player: Player): boolean {
+        if (
+            obstacle.dead ||
+            obstacle.isWindow ||
+            !obstacle.destructible ||
+            obstacle.health <= 0 ||
+            v2.distance(player.pos, obstacle.pos) >
+                BotTuning.navigation.waypointInterestSearchDist
+        ) {
+            return false;
+        }
+
+        const def = MapObjectDefs[obstacle.type];
+        if (def.type !== "obstacle") return false;
+
+        const obstacleDef = def as ObstacleDef;
+        return (
+            obstacleDef.loot.length > 0 ||
+            !!obstacleDef.destroyType ||
+            !!obstacleDef.airdropCrate
+        );
     }
 
     private _isWarehouseBuilding(building: Building): boolean {
@@ -786,13 +1125,28 @@ export class BotNavigationLite {
         return v2.add(v2.rotate(local, building.rot), building.pos);
     }
 
+    private _setWarehouseTransition(
+        buildingId: number,
+        mode: "enter" | "exit",
+        goal: Vec2,
+        opening: Vec2,
+    ): void {
+        this._warehouseTransition = {
+            buildingId,
+            mode,
+            goal: v2.copy(goal),
+            opening: v2.copy(opening),
+            until: this._time + BotTuning.navigation.warehouseTransitionCommitSec,
+        };
+    }
+
     private _pickWallSlideWaypoint(
         game: Game,
         player: Player,
         goal: Vec2,
         directTrace: RouteTrace,
         gasEmergency: boolean,
-    ): Vec2 | undefined {
+    ): { pos: Vec2; blockerId?: number; sideSign?: -1 | 1 } | undefined {
         const blocker = directTrace.hitObstacle;
         if (!blocker || !this._isLargeIndestructibleWall(blocker)) {
             return undefined;
@@ -819,23 +1173,38 @@ export class BotNavigationLite {
         );
 
         const candidates = [
-            v2.add(base, v2.mul(tangent, BotTuning.navigation.wallSlideSideDist)),
-            v2.add(base, v2.mul(tangent, -BotTuning.navigation.wallSlideSideDist)),
-            v2.add(player.pos, v2.mul(normal, BotTuning.navigation.wallEscapeDist)),
+            {
+                pos: v2.add(base, v2.mul(tangent, BotTuning.navigation.wallSlideSideDist)),
+                sideSign: 1 as const,
+            },
+            {
+                pos: v2.add(base, v2.mul(tangent, -BotTuning.navigation.wallSlideSideDist)),
+                sideSign: -1 as const,
+            },
+            {
+                pos: v2.add(player.pos, v2.mul(normal, BotTuning.navigation.wallEscapeDist)),
+                sideSign: undefined,
+            },
         ];
 
         let bestPos: Vec2 | undefined;
         let bestScore = -Infinity;
+        let bestSideSign: -1 | 1 | undefined;
+        const preferCommittedSide =
+            this._detourBlockerId === blocker.__id &&
+            this._time < this._detourCommitUntil
+                ? this._detourSideSign
+                : undefined;
         for (const candidate of candidates) {
-            game.map.clampToMapBounds(candidate, player.rad);
-            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
-            if (this._isRecentlyFailed(candidate)) continue;
+            game.map.clampToMapBounds(candidate.pos, player.rad);
+            if (!this._isNavPointValid(game, player, candidate.pos, gasEmergency)) continue;
+            if (this._isRecentlyFailed(candidate.pos)) continue;
 
-            const firstLeg = this._traceRoute(game, player, player.pos, candidate);
+            const firstLeg = this._traceRoute(game, player, player.pos, candidate.pos);
             if (firstLeg.blocked) continue;
 
-            const secondLeg = this._traceRoute(game, player, candidate, goal);
-            const progress = directTrace.len - v2.distance(candidate, goal);
+            const secondLeg = this._traceRoute(game, player, candidate.pos, goal);
+            const progress = directTrace.len - v2.distance(candidate.pos, goal);
             const tangentGoalAlign = Math.abs(
                 v2.dot(
                     v2.normalizeSafe(v2.sub(goal, player.pos), v2.create(1, 0)),
@@ -845,16 +1214,29 @@ export class BotNavigationLite {
             const score =
                 (secondLeg.blocked ? 0 : 850) +
                 progress * 8 -
-                v2.distance(player.pos, candidate) * 1.25 +
+                v2.distance(player.pos, candidate.pos) * 1.25 +
                 tangentGoalAlign * 80;
+            const sideCommitBonus =
+                preferCommittedSide !== undefined &&
+                candidate.sideSign !== undefined &&
+                preferCommittedSide === candidate.sideSign
+                    ? BotTuning.navigation.detourSameSideBonus
+                    : 0;
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestPos = v2.copy(candidate);
+            if (score + sideCommitBonus > bestScore) {
+                bestScore = score + sideCommitBonus;
+                bestPos = v2.copy(candidate.pos);
+                bestSideSign = candidate.sideSign;
             }
         }
 
-        return bestPos;
+        return bestPos
+            ? {
+                  pos: bestPos,
+                  blockerId: blocker.__id,
+                  sideSign: bestSideSign,
+              }
+            : undefined;
     }
 
     private _isLargeIndestructibleWall(obstacle: Obstacle): boolean {
@@ -940,6 +1322,9 @@ export class BotNavigationLite {
         this._detourWaypoint = undefined;
         this._detourGoal = undefined;
         this._detourUntil = -Infinity;
+        this._detourCommitUntil = -Infinity;
+        this._detourBlockerId = undefined;
+        this._detourSideSign = undefined;
     }
 
     private _clearForcedDetour(): void {
@@ -950,5 +1335,20 @@ export class BotNavigationLite {
     private _clearFallback(): void {
         this._fallbackGoal = undefined;
         this._fallbackMode = undefined;
+    }
+
+    private _clearWarehouseTransition(): void {
+        this._warehouseTransition = undefined;
+    }
+
+    private _getRouteTraceCacheKey(layer: number, start: Vec2, goal: Vec2): string {
+        const prec = 100;
+        return [
+            layer,
+            Math.round(start.x * prec),
+            Math.round(start.y * prec),
+            Math.round(goal.x * prec),
+            Math.round(goal.y * prec),
+        ].join(":");
     }
 }

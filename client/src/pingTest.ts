@@ -16,7 +16,7 @@ export class PingTest {
             ping: 9999,
             active: false,
             complete: false,
-            ws: null as unknown as WebSocket | null,
+            ws: null as WebSocket | null,
             sendDelay: 0,
             sendTime: 0,
             sendCount: 0,
@@ -71,7 +71,7 @@ export class PingTest {
         for (let i = 0; i < this.tests.length; i++) {
             const test = this.tests[i];
             if (!test.active) {
-                return "continue";
+                continue;
             }
             if (!test.ws) {
                 const ws = new WebSocket(`ws${test.https ? "s" : ""}://${test.url}/ptc`);

@@ -1,27 +1,18 @@
 {
+  "$schema": "https://www.schemastore.org/tsconfig.json",
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["DOM", "ESNext"],
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "esModuleInterop": true,
-    "outDir": "./dist",
-    "newLine": "lf",
-    "allowSyntheticDefaultImports": true,
-    "useDefineForClassFields": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "allowImportingTsExtensions": true,
-    "allowJs": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "types": ["vite/client"]
+    "paths": {
+      "@/sdk": ["./src/sdk/sdk-manager.ts"]
+    }
   },
   "include": [
-    "src/**/*.ts",
-    "src/**/*.js",
+    "./src/**/*.ts",
+    "./src/**/*.js",
     "../shared/",
-    "atlas-builder/**/*.ts",
-    "global.d.ts"
+    "./atlas-builder/**/*.ts",
+    "./building-editor/**/*.ts",
+    "./global.d.ts"
   ]
 }

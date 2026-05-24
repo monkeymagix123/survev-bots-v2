@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-05
+Last updated: 2026-05-23
 
 ## Core Model
 
@@ -22,7 +22,7 @@ They are managed by `BotManager` and driven by:
 ### Main pieces
 - `server/src/game/bots/botController.ts`
   - main armed-bot controller path
-  - shared update loop / timing / parity hooks
+  - shared update loop / timing for armed bots
 - `server/src/game/bots/unarmedBotInputController.ts`
   - dedicated final input path for unarmed bots
   - keeps unarmed-specific object/loot/survival behavior from overcomplicating the armed controller
@@ -33,6 +33,9 @@ They are managed by `BotManager` and driven by:
 - `server/src/game/bots/botControllerShared.ts`
   - shared low-level controller helpers used by both armed and unarmed paths
   - centralizes common target/object/loot/melee/support-item behavior without merging the two controller flows
+- `server/src/game/bots/botDecisionSupport.ts`
+  - shared tactical snapshot / danger helpers
+  - keeps armed danger, threat-band, and softened-visible-threat logic in one place
 
 ### Supporting systems
 - `BotPerception`
@@ -112,12 +115,17 @@ Movement is state-driven and separate from shooting.
 `BotNavigationLite` intentionally stays simple:
 - direct goals when possible
 - short detour waypoints around blockers
+- short side-commitment around a chosen detour/wall-follow side so bots do not re-flip as easily between near-equivalent routes
+- normal idle roaming now first looks for nearby interesting local destinations (loot-bearing destructible obstacles, then nearby buildings), and only then falls back to a local random roam step
+- idle waypoints are refreshed once reached, so bots do not stand on a completed roam goal waiting only for waypoint TTL to expire
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / gas-center recovery
 - special-case container exit routing when a bot is inside a container but needs to leave it
 - special-case warehouse entry/exit routing through the large side openings
 - warehouse entry now uses an interior opening point so bots cross the threshold instead of stalling just outside
+- warehouse transitions now keep a short committed opening target so bots do not flip between enter/exit while hovering on the doorway threshold
+- when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
 
 It is **not** full pathfinding.
@@ -161,6 +169,7 @@ Recent guardrails:
 - armored / stone-plated obstacles are only considered if the bot’s melee slot can actually damage them
 - loot objects blocked by obvious walls/building separation are rejected
 - unarmed bots can redirect to a destructible blocker if that blocker is what stands between them and the desired object
+- explosive props like oil barrels are not favored as route-clearing blockers on the way to a better target
 
 Limits:
 - no broad puzzle solving
@@ -172,6 +181,8 @@ Limits:
 - approaches the obstacle edge, not the center
 - uses its own arrival threshold
 - uses actual melee geometry from the melee def (`attack.offset` + `attack.rad`)
+- checks punch reach against the bot’s intended same-tick aim direction instead of only last tick’s facing, so bots are less likely to stall beside a crate without swinging
+- can briefly plant during the swing through `BotTuning.objectInteract.meleeSwingStopSec`; this is intentionally tiny and can be set to `0` if the stop makes bots too punishable
 - can be used on a destructible route-blocker for unarmed bots when that blocker directly gates access to a better nearby object target
 
 ## Unarmed Behavior
@@ -192,6 +203,8 @@ Unarmed bots default to:
 - visible armed hostiles matter much more
 - visible unarmed hostiles are treated as less threatening
 - distracted armed hostiles allow more opportunistic crate/object behavior
+- very close hostiles still count as melee pressure, so unarmed bots back off instead of passively standing on top of each other
+- if a visible hostile still appears unarmed and no immediate gun/object is available, bots now prefer nearby fallback loot or disengage instead of stalling in place
 
 ### Armed-vs-unarmed threat softening
 Armed bots now also use that visible-hostile classification in a limited way:
@@ -222,6 +235,30 @@ Shared helper layer:
 - object-abort, heal-cancel, and heal/boost item-choice helpers
 - blocked-object rejection and redirect-to-blocker helper behavior
 
+## Optimization Notes
+
+Recent optimization work stayed deliberately conservative:
+- removed the old legacy parity-comparison path from live bot updates
+- added short-lived local-selection caches inside `BotLootScorer` and `BotObjectInteractionScorer`
+- added brief cooldown memory for failed loot/object/blocker picks so bots do not immediately retry the same bad choice
+- centralized armed tactical danger/threat derivation through a shared snapshot helper instead of recomputing overlapping booleans in multiple places
+- added strict same-tick/local reuse for `BotPerception` scans and repeated `BotNavigationLite` route traces
+
+This was meant to reduce repeated hot-path scans and retry loops without materially changing bot personalities.
+
+## Recent Fixes
+
+- Armed bots now remember which gun slot they were using before temporary `melee_break`, and re-equip that gun afterward.
+- Unarmed bots now treat very close hostiles as melee pressure and back off instead of face-hugging.
+- If a visible hostile still appears unarmed, bots now keep pursuing nearby loot/object opportunities or deliberately disengage instead of idling.
+- Route-blocker redirection no longer chooses explosive blockers like oil barrels for melee clearing.
+- Normal-mode roaming now prefers nearby loot-bearing obstacles/buildings before generic local wander.
+- Idle waypoints are now refreshed on arrival so unarmed bots do not stall on a completed roam goal until TTL expiry.
+- Warehouse doorway routing now keeps a short committed opening target so bots do not oscillate between moving in and back out at the threshold.
+- Exterior pursuit now has a first-pass building-corner detour so bots can round structure shells more deliberately when a building wall/child obstacle is the real blocker.
+- Melee-break range checks now use intended same-tick aim direction, which fixes a stall where bots could stand beside a crate without punching because the helper was still reading stale previous-tick facing.
+- Melee-break now has a tiny configurable post-swing plant window so crate punches look cleaner without hard-coding a long immobile stall.
+
 ## Aim / Shooting
 
 Aim/shoot is still separate from movement-state logic.
@@ -231,6 +268,7 @@ Aim/shoot is still separate from movement-state logic.
 - optional simple lead
 - difficulty-based mechanics
 - brain-profile modifiers layered on top
+- automatic-weapon spray now keeps a short persistent visible offset, so AR/SMG/LMG aim drifts more smoothly across a burst instead of snapping to a brand-new random angle every shot
 
 ### Shooting
 - armed bots use weapon-profile-gated shooting behavior
@@ -272,8 +310,9 @@ Holds brain-type behavior overlays such as:
 
 ## Debugging / Observability
 
-### Console / parity
-- optional parity comparison vs legacy controller
+### Console combat log
+- `debugCombat`
+- prints armed-brain combat state transitions to console for quick live inspection
 
 ### Stability log
 - `debugBotStability`

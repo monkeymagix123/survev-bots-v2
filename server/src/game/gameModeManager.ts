@@ -1,7 +1,6 @@
 import { TeamColor } from "../../../shared/defs/maps/factionDefs";
 import { GameConfig, TeamMode } from "../../../shared/gameConfig";
 import { ObjectType } from "../../../shared/net/objectSerializeFns";
-import type { PlayerStatus } from "../../../shared/net/updateMsg";
 import { collider } from "../../../shared/utils/collider";
 import { util } from "../../../shared/utils/util";
 import { v2 } from "../../../shared/utils/v2";
@@ -46,50 +45,113 @@ export class GameModeManager {
         }
     }
 
-    private _countAliveHumans(): number {
-        const livingPlayers = this.game.playerBarn.livingPlayers;
-        let count = 0;
+    // so the game doesn't start when there's only 2 players and one can of them can despawn which would end the game
+    // instead it will await 10 seconds for the second player to not be able to despawn before starting
+    cantDespawnAliveCount(): number {
+        switch (this.mode) {
+            case GameMode.Solo:
+                return this.game.playerBarn.livingPlayers.filter((p) => !p.canDespawn())
+                    .length;
+            case GameMode.Team:
+                return this.game.playerBarn.getAliveGroups().filter((group) => {
+                    return group.players.filter((p) => !p.canDespawn()).length > 0;
+                }).length;
+            case GameMode.Faction:
+                return this.game.playerBarn.getAliveTeams().filter((team) => {
+                    return team.players.filter((p) => !p.canDespawn()).length;
+                }).length;
+        }
+    }
 
-        for (let i = 0; i < livingPlayers.length; i++) {
-            const p = livingPlayers[i];
-            if (!p.isAi && !p.bot && !p.disconnected) {
-                count++;
+    private _countAliveHumans(): number {
+        return this.game.playerBarn.livingPlayers.filter(
+            (p) => !p.isAi && !p.bot && !p.disconnected,
+        ).length;
+    }
+
+    // used when saving the game match data
+    getPlayersSortedByRank(): Array<{ player: Player; rank: number }> {
+        const players = [...this.game.playerBarn.players];
+
+        switch (this.mode) {
+            case GameMode.Solo: {
+                return players
+                    .sort((a, b) => {
+                        return b.killedIndex - a.killedIndex;
+                    })
+                    .map((player, idx) => {
+                        return {
+                            player,
+                            rank: idx + 1,
+                        };
+                    });
+            }
+            case GameMode.Team:
+            case GameMode.Faction: {
+                // the logic is basically the exact same for both
+                // just uses team instead of group on faction...
+
+                const key = this.mode === GameMode.Faction ? "teams" : "groups";
+
+                // calculate each group killed index
+                // by basing it on the last player to die killed index
+                const groups = this.game.playerBarn[key].map((group) => {
+                    return {
+                        killedIndex:
+                            group.players.sort((a, b) => {
+                                return b.killedIndex - a.killedIndex;
+                            })[0].killedIndex ?? Infinity,
+                        players: group.players,
+                    };
+                });
+
+                groups.sort((a, b) => b.killedIndex - a.killedIndex);
+
+                let data: Array<{ player: Player; rank: number }> = [];
+
+                for (let i = 0; i < groups.length; i++) {
+                    for (const player of groups[i].players) {
+                        data.push({
+                            player,
+                            rank: i + 1,
+                        });
+                    }
+                }
+
+                return data;
             }
         }
-
-        return count;
     }
 
     /** true if game needs to end */
     handleGameEnd(): boolean {
-        if (!this.game.started) return false;
+        if (this.game.map.mapDef.isWave) {
+            if (!this.game.started) return false;
 
-        const isWaveMap = !!this.game.map.mapDef.isWave;
-        if (isWaveMap) {
-            const aliveHumans = this._countAliveHumans();
-            if (aliveHumans > 0) return false;
+            if (this.game.botManager.wavesComplete) {
+                for (const player of this.game.playerBarn.players) {
+                    if (player.hasClient && !player.disconnected && !player.bot) {
+                        player.addGameOverMsg(TeamColor.Red);
+                    }
+                }
 
-            // Wave map ends only when all humans are dead/disconnected.
-            // Bots always win (Team 2 / Blue).
-            for (const p of this.game.playerBarn.players) {
-                if (p.hasClient && !p.disconnected && !p.bot) {
-                    p.addGameOverMsg(TeamColor.Blue);
+                this.game.playerBarn.killedPlayers.length = 0;
+                return true;
+            }
+
+            if (this._countAliveHumans() > 0) return false;
+
+            for (const player of this.game.playerBarn.players) {
+                if (player.hasClient && !player.disconnected && !player.bot) {
+                    player.addGameOverMsg(TeamColor.Blue);
                 }
             }
 
-            // Prevent the killed-player "placement" gameover message from overwriting the
-            // final defeat message (winningTeamId=Blue) on the same tick.
             this.game.playerBarn.killedPlayers.length = 0;
             return true;
         }
 
-        const aliveCount = this.aliveCount();
-        if (aliveCount > 1) return false;
-        if (aliveCount <= 0) {
-            // No winner (all players removed/disconnected). End the match safely.
-            return true;
-        }
-
+        if (!this.game.started || this.aliveCount() > 1) return false;
         switch (this.mode) {
             case GameMode.Solo: {
                 const winner = this.game.playerBarn.livingPlayers[0];
@@ -99,14 +161,14 @@ export class GameModeManager {
             case GameMode.Team: {
                 const winner = this.game.playerBarn.getAliveGroups()[0];
                 for (const player of winner.getAlivePlayers()) {
-                    player.addGameOverMsg(winner.groupId);
+                    player.addGameOverMsg(winner.id);
                 }
                 return true;
             }
             case GameMode.Faction: {
                 const winner = this.game.playerBarn.getAliveTeams()[0];
                 for (const player of winner.livingPlayers) {
-                    player.addGameOverMsg(winner.teamId);
+                    player.addGameOverMsg(winner.id);
                 }
                 return true;
             }
@@ -117,7 +179,7 @@ export class GameModeManager {
         if (this.game.map.mapDef.isWave) {
             return this._countAliveHumans() > 0;
         }
-        return this.aliveCount() > 1;
+        return this.cantDespawnAliveCount() > 1;
     }
 
     updateAliveCounts(aliveCounts: number[]): void {
@@ -153,22 +215,10 @@ export class GameModeManager {
         }
     }
 
-    getSpectatablePlayers(player: Player): Player[] {
-        let playerFilter: (p: Player) => boolean;
-        if (this.getPlayerAlivePlayersContext(player).length != 0) {
-            playerFilter = (p: Player) => !p.disconnected && p.teamId == player.teamId;
-        } else {
-            // if no players left on group/team, player can spectate anyone
-            playerFilter = (p: Player) => !p.disconnected;
-        }
-        // livingPlayers is used here instead of a more "efficient" option because its sorted while other options are not
-        return this.game.playerBarn.livingPlayers.filter(playerFilter);
-    }
-
-    getPlayerStatusPlayers(player: Player): Player[] | undefined {
+    getPlayerStatusPlayers(player: Player): Player[] {
         switch (this.mode) {
             case GameMode.Solo:
-                return undefined;
+                return [];
             case GameMode.Team:
                 return player.group!.players;
             case GameMode.Faction:
@@ -187,17 +237,6 @@ export class GameModeManager {
         }
     }
 
-    getIdContext(player: Player): number {
-        switch (this.mode) {
-            case GameMode.Solo:
-                return player.__id;
-            case GameMode.Team:
-                return player.groupId;
-            case GameMode.Faction:
-                return player.teamId;
-        }
-    }
-
     /** includes passed in player */
     getNearbyAlivePlayersContext(player: Player, range: number): Player[] {
         const alivePlayersContext = this.getPlayerAlivePlayersContext(player);
@@ -211,53 +250,23 @@ export class GameModeManager {
             );
         }
 
-        const playerIdContext = this.getIdContext(player);
         return this.game.grid
             .intersectCollider(collider.createCircle(player.pos, range))
             .filter(
                 (obj): obj is Player =>
                     obj.__type == ObjectType.Player &&
-                    playerIdContext == this.getIdContext(obj) &&
+                    player.teamId === obj.teamId &&
                     !obj.dead && // necessary since player isnt deleted from grid on death
                     !!util.sameLayer(player.layer, obj.layer) &&
                     v2.lengthSqr(v2.sub(player.pos, obj.pos)) <= range * range,
             );
     }
 
-    isReviveSupported(): boolean {
-        return !this.isSolo;
-    }
-
-    isReviving(player: Player): boolean {
-        if (this.isSolo) return false;
-
-        return player.actionType == GameConfig.Action.Revive && !!player.action.targetId;
-    }
-
-    isBeingRevived(player: Player): boolean {
-        if (!player.downed || this.isSolo) return false;
-
-        const normalRevive =
-            player.actionType == GameConfig.Action.Revive && player.action.targetId == 0;
-        if (normalRevive) return true;
-
-        const numMedics = this.game.playerBarn.medics.length;
-        if (numMedics) {
-            return this.game.playerBarn.medics.some((medic) => {
-                return (
-                    medic != player &&
-                    this.isReviving(medic) &&
-                    player.isAffectedByAOE(medic)
-                );
-            });
-        }
-        return false;
-    }
-
     showStatsMsg(player: Player): boolean {
         if (this.game.map.mapDef.isWave) {
             return this._countAliveHumans() > 0;
         }
+
         switch (this.mode) {
             case GameMode.Solo:
                 return false;
@@ -278,11 +287,18 @@ export class GameModeManager {
                 const redLeader = this.game.playerBarn.teams[TeamColor.Red - 1].leader;
                 const blueLeader = this.game.playerBarn.teams[TeamColor.Blue - 1].leader;
                 const highestKiller = this.game.playerBarn.players.reduce(
-                    (highestKiller, p) =>
-                        highestKiller.kills > p.kills ? highestKiller : p,
+                    (highestKiller, p) => {
+                        if (highestKiller.kills === p.kills) {
+                            return highestKiller.damageDealt > p.damageDealt
+                                ? highestKiller
+                                : p;
+                        }
+
+                        return highestKiller.kills > p.kills ? highestKiller : p;
+                    },
                 );
 
-                //if game ends before leaders are promoted, just show the player by himself
+                // if game ends before leaders are promoted, just show the player by himself
                 return !redLeader || !blueLeader
                     ? [player]
                     : [player, redLeader, blueLeader, highestKiller];
@@ -301,30 +317,11 @@ export class GameModeManager {
         // If there are no spectators, we have no need to run any logic.
         if (player.spectatorCount === 0) return;
 
-        // Utility function to find a derivative of the original killer.
-        let attempts = 0;
-        const getAliveKiller = (killer: Player | undefined): Player | undefined => {
-            attempts++;
-            if (attempts > 80) return undefined;
-
-            if (!killer) return undefined;
-            if (!killer.dead) return killer;
-            if (
-                killer.killedBy &&
-                killer.killedBy !== player &&
-                killer.killedBy !== killer
-            ) {
-                return getAliveKiller(killer.killedBy);
-            }
-
-            return undefined;
-        };
-
         // Priority list of spectate targets.
         const spectateTargets = [
             player.group?.randomPlayer(), // undefined if no player to choose
             player.team?.randomPlayer(), // undefined if no player to choose
-            getAliveKiller(player.killedBy),
+            player.getAliveKiller(),
             player.game.playerBarn.randomPlayer(),
         ];
 
@@ -343,114 +340,53 @@ export class GameModeManager {
         }
     }
 
-    getPlayerStatuses(player: Player): PlayerStatus[] {
-        if (this.isSolo) return [];
-
-        const isWaveMap = !!this.game.map.mapDef.isWave;
-        const players: Player[] = this.getPlayerStatusPlayers(player)!;
-        return players.map((p) => ({
-            hasData: p.playerStatusDirty,
-            pos: p.pos,
-            visible:
-                isWaveMap && (p.isAi || p.bot)
-                    ? true
-                    : p.teamId === player.teamId || p.timeUntilHidden > 0,
-            dead: p.dead,
-            downed: p.downed,
-            role: p.role,
-        }));
-    }
-
     handlePlayerDeath(player: Player, params: DamageParams): void {
-        switch (this.mode) {
-            case GameMode.Solo:
-                return player.kill(params);
-            case GameMode.Team:
-                {
-                    const sourceIsPlayer = params.source?.__type === ObjectType.Player;
-                    const group = player.group!;
-                    if (player.downed) {
-                        const finishedByTeammate =
-                            player.downedBy &&
-                            sourceIsPlayer &&
-                            player.downedBy.groupId === (params.source as Player).groupId;
+        if (this.isSolo) {
+            player.kill(params);
+        } else {
+            const group = this.mode === GameMode.Faction ? player.team! : player.group!;
 
-                        const bledOut =
-                            player.downedBy &&
-                            params.damageType == GameConfig.DamageType.Bleeding;
+            const playerSource =
+                params.source?.__type === ObjectType.Player
+                    ? (params.source as Player)
+                    : undefined;
+            if (player.downed) {
+                const finishedByTeammate =
+                    player.downedBy &&
+                    playerSource &&
+                    player.downedBy.teamId === playerSource.teamId;
 
-                        if (finishedByTeammate || bledOut) {
-                            params.source = player.downedBy;
-                        }
+                const nonPlayerKill =
+                    player.downedBy && params.damageType != GameConfig.DamageType.Player;
 
-                        player.kill(params);
-                        // special case that only happens when the player has self_revive since the teammates wouldnt have previously been finished off
-                        if (group.checkAllDowned(player)) {
-                            group.killAllTeammates();
-                        }
-                        return;
-                    }
-
-                    const allDeadOrDisconnected =
-                        group.checkAllDeadOrDisconnected(player);
-                    const allDowned = group.checkAllDowned(player);
-                    const groupHasSelfRevive = group.livingPlayers.find((p) =>
-                        p.hasPerk("self_revive"),
-                    );
-
-                    if (!groupHasSelfRevive && (allDeadOrDisconnected || allDowned)) {
-                        group.allDeadOrDisconnected = true; // must set before any kill() calls so the gameovermsgs are accurate
-                        player.kill(params);
-                        if (allDowned) {
-                            group.killAllTeammates();
-                        }
-                    } else {
-                        player.down(params);
-                    }
+                // give kill credit to the person that downed the player if it was killed by:
+                // a teammate, bleeding or non player source (airstrike, gas etc)
+                if (finishedByTeammate || nonPlayerKill) {
+                    params.killCreditSource = player.downedBy;
                 }
-                break;
-            case GameMode.Faction:
-                {
-                    const sourceIsPlayer = params.source?.__type === ObjectType.Player;
-                    const team = player.team!;
-                    if (player.downed) {
-                        const finishedByTeammate =
-                            player.downedBy &&
-                            sourceIsPlayer &&
-                            player.downedBy.teamId === (params.source as Player).teamId;
 
-                        const bledOut =
-                            player.downedBy &&
-                            params.damageType == GameConfig.DamageType.Bleeding;
-
-                        if (finishedByTeammate || bledOut) {
-                            params.source = player.downedBy;
-                        }
-
-                        player.kill(params);
-                        // special case that only happens when the player has self_revive since the teammates wouldnt have previously been finished off
-                        if (team.checkAllDowned(player)) {
-                            team.killAllTeammates();
-                        }
-                        return;
-                    }
-
-                    const teamHasSelfRevive = team.livingPlayers.find((p) =>
-                        p.hasPerk("self_revive"),
-                    );
-                    const allDead = team.checkAllDead(player);
-                    const allDowned = team.checkAllDowned(player);
-
-                    if (!teamHasSelfRevive && (allDead || allDowned)) {
-                        player.kill(params);
-                        if (allDowned) {
-                            team.killAllTeammates();
-                        }
-                    } else {
-                        player.down(params);
-                    }
+                player.kill(params);
+                // special case that only happens when the player has self_revive since the teammates wouldnt have previously been finished off
+                if (group.checkAllDowned(player) && !group.checkSelfRevive()) {
+                    // don't kill teammates if any one has self revive
+                    group.killAllTeammates();
                 }
-                break;
+                return;
+            }
+
+            const allDeadOrDisconnected = group.checkAllDeadOrDisconnected(player);
+            const allDowned = group.checkAllDowned(player);
+            const groupHasSelfRevive = group.checkSelfRevive();
+
+            if (!groupHasSelfRevive && (allDeadOrDisconnected || allDowned)) {
+                group.allDeadOrDisconnected = true; // must set before any kill() calls so the gameovermsgs are accurate
+                player.kill(params);
+                if (allDowned) {
+                    group.killAllTeammates();
+                }
+            } else {
+                player.down(params);
+            }
         }
     }
 }

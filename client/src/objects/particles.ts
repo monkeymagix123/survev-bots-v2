@@ -5,6 +5,7 @@ import { type Vec2, v2 } from "../../../shared/utils/v2";
 import type { Camera } from "../camera";
 import type { Map } from "../map";
 import type { Renderer } from "../renderer";
+import { SDK } from "../sdk/sdk";
 
 class Range {
     constructor(
@@ -77,6 +78,7 @@ export class Particle {
         parent: PIXI.Container | null,
         zOrd: number,
         valueAdjust: number,
+        tint?: number,
     ) {
         const def = ParticleDefs[type];
         this.active = true;
@@ -115,7 +117,13 @@ export class Particle {
         this.sprite.texture = PIXI.Texture.from(tex);
         this.sprite.visible = false;
         this.valueAdjust = def.ignoreValueAdjust ? 1 : valueAdjust;
-        this.setColor(getColorValue(def.color!));
+        this.setColor(tint !== undefined ? tint : getColorValue(def.color!));
+
+        if (SDK.disableBloodParticles() && type == "bloodSplat") {
+            this.sprite.renderable = false;
+        } else {
+            this.sprite.renderable = true;
+        }
     }
 
     free() {
@@ -144,6 +152,7 @@ interface EmitterOptions {
     radius?: number;
     rateMult?: number;
     parent?: PIXI.Container | null;
+    color?: number;
 }
 
 export class Emitter {
@@ -163,6 +172,7 @@ export class Emitter {
     alpha!: number;
     rateMult!: number;
     zOrd!: number;
+    color?: number;
 
     init(type: string, options = {} as EmitterOptions) {
         const def = EmitterDefs[type];
@@ -182,6 +192,7 @@ export class Emitter {
         this.parent = options.parent || null;
         this.alpha = 1;
         this.rateMult = options.rateMult !== undefined ? options.rateMult : 1;
+        this.color = options.color;
         const partDef = ParticleDefs[def.particle];
         this.zOrd =
             def.zOrd !== undefined
@@ -234,6 +245,7 @@ export class ParticleBarn {
         rot?: number,
         parent?: PIXI.Container | null,
         zOrd?: number,
+        tint?: number,
     ) {
         let particle = null;
         for (let i = 0; i < this.particles.length; i++) {
@@ -261,6 +273,7 @@ export class ParticleBarn {
             parent!,
             zOrd,
             this.valueAdjust,
+            tint,
         );
         return particle;
     }
@@ -298,7 +311,7 @@ export class ParticleBarn {
         return emitter;
     }
 
-    m_update(dt: number, camera: Camera, _debug: unknown) {
+    m_update(dt: number, camera: Camera) {
         // Update emitters
         for (let i = 0; i < this.emitters.length; i++) {
             const e = this.emitters[i];
@@ -322,6 +335,9 @@ export class ParticleBarn {
                         e.parent,
                         e.zOrd,
                     );
+                    if (e.color !== undefined) {
+                        particle.setColor(e.color);
+                    }
                     particle.emitterIdx = i;
                     let rate = getRangeValue(def.rate);
                     if (def.maxRate) {
@@ -442,7 +458,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             lerp: new Range(0.75, 1),
         },
         color: function () {
-            return util.rgbToInt(util.hsvToRgb(16711680, 1, util.random(0.45, 0.8)));
+            return util.rgbToInt(util.hsvToRgb(0xff0000, 1, util.random(0.45, 0.8)));
         },
     },
     barrelPlank: {
@@ -574,7 +590,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.95, 1),
         },
-        color: 7878664,
+        color: 0x783808,
     },
     bottleBrownBreak: {
         image: ["part-spark-02.img"],
@@ -591,7 +607,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.75, 1),
         },
-        color: 7878664,
+        color: 0x783808,
     },
     bottleBlueChip: {
         image: ["part-spark-02.img"],
@@ -608,7 +624,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.95, 1),
         },
-        color: 19544,
+        color: 0x4c58,
     },
     bottleWhiteBreak: {
         image: ["part-spark-02.img"],
@@ -659,7 +675,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.75, 1),
         },
-        color: 19544,
+        color: 0x4c58,
     },
     brickChip: {
         image: ["part-spark-02.img"],
@@ -771,7 +787,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.95, 1),
         },
-        color: 8444415,
+        color: 0x80d9ff,
     },
     glassPlank: {
         image: ["part-plank-01.img"],
@@ -788,7 +804,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.9, 1),
         },
-        color: 8444415,
+        color: 0x80d9ff,
     },
     goldChip: {
         image: ["part-spark-02.img"],
@@ -807,6 +823,63 @@ const ParticleDefs: Record<string, ParticleDef> = {
         },
         color: function () {
             return util.rgbToInt(util.hsvToRgb(0.11, 0.84, util.random(0.88, 0.9)));
+        },
+    },
+    pinkChip: {
+        image: ["part-spark-02.img"],
+        life: new Range(0.5, 1),
+        drag: new Range(1, 5),
+        rotVel: new Range(Math.PI * 3, Math.PI * 3),
+        scale: {
+            start: new Range(0.04, 0.08),
+            end: new Range(0.01, 0.02),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0, 0.52, util.random(0.98, 1)));
+        },
+    },
+    ltblueChip: {
+        image: ["part-spark-02.img"],
+        life: new Range(0.5, 1),
+        drag: new Range(1, 5),
+        rotVel: new Range(Math.PI * 3, Math.PI * 3),
+        scale: {
+            start: new Range(0.04, 0.08),
+            end: new Range(0.01, 0.02),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0.5, 0.65, util.random(0.98, 1)));
+        },
+    },
+    yellowChip: {
+        image: ["part-spark-02.img"],
+        life: new Range(0.5, 1),
+        drag: new Range(1, 5),
+        rotVel: new Range(Math.PI * 3, Math.PI * 3),
+        scale: {
+            start: new Range(0.04, 0.08),
+            end: new Range(0.01, 0.02),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0.16, 0.73, util.random(0.98, 1)));
         },
     },
     greenChip: {
@@ -843,7 +916,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.9, 1),
         },
-        color: 3884335,
+        color: 0x3b452f,
     },
     greenhouseBreak: {
         image: ["part-spark-02.img", "part-plate-01.img", "part-panel-01.img"],
@@ -860,7 +933,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.75, 1),
         },
-        color: 8444415,
+        color: 0x80d9ff,
     },
     hutBreak: {
         image: ["part-panel-01.img"],
@@ -1109,6 +1182,82 @@ const ParticleDefs: Record<string, ParticleDef> = {
             return util.rgbToInt(util.hsvToRgb(0.075, 0.43, util.random(0.48, 0.5)));
         },
     },
+    tomatoChip_01: {
+        image: ["part-spark-02.img"],
+        life: 0.5,
+        drag: new Range(1, 10),
+        rotVel: 0,
+        scale: {
+            start: new Range(0.04, 0.08),
+            end: new Range(0.01, 0.02),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.95, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0, util.random(0.43, 0.64), 0.7));
+        },
+    },
+    tomatoChip_02: {
+        image: ["part-spark-02.img"],
+        life: 0.5,
+        drag: new Range(1, 10),
+        rotVel: 0,
+        scale: {
+            start: new Range(0.04, 0.08),
+            end: new Range(0.01, 0.02),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.95, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0.26, util.random(0.53, 0.63), 0.55));
+        },
+    },
+    tomatoBreak_01: {
+        image: ["part-pumpkin-01.img"],
+        life: new Range(0.8, 1),
+        drag: new Range(1, 5),
+        rotVel: 0,
+        scale: {
+            start: new Range(0.07, 0.12),
+            end: new Range(0.05, 0.1),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0, util.random(0.43, 0.64), 0.7));
+        },
+    },
+    tomatoBreak_02: {
+        image: ["part-pumpkin-01.img"],
+        life: new Range(0.8, 1),
+        drag: new Range(1, 5),
+        rotVel: 0,
+        scale: {
+            start: new Range(0.07, 0.12),
+            end: new Range(0.05, 0.1),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0.26, util.random(0.53, 0.63), 0.55));
+        },
+    },
     pumpkinChip: {
         image: ["part-spark-02.img"],
         life: 0.5,
@@ -1295,7 +1444,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.95, 1),
         },
-        color: 2696225,
+        color: 0x292421,
     },
     rockEyeBreak: {
         image: ["map-stone-01.img"],
@@ -1312,7 +1461,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.9, 1),
         },
-        color: 2696225,
+        color: 0x292421,
     },
     shackBreak: {
         image: ["part-panel-01.img"],
@@ -1348,7 +1497,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.9, 1),
         },
-        color: 5730406,
+        color: 0x577066,
     },
     tanChip: {
         image: ["part-woodchip-01.img"],
@@ -1817,7 +1966,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.5, 1),
         },
-        color: 16767488,
+        color: 0xffda00,
     },
     fragPin: {
         image: ["part-frag-pin-01.img"],
@@ -1980,7 +2129,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.75, 1),
         },
-        color: 11363866,
+        color: 0xad661a,
     },
     explosionPotatoSMG: {
         image: ["part-frag-burst-01.img"],
@@ -1997,7 +2146,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             end: 0,
             lerp: new Range(0.75, 1),
         },
-        color: 12888074,
+        color: 0xc4a80a,
     },
     airdropSmoke: {
         image: ["part-smoke-02.img", "part-smoke-03.img"],
@@ -2339,7 +2488,7 @@ const ParticleDefs: Record<string, ParticleDef> = {
             start: 1,
             exp: -1,
         },
-        color: 11792639,
+        color: 0xb3f0ff,
     },
     leafAutumn: {
         image: [
@@ -2508,6 +2657,30 @@ const ParticleDefs: Record<string, ParticleDef> = {
             return util.rgbToInt(util.hsvToRgb(0, 0, util.random(0.9, 0.95)));
         },
     },
+    potato_factions: {
+        image: ["part-potato-02.img", "part-tomato-02.img"],
+        life: new Range(10, 15),
+        drag: new Range(0, 0),
+        rotVel: new Range(Math.PI * 0.25, Math.PI * 0.5),
+        scale: {
+            start: new Range(0.13, 0.15),
+            end: new Range(0.08, 0.11),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        alphaIn: {
+            start: 0,
+            end: 1,
+            lerp: new Range(0, 0.05),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0, 0, util.random(0.9, 0.95)));
+        },
+    },
     snow: {
         image: ["part-snow-01.img"],
         life: new Range(10, 15),
@@ -2586,6 +2759,44 @@ const ParticleDefs: Record<string, ParticleDef> = {
             lerp: new Range(0.9, 1),
         },
         color: 16770437,
+    },
+    coconut_impact: {
+        image: ["part-coconut-01.img", "part-coconut-02.img", "part-coconut-03.img"],
+        life: new Range(0.5, 1),
+        drag: new Range(0, 0),
+        rotVel: new Range(Math.PI * 0.25, Math.PI * 0.5),
+        scale: {
+            start: new Range(0.13, 0.23),
+            end: new Range(0.07, 0.14),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0, 0, util.random(0.9, 0.95)));
+        },
+    },
+    tomato_impact: {
+        image: ["part-tomato-01.img"],
+        life: new Range(0.5, 1),
+        drag: new Range(0, 0),
+        rotVel: new Range(Math.PI * 0.25, Math.PI * 0.5),
+        scale: {
+            start: new Range(0.13, 0.23),
+            end: new Range(0.07, 0.14),
+            lerp: new Range(0, 1),
+        },
+        alpha: {
+            start: 1,
+            end: 0,
+            lerp: new Range(0.9, 1),
+        },
+        color: function () {
+            return util.rgbToInt(util.hsvToRgb(0, 0, util.random(0.9, 0.95)));
+        },
     },
     heal_basic: {
         image: ["part-heal-basic.img"],
@@ -2991,6 +3202,15 @@ const EmitterDefs: Record<string, EmitterDef> = {
         rot: new Range(0, Math.PI * 2),
         maxCount: Number.MAX_VALUE,
     },
+    campfire_smoke: {
+        particle: "cabinSmoke",
+        rate: new Range(2, 4),
+        radius: 0,
+        speed: new Range(1, 1.5),
+        angle: Math.PI * 0.1,
+        rot: new Range(0, Math.PI * 2),
+        maxCount: Number.MAX_VALUE,
+    },
     bathhouse_steam: {
         particle: "bathhouseSteam",
         rate: new Range(2, 3),
@@ -3068,6 +3288,16 @@ const EmitterDefs: Record<string, EmitterDef> = {
     },
     falling_potato: {
         particle: "potato",
+        rate: new Range(0.2, 0.24),
+        radius: 120,
+        speed: new Range(2, 3),
+        angle: Math.PI * 0.2,
+        rot: new Range(0, Math.PI * 2),
+        maxCount: Number.MAX_VALUE,
+        zOrd: 999,
+    },
+    falling_pvt: {
+        particle: "potato_factions",
         rate: new Range(0.2, 0.24),
         radius: 120,
         speed: new Range(2, 3),

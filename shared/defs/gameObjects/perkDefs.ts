@@ -1,27 +1,46 @@
 export const PerkProperties = {
     leadership: {
+        minBoost: 100,
         scale: 0.25,
+    },
+    assume_leadership: {
+        minBoost: 50,
+        scale: 0.15,
     },
     steelskin: {
         scale: 0.4,
-        damageReduction: 0.5,
+        damageReduction: 0.45,
     },
     flak_jacket: {
-        scale: 0.2,
+        scale: 0.1,
         damageReduction: 0.1,
         explosionDamageReduction: 0.9,
+        fragBonus: 3,
+        mirvBonus: 2,
+    },
+    amped_explosives: {
+        throwableRangeMult: 1.75,
+        throwableSpeedMult: 2,
+        shrapnelCountMult: 2,
+        shrapnelDamageMult: 1.5,
+        shrapnelSpeedMult: 1.4,
     },
     small_arms: {
         scale: -0.25,
     },
     splinter: {
         mainDamageMult: 0.6,
-        splitsDamageMult: 0.45,
+        splitsDamageMult: 0.5,
+    },
+    ap_rounds: {
+        armorPenetration: 0.8,
+        obstacleMult: 1.5,
     },
     trick_size: {
         scale: 0.25,
     },
     final_bugle: {
+        bonusDamageMult: 1.08,
         scaleOnDeath: 0.2,
     },
     broken_arrow: {
@@ -32,20 +51,34 @@ export const PerkProperties = {
         giveInterval: 0.08, // interval between each grenade being given until the backpack is full
     },
     gotw: {
-        scale: 0.25,
-        healthRegen: 0.5, // per second
+        scale: 0.2,
+        healthRegen: 1, // per second
+    },
+    lifeline: {
+        decayMult: 0.75, // Adrenaline decay multiplier
+        conversionRate: 2, // How much adrenaline used per health
     },
     field_medic: {
-        speedBoost: 1.5,
+        speedBoost: 1,
+    },
+    combat_stims: {
+        bonusDamageMult: 1.12,
+        healPercent: 0.06,
     },
     tree_climbing: {
         waterSpeedBoost: 2,
     },
     bonus_9mm: {
         spreadMul: 1.1,
+        speedMult: 1.25,
+        distanceMult: 1.25,
     },
     rare_potato: {
         quality: 1,
+    },
+    high_velocity: {
+        speedMult: 1.4,
+        distanceMult: 1.3,
     },
     // map of ammo type to perk that boosts that ammo
     ammoBonuses: {
@@ -56,6 +89,23 @@ export const PerkProperties = {
         "45acp": ["bonus_45"],
     } as Record<string, string[]>,
     ammoBonusDamageMult: 1.08,
+    // Classless perk list (effectively all class perks in Cobalt, minus martyrdom)
+    classless: {
+        perkPool: [
+            "combat_stims",
+            "field_medic",
+            "steelskin",
+            "endless_ammo",
+            "chambered",
+            "takedown",
+            "small_arms",
+            "tree_climbing",
+            "amped_explosives",
+            "flak_jacket",
+            "firepower",
+            "bonus_assault",
+        ],
+    },
 };
 
 export interface PerkDef {
@@ -80,6 +130,20 @@ export const PerkDefs: Record<string, PerkDef> = {
         type: "perk",
         lootImg: {
             sprite: "loot-perk-leadership.img",
+            tint: 0xffffff,
+            border: "loot-circle-outer-03.img",
+            borderTint: 0xffffff,
+            scale: 0.275,
+        },
+        sound: {
+            pickup: "perk_pickup_01",
+        },
+    },
+    assume_leadership: {
+        name: "Assume Leadership",
+        type: "perk",
+        lootImg: {
+            sprite: "loot-perk-assume-leadership.img",
             tint: 0xffffff,
             border: "loot-circle-outer-03.img",
             borderTint: 0xffffff,
@@ -187,6 +251,20 @@ export const PerkDefs: Record<string, PerkDef> = {
             pickup: "perk_pickup_01",
         },
     },
+    ap_rounds: {
+        name: "AP Rounds",
+        type: "perk",
+        lootImg: {
+            sprite: "loot-perk-ap-rounds.img",
+            tint: 0xffffff,
+            border: "loot-circle-outer-03.img",
+            borderTint: 0xffffff,
+            scale: 0.275,
+        },
+        sound: {
+            pickup: "perk_pickup_01",
+        },
+    },
     splinter: {
         name: "Splinter Rounds",
         type: "perk",
@@ -229,11 +307,39 @@ export const PerkDefs: Record<string, PerkDef> = {
             pickup: "perk_pickup_01",
         },
     },
+    lifeline: {
+        name: "Indomitable",
+        type: "perk",
+        lootImg: {
+            sprite: "loot-perk-lifeline.img",
+            tint: 0xffffff,
+            border: "loot-circle-outer-03.img",
+            borderTint: 0xffffff,
+            scale: 0.275,
+        },
+        sound: {
+            pickup: "perk_pickup_01",
+        },
+    },
     field_medic: {
-        name: "Field Medic",
+        name: "Combat Medic",
         type: "perk",
         lootImg: {
             sprite: "loot-perk-field-medic.img",
+            tint: 0xffffff,
+            border: "loot-circle-outer-03.img",
+            borderTint: 0xffffff,
+            scale: 0.275,
+        },
+        sound: {
+            pickup: "perk_pickup_01",
+        },
+    },
+    combat_stims: {
+        name: "Combat Stimulants",
+        type: "perk",
+        lootImg: {
+            sprite: "loot-perk-combat-stims.img",
             tint: 0xffffff,
             border: "loot-circle-outer-03.img",
             borderTint: 0xffffff,
@@ -285,6 +391,20 @@ export const PerkDefs: Record<string, PerkDef> = {
             pickup: "perk_pickup_01",
         },
     },
+    pirate: {
+        name: "Pirate's Bounty",
+        type: "perk",
+        lootImg: {
+            sprite: "loot-perk-pirate.img",
+            tint: 0xffffff,
+            border: "loot-circle-outer-03.img",
+            borderTint: 0xffffff,
+            scale: 0.275,
+        },
+        sound: {
+            pickup: "perk_pickup_01",
+        },
+    },
     hunted: {
         name: "The Hunted",
         type: "perk",
@@ -300,7 +420,7 @@ export const PerkDefs: Record<string, PerkDef> = {
         },
     },
     chambered: {
-        name: "One In The Chamber",
+        name: "One in the Chamber",
         type: "perk",
         lootImg: {
             sprite: "loot-perk-chambered.img",
@@ -342,7 +462,7 @@ export const PerkDefs: Record<string, PerkDef> = {
         },
     },
     bonus_45: {
-        name: ".45 In The Chamber",
+        name: ".45 in the Chamber",
         type: "perk",
         lootImg: {
             sprite: "loot-perk-bonus-45.img",
@@ -425,6 +545,20 @@ export const PerkDefs: Record<string, PerkDef> = {
             pickup: "perk_pickup_01",
         },
     },
+    amped_explosives: {
+        name: "Hyperfragmentation",
+        type: "perk",
+        lootImg: {
+            sprite: "loot-perk-amped-explosives.img",
+            tint: 0xffffff,
+            border: "loot-circle-outer-03.img",
+            borderTint: 0xffffff,
+            scale: 0.275,
+        },
+        sound: {
+            pickup: "perk_pickup_01",
+        },
+    },
     explosive: {
         name: "Explosive Rounds",
         type: "perk",
@@ -440,7 +574,7 @@ export const PerkDefs: Record<string, PerkDef> = {
         },
     },
     bonus_assault: {
-        name: "Hollow-points",
+        name: "Hollow-Points",
         type: "perk",
         lootImg: {
             sprite: "loot-perk-bonus-assault.img",
@@ -477,8 +611,22 @@ export const PerkDefs: Record<string, PerkDef> = {
         },
         sound: { pickup: "perk_pickup_01" },
     },
+    high_velocity: {
+        name: "High-Velocity Rounds",
+        type: "perk",
+        lootImg: {
+            sprite: "loot-perk-high-velocity.img",
+            tint: 0xffffff,
+            border: "loot-circle-outer-03.img",
+            borderTint: 0xffffff,
+            scale: 0.275,
+        },
+        sound: { pickup: "perk_pickup_01" },
+    },
+
+    // Halloween Perks
     halloween_mystery: {
-        name: "Trick Or Treat?",
+        name: "Trick or Treat?",
         type: "perk",
         lootImg: {
             sprite: "loot-perk-halloween-mystery.img",
@@ -641,6 +789,8 @@ export const PerkDefs: Record<string, PerkDef> = {
             pickup: "perk_pickup_01",
         },
     },
+
+    // Cosmetic Perks
     turkey_shoot: {
         name: "Perky Shoot",
         type: "perk",

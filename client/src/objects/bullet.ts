@@ -19,14 +19,6 @@ import type { FlareBarn } from "./flare";
 import type { ParticleBarn } from "./particles";
 import type { Player, PlayerBarn } from "./player";
 
-export function transformSegment(p0: Vec2, p1: Vec2, pos: Vec2, dir: Vec2) {
-    const ang = Math.atan2(dir.y, dir.x);
-    return {
-        p0: v2.add(pos, v2.rotate(p0, ang)),
-        p1: v2.add(pos, v2.rotate(p1, ang)),
-    };
-}
-
 export function createBullet(
     bullet: Bullet,
     bulletBarn: BulletBarn,
@@ -35,7 +27,7 @@ export function createBullet(
     renderer: Renderer,
 ) {
     if (BulletDefs[bullet.bulletType].addFlare) {
-        flareBarn.addFlare(bullet, playerBarn, renderer);
+        flareBarn.addFlare(bullet, playerBarn);
     } else {
         bulletBarn.addBullet(bullet, playerBarn, renderer);
     }
@@ -86,6 +78,8 @@ export class BulletBarn {
         suppressed: boolean;
         tracerAlphaRate: number;
         tracerAlphaMin: number;
+        combatStims: boolean;
+        particleTicker: number;
     }> = [];
 
     tracerColors: Record<
@@ -94,6 +88,7 @@ export class BulletBarn {
             regular: number;
             saturated: number;
             chambered: number;
+            apSaturated: number;
             alphaRate: number;
             alphaMin: number;
         }
@@ -101,6 +96,7 @@ export class BulletBarn {
 
     onMapLoad(map: Map) {
         this.tracerColors = util.mergeDeep(
+            {},
             GameConfig.tracerColors,
             map.getMapDef().biome.tracerColors,
         );
@@ -147,12 +143,14 @@ export class BulletBarn {
         b.pos = v2.copy(bullet.pos);
         b.dir = v2.copy(bullet.dir);
         b.layer = bullet.layer;
-        b.speed = bulletDef.speed * variance;
-        b.distance = distance * variance + distAdj;
+        b.speed = bulletDef.speed * bullet.speedMult * variance;
+        b.distance = distance * bullet.distanceMult * variance + distAdj;
         b.damageSelf = bulletDef.shrapnel || bullet.reflectCount > 0;
         b.reflectCount = bullet.reflectCount;
         b.reflectObjId = bullet.reflectObjId;
         b.whizHeard = false;
+        b.combatStims = bullet.combatStims;
+        b.particleTicker = util.random(0.05, 0.15);
 
         const angleRadians = Math.atan2(b.dir.x, b.dir.y);
         b.container.rotation = angleRadians - Math.PI / 2;
@@ -178,7 +176,9 @@ export class BulletBarn {
         // Use saturated color if the player is on a bright surface
         const tracerColors = this.tracerColors[bulletDef.tracerColor];
         let tracerTint = tracerColors.regular;
-        if (bullet.trailSaturated) {
+        if (bullet.apRounds) {
+            tracerTint = tracerColors.apSaturated;
+        } else if (bullet.trailSaturated) {
             tracerTint = tracerColors.chambered || tracerColors.saturated;
         } else if (player?.surface?.data.isBright) {
             tracerTint = tracerColors.saturated;
@@ -219,6 +219,22 @@ export class BulletBarn {
                 const distTravel = math.min(distLeft, dt * b.speed);
                 const posOld = v2.copy(b.pos);
                 b.pos = v2.add(b.pos, v2.mul(b.dir, distTravel));
+
+                b.particleTicker += dt;
+                if (b.combatStims && b.particleTicker >= 0.15) {
+                    particleBarn.addParticle(
+                        "boost_basic",
+                        b.layer,
+                        b.pos,
+                        b.dir,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        PIXI.Color.shared.setValue(b.bulletTrail.tint).toNumber(),
+                    );
+                    b.particleTicker = util.random(0, 0.1); // Done to make the particles for shotguns less periodic and more continuous
+                }
 
                 if (
                     !activePlayer.m_netData.m_dead &&
@@ -295,13 +311,13 @@ export class BulletBarn {
                         if (player.m_hasActivePan()) {
                             const p = player;
                             const panSeg = p.m_getPanSegment()!;
-                            const oldSegment = transformSegment(
+                            const oldSegment = math.transformSegment(
                                 panSeg.p0,
                                 panSeg.p1,
                                 p.m_posOld,
                                 p.m_dirOld,
                             );
-                            const newSegment = transformSegment(
+                            const newSegment = math.transformSegment(
                                 panSeg.p0,
                                 panSeg.p1,
                                 p.m_pos,
@@ -524,8 +540,7 @@ export class BulletBarn {
         }
     }
 
-    m_render(camera: Camera, _debug: unknown) {
-        camera.m_pixels(1);
+    m_render(camera: Camera) {
         for (let i = 0; i < this.bullets.length; i++) {
             const b = this.bullets[i];
             if (b.alive || b.collided) {

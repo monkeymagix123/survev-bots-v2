@@ -1,8 +1,12 @@
 import type { Vec2 } from "../utils/v2";
+import type { RoleDef } from "./gameObjects/roleDefs";
 import { Main } from "./maps/baseDefs";
+import { Beach } from "./maps/beachDefs";
+import { Birthday } from "./maps/birthdayDefs";
 import { Cobalt } from "./maps/cobaltDefs";
 import { Desert } from "./maps/desertDefs";
 import { Faction } from "./maps/factionDefs";
+import { factionPotato } from "./maps/factionPotatoDefs";
 import { Halloween } from "./maps/halloweenDefs";
 import { MainSpring } from "./maps/mainSpringDefs";
 import { MainSummer } from "./maps/mainSummerDefs";
@@ -10,6 +14,7 @@ import { Potato } from "./maps/potatoDefs";
 import { PotatoSpring } from "./maps/potatoSpringDefs";
 import { Savannah } from "./maps/savannahDefs";
 import { Snow } from "./maps/snowDefs";
+import { testFaction, testNormal } from "./maps/testDefs";
 import { Turkey } from "./maps/turkeyDefs";
 import { Wave } from "./maps/waveDefs";
 import { Wave2 } from "./maps/waveDefs2";
@@ -17,27 +22,7 @@ import { Woods } from "./maps/woodsDefs";
 import { WoodsSnow } from "./maps/woodsSnowDefs";
 import { WoodsSpring } from "./maps/woodsSpringDefs";
 import { WoodsSummer } from "./maps/woodsSummerDefs";
-
-export const MapDefs = {
-    main: Main,
-    main_spring: MainSpring,
-    main_summer: MainSummer,
-    desert: Desert,
-    faction: Faction,
-    halloween: Halloween,
-    potato: Potato,
-    potato_spring: PotatoSpring,
-    snow: Snow,
-    woods: Woods,
-    woods_snow: WoodsSnow,
-    woods_spring: WoodsSpring,
-    woods_summer: WoodsSummer,
-    savannah: Savannah,
-    cobalt: Cobalt,
-    turkey: Turkey,
-    wave: Wave,
-    wave2: Wave2,
-} satisfies Record<string, MapDef>;
+import type { MapId } from "./types/misc";
 
 export type Atlas =
     | "gradient"
@@ -51,20 +36,49 @@ export type Atlas =
     | "snow"
     | "woods"
     | "cobalt"
-    | "savannah";
+    | "savannah"
+    | "turkey"
+    | "beach";
+
+export const MapDefs = {
+    main: Main,
+    main_spring: MainSpring,
+    main_summer: MainSummer,
+    desert: Desert,
+    faction: Faction,
+    faction_potato: factionPotato,
+    halloween: Halloween,
+    potato: Potato,
+    potato_spring: PotatoSpring,
+    snow: Snow,
+    woods: Woods,
+    woods_snow: WoodsSnow,
+    woods_spring: WoodsSpring,
+    woods_summer: WoodsSummer,
+    savannah: Savannah,
+    cobalt: Cobalt,
+    turkey: Turkey,
+    birthday: Birthday,
+    beach: Beach,
+    wave: Wave,
+    wave2: Wave2,
+
+    /* STRIP_FROM_PROD_CLIENT:START */
+    test_normal: testNormal,
+    test_faction: testFaction,
+    /* STRIP_FROM_PROD_CLIENT:END */
+} satisfies Record<string, MapDef>;
 
 export interface MapDef {
-    mapId: number;
-    /**
-     * True if this map should run the wave PvE ruleset (humans vs bots).
-     * Used by both server and client to toggle wave-specific behavior.
-     */
+    mapId: MapId;
     isWave?: boolean;
+    wave?: WaveConfig;
     desc: {
         name: string;
         icon: string;
         buttonCss: string;
         buttonText?: string;
+        backgroundImg: string;
     };
     assets: {
         audio: Array<{
@@ -98,7 +112,6 @@ export interface MapDef {
             planeSound: string;
             airdropImg: string;
         };
-        frozenSprites?: string[];
     };
     gameMode: {
         maxPlayers: number;
@@ -111,7 +124,7 @@ export interface MapDef {
         sniperMode?: boolean;
         perkMode?: boolean;
         perkModeRoles?: string[];
-        turkeyMode?: number;
+        turkeyMode?: boolean;
         spookyKillSounds?: boolean;
     };
     gameConfig: {
@@ -142,11 +155,12 @@ export interface MapDef {
                 circleIdx: number;
                 wait: number;
             }>;
+            roleOverrides?: Record<string, Partial<RoleDef>>;
         };
         unlocks?: {
             timings: Array<{
-                type: string; //can either be a building with the door(s) to unlock OR the door itself, no support for structures yet
-                stagger: number; //only for buildings with multiple unlocks, will stagger the unlocks instead of doing them all at once
+                type: string; // can either be a building with the door(s) to unlock OR the door itself, no support for structures yet
+                stagger: number; // only for buildings with multiple unlocks, will stagger the unlocks instead of doing them all at once
                 circleIdx: number;
                 wait: number;
             }>;
@@ -161,6 +175,7 @@ export interface MapDef {
             name: string;
             count: number;
             weight: number;
+            preload?: boolean;
         }>
     >;
     mapGen: {
@@ -179,6 +194,7 @@ export interface MapDef {
                     odds: number;
                     innerRad: number;
                     outerRad: number;
+                    centerObj?: string;
                     spawnBound: {
                         pos: Vec2;
                         rad: number;
@@ -190,7 +206,8 @@ export interface MapDef {
                 }>;
                 smoothness: number;
                 masks: Array<{
-                    pos: Vec2;
+                    pos?: Vec2;
+                    genOnShore?: boolean;
                     rad: number;
                 }>;
                 spawnCabins: boolean;
@@ -199,6 +216,7 @@ export interface MapDef {
         places: Array<{
             name: string;
             pos: Vec2;
+            dontSpawnObjects?: boolean;
         }>;
         bridgeTypes: {
             medium: string;
@@ -214,15 +232,29 @@ export interface MapDef {
             }>;
             placeSpawns: string[];
         };
-        densitySpawns: Array<Record<string, number>>;
-        fixedSpawns: Array<
-            Record<string, number | { odds: number } | { small: number; large: number }>
-        >;
+        densitySpawns: [Record<string, number>];
+        fixedSpawns: [
+            Record<string, number | { odds: number } | { small: number; large: number }>,
+        ];
         randomSpawns: Array<{
             spawns: string[];
             choose: number;
         }>;
-        spawnReplacements: Array<Record<string, string>>;
+        spawnReplacements: [Record<string, string>];
         importantSpawns: string[];
     };
+}
+
+export type WaveBotBrainType = "practice" | "realistic" | "competitive";
+export type WaveBotDifficulty = "normal" | "hard" | "pro";
+
+export interface WaveEntry {
+    count: number;
+    brains?: Partial<Record<WaveBotBrainType, number>>;
+    difficulty?: WaveBotDifficulty;
+}
+
+export interface WaveConfig {
+    interWaveDelay?: number;
+    waves: WaveEntry[];
 }

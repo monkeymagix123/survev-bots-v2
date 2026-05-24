@@ -1,10 +1,11 @@
 import type { BitStream } from "../../../shared/net/net";
 import {
     type ObjectData,
-    ObjectType,
     type ObjectsPartialData,
+    ObjectType,
 } from "../../../shared/net/objectSerializeFns";
 import { assert } from "../../../shared/utils/util";
+import { errorLogManager } from "../errorLogs";
 import type { Ctx } from "../game";
 
 import type { AbstractObject } from "./player";
@@ -83,9 +84,10 @@ export class Creator {
             const err = {
                 id,
                 ids: Object.keys(this.m_idToObj),
-                stream: s._view._view,
+                stream: [...s.view.view],
             };
-            console.error("objectPoolErr", `getTypeById${JSON.stringify(err)}`);
+            errorLogManager.logError("getTypeById", err);
+            errorLogManager.storeGeneric("objectPoolErr", "getTypeById");
             return ObjectType.Invalid;
         }
         return obj.__type;
@@ -116,6 +118,7 @@ export class Creator {
         if (obj) {
             obj.m_updateData(data, false, false, ctx);
         } else {
+            errorLogManager.storeGeneric("objectPoolErr", "updateObjPart");
             console.error("updateObjPart, missing object", id);
         }
     }
@@ -124,6 +127,7 @@ export class Creator {
         const obj = this.m_getObjById(id);
         if (obj === undefined) {
             console.error("deleteObj, missing object", id);
+            errorLogManager.storeGeneric("objectPoolErr", "deleteObj");
         } else {
             this.m_types[obj.__type].m_free(obj);
             delete this.m_idToObj[id];

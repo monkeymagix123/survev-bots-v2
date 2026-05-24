@@ -22,8 +22,6 @@ export interface ReverbDef {
     echoLowPass?: number;
 }
 
-declare const MENU_MUSIC: string;
-
 const Sounds: Record<string, Record<string, SoundDef>> = {
     players: {
         m9_01: {
@@ -314,6 +312,19 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
             path: "audio/guns/spas12_pull_01.mp3",
             volume: 1,
         },
+        spas16_01: {
+            path: "audio/guns/spas16_01.mp3",
+            volume: 1,
+            maxInstances: 5,
+        },
+        spas16_reload_01: {
+            path: "audio/guns/spas16_reload_01.mp3",
+            volume: 1.25,
+        },
+        spas16_switch_01: {
+            path: "audio/guns/spas16_switch_01.mp3",
+            volume: 1.25,
+        },
         mp220_01: {
             path: "audio/guns/mp220_01.mp3",
             volume: 1,
@@ -584,6 +595,19 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
             path: "audio/guns/l86_switch_01.mp3",
             volume: 1,
         },
+        imbel_01: {
+            path: "audio/guns/imbel_01.mp3",
+            volume: 1,
+            maxInstances: 5,
+        },
+        imbel_reload_01: {
+            path: "audio/guns/imbel_reload_01.mp3",
+            volume: 1.25,
+        },
+        imbel_switch_01: {
+            path: "audio/guns/imbel_switch_01.mp3",
+            volume: 1.25,
+        },
         m249_01: {
             path: "audio/guns/m249_01.mp3",
             volume: 1,
@@ -745,6 +769,19 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
         },
         potato_smg_switch_01: {
             path: "audio/guns/potato_smg_switch_01.mp3",
+            volume: 1,
+        },
+        potato_lmg_01: {
+            path: "audio/guns/potato_lmg_01.mp3",
+            volume: 1,
+            maxInstances: 8,
+        },
+        potato_lmg_reload_01: {
+            path: "audio/guns/potato_lmg_reload_01.mp3",
+            volume: 1,
+        },
+        potato_lmg_switch_01: {
+            path: "audio/guns/potato_lmg_switch_01.mp3",
             volume: 1,
         },
         bugle_01: {
@@ -914,6 +951,11 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
         metal_punch_hit_02: {
             path: "audio/hits/metal_punch_hit_02.mp3",
             volume: 1,
+        },
+        egg_hit_01: {
+            path: "audio/hits/egg_hit_01.mp3",
+            volume: 1,
+            preload: false,
         },
         player_bullet_hit_01: {
             path: "audio/hits/player_bullet_hit_01.mp3",
@@ -1101,9 +1143,24 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
             volume: 1,
             preload: false,
         },
+        tomato_break_01: {
+            path: "audio/sfx/tomato_break_01.mp3",
+            volume: 1,
+            preload: false,
+        },
+        tomato_break_02: {
+            path: "audio/sfx/tomato_break_01.mp3",
+            volume: 1,
+            preload: false,
+        },
         ceramic_break_01: {
             path: "audio/sfx/ceramic_break_01.mp3",
             volume: 1,
+        },
+        egg_break_01: {
+            path: "audio/sfx/egg_break_01.mp3",
+            volume: 1,
+            preload: false,
         },
         footstep_grass_01: {
             path: "audio/sfx/footstep_grass_01.mp3",
@@ -1279,6 +1336,16 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
         },
         potato_02: {
             path: "audio/sfx/potato_02.mp3",
+            volume: 1,
+            preload: false,
+        },
+        coconut_01: {
+            path: "audio/sfx/coconut_01.mp3",
+            volume: 1,
+            preload: false,
+        },
+        tomato_01: {
+            path: "audio/sfx/tomato_01.mp3",
             volume: 1,
             preload: false,
         },
@@ -1714,6 +1781,12 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
             volume: 1.75,
             maxInstances: 1,
         },
+        captain_assigned_01: {
+            path: "audio/ui/captain_assigned_01.mp3",
+            volume: 2,
+            preload: false,
+            maxInstances: 1,
+        },
         lt_assigned_01: {
             path: "audio/ui/lt_assigned_01.mp3",
             volume: 1,
@@ -1794,7 +1867,7 @@ const Sounds: Record<string, Record<string, SoundDef>> = {
     },
     music: {
         menu_music: {
-            path: MENU_MUSIC,
+            path: "audio/ambient/menu_music_01.mp3",
             volume: 1,
             loadPriority: 2,
         },
@@ -1944,6 +2017,10 @@ const Groups: Record<string, { channel: string; sounds: string[] }> = {
     tree_bullet: {
         channel: "hits",
         sounds: ["wood_bullet_hit_01"],
+    },
+    egg_hit: {
+        channel: "hits",
+        sounds: ["egg_hit_01"],
     },
     player_bullet_grunt: {
         channel: "hits",
