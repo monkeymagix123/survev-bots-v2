@@ -534,6 +534,17 @@ export class BotNavigationLite {
         directTrace: RouteTrace,
         gasEmergency: boolean,
     ): { pos: Vec2; blockerId?: number; sideSign?: -1 | 1 } | undefined {
+        const buildingCornerWaypoint = this._pickBuildingCornerWaypoint(
+            game,
+            player,
+            goal,
+            directTrace,
+            gasEmergency,
+        );
+        if (buildingCornerWaypoint) {
+            return buildingCornerWaypoint;
+        }
+
         const wallSlideWaypoint = this._pickWallSlideWaypoint(
             game,
             player,
@@ -630,6 +641,76 @@ export class BotNavigationLite {
                   pos: bestPos,
                   blockerId: directTrace.hitObstacle?.__id,
                   sideSign: bestSideSign,
+              }
+            : undefined;
+    }
+
+    private _pickBuildingCornerWaypoint(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+        directTrace: RouteTrace,
+        gasEmergency: boolean,
+    ): { pos: Vec2; blockerId?: number } | undefined {
+        const blocker = directTrace.hitObstacle;
+        const building = blocker?.parentBuilding;
+        if (!blocker || !building) {
+            return undefined;
+        }
+        if (
+            this._isPointInsideBuilding(building, player.pos, player.layer) ||
+            this._isPointInsideBuilding(building, goal, player.layer)
+        ) {
+            return undefined;
+        }
+
+        const bounds = this._getBuildingLocalSurfaceBounds(building);
+        const cornerInset = BotTuning.navigation.buildingCornerOutsideDist;
+        const localCandidates = [
+            v2.create(bounds.min.x - cornerInset, bounds.min.y - cornerInset),
+            v2.create(bounds.min.x - cornerInset, bounds.max.y + cornerInset),
+            v2.create(bounds.max.x + cornerInset, bounds.min.y - cornerInset),
+            v2.create(bounds.max.x + cornerInset, bounds.max.y + cornerInset),
+        ];
+
+        const directCoverage = directTrace.hitDist / Math.max(directTrace.len, 0.001);
+        let bestPos: Vec2 | undefined;
+        let bestScore = -Infinity;
+
+        for (const local of localCandidates) {
+            const candidate = this._toWorldPoint(building, local);
+            game.map.clampToMapBounds(candidate, player.rad);
+
+            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
+            if (this._isRecentlyFailed(candidate)) continue;
+
+            const firstLeg = this._traceRoute(game, player, player.pos, candidate);
+            if (firstLeg.blocked) continue;
+
+            const secondLeg = this._traceRoute(game, player, candidate, goal);
+            const secondCoverage = secondLeg.hitDist / Math.max(secondLeg.len, 0.001);
+            if (secondLeg.blocked && secondCoverage <= directCoverage + 0.12) {
+                continue;
+            }
+
+            const distFromBot = v2.distance(player.pos, candidate);
+            const distToGoal = v2.distance(candidate, goal);
+            const score =
+                (secondLeg.blocked ? 0 : 1200) +
+                secondCoverage * 220 -
+                distFromBot * 1.2 -
+                distToGoal * 0.2;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestPos = v2.copy(candidate);
+            }
+        }
+
+        return bestPos
+            ? {
+                  pos: bestPos,
+                  blockerId: blocker.__id,
               }
             : undefined;
     }

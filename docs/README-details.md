@@ -125,6 +125,7 @@ Movement is state-driven and separate from shooting.
 - special-case warehouse entry/exit routing through the large side openings
 - warehouse entry now uses an interior opening point so bots cross the threshold instead of stalling just outside
 - warehouse transitions now keep a short committed opening target so bots do not flip between enter/exit while hovering on the doorway threshold
+- when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
 
 It is **not** full pathfinding.
@@ -252,6 +253,7 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 - Normal-mode roaming now prefers nearby loot-bearing obstacles/buildings before generic local wander.
 - Idle waypoints are now refreshed on arrival so unarmed bots do not stall on a completed roam goal until TTL expiry.
 - Warehouse doorway routing now keeps a short committed opening target so bots do not oscillate between moving in and back out at the threshold.
+- Exterior pursuit now has a first-pass building-corner detour so bots can round structure shells more deliberately when a building wall/child obstacle is the real blocker.
 
 ## Aim / Shooting
 
