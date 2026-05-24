@@ -452,6 +452,7 @@ export class BotController {
             veryLowBoost,
             danger: tactical.danger,
             recentlyDamaged,
+            recentEnemy: threat.hasRecentEnemy,
             enemyClose: tactical.enemyClose,
             enemyVeryClose: tactical.enemyVeryClose,
             anyHostileVisible: threat.anyHostileVisible,

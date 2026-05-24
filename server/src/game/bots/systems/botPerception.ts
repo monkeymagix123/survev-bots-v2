@@ -252,7 +252,8 @@ export class BotPerception {
             this._lastDamagedTime,
             this._lastHeardEnemyTime,
         );
-        const hasRecentEnemy = timeNow - recentEnemyTime < 1.25;
+        const hasRecentEnemy =
+            timeNow - recentEnemyTime < BotTuning.combat.recentEnemyMemorySec;
 
         this.threat = {
             nearbyHostileCount,

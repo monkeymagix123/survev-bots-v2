@@ -39,6 +39,7 @@ export const BotTuning = {
     },
     combat: {
         recentlyDamagedWindowSec: 0.45,
+        recentEnemyMemorySec: 1.25,
         damageDodgeDurationSec: 0.35,
         stateHysteresisDist: 1.25,
         retreatStateCommitSec: 0.55,

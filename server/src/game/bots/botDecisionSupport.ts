@@ -224,6 +224,7 @@ export function isBotSafeToHeal(params: {
     anyHostileVisible: boolean;
     danger: number;
     recentlyDamaged: boolean;
+    recentEnemy: boolean;
     enemyClose: boolean;
     enemyVeryClose: boolean;
     inRetreatState: boolean;
@@ -233,6 +234,7 @@ export function isBotSafeToHeal(params: {
         anyHostileVisible,
         danger,
         recentlyDamaged,
+        recentEnemy,
         enemyClose,
         enemyVeryClose,
         inRetreatState,
@@ -243,6 +245,7 @@ export function isBotSafeToHeal(params: {
         !anyHostileVisible &&
         danger < BotTuning.danger.healMax * brainProfile.healDangerScale &&
         !recentlyDamaged &&
+        !recentEnemy &&
         !enemyClose;
 
     const safeToHealWhileRetreating =
@@ -250,6 +253,7 @@ export function isBotSafeToHeal(params: {
         !anyHostileVisible &&
         danger < BotTuning.danger.retreatHealMax * brainProfile.retreatHealDangerScale &&
         !recentlyDamaged &&
+        !recentEnemy &&
         !enemyVeryClose;
 
     return safeToHealNormally || safeToHealWhileRetreating;

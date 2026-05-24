@@ -92,6 +92,7 @@ Bots follow a lightweight priority stack:
 - Bots can keep moving while healing, just more slowly
 - Healthkits and retreating bandages now have stronger “commit” behavior so bots are less likely to throw away a mostly-good heal
 - Armed bots also soften visible-pressure rules against lone clearly unarmed hostiles, so safe-ish heals are less likely to get blocked by pure visibility alone
+- Heal/boost starts now also respect short recent-enemy pressure memory, so bots are less likely to instantly med or boost the moment LOS briefly breaks
 
 ### Shooting Feel
 - Automatic weapons now keep a short persistent spray offset instead of re-rolling a completely fresh visible aim angle every shot, so AR/SMG/LMG fire looks less jittery in spectate

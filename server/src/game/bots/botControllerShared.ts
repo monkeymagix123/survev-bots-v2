@@ -423,6 +423,7 @@ export function chooseSupportUseItem(params: {
     veryLowBoost: boolean;
     danger: number;
     recentlyDamaged: boolean;
+    recentEnemy: boolean;
     enemyClose: boolean;
     enemyVeryClose: boolean;
     anyHostileVisible: boolean;
@@ -438,6 +439,7 @@ export function chooseSupportUseItem(params: {
         veryLowBoost,
         danger,
         recentlyDamaged,
+        recentEnemy,
         enemyClose,
         enemyVeryClose,
         anyHostileVisible,
@@ -457,6 +459,7 @@ export function chooseSupportUseItem(params: {
         anyHostileVisible: effectiveHostileVisible,
         danger,
         recentlyDamaged,
+        recentEnemy,
         enemyClose,
         enemyVeryClose,
         inRetreatState,
@@ -475,6 +478,7 @@ export function chooseSupportUseItem(params: {
             BotTuning.danger.boostQuickMax *
                 brainProfile.boostQuickDangerScale &&
         !recentlyDamaged &&
+        !recentEnemy &&
         !enemyVeryClose;
 
     const safeToBoostLong =
@@ -483,6 +487,7 @@ export function chooseSupportUseItem(params: {
             BotTuning.danger.boostLongMax *
                 brainProfile.boostLongDangerScale &&
         !recentlyDamaged &&
+        !recentEnemy &&
         !enemyClose;
 
     return chooseBotBoostItem({

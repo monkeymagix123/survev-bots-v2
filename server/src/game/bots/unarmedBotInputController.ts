@@ -256,6 +256,7 @@ export class UnarmedBotInputController {
             veryLowBoost,
             danger,
             recentlyDamaged,
+            recentEnemy: threat.hasRecentEnemy,
             enemyClose,
             enemyVeryClose,
             anyHostileVisible: threat.anyHostileVisible,

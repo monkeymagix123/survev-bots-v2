@@ -98,6 +98,8 @@ Last updated: 2026-05-24
   - crate/object punch checks now use intended same-tick aim direction instead of stale previous-tick facing
 - Added configurable melee-break swing planting:
   - crate punches can briefly plant via `BotTuning.objectInteract.meleeSwingStopSec`, with `0` available as a no-stop option
+- Tightened support-item start discipline:
+  - heal/boost starts now also respect short recent-enemy pressure memory instead of only current visibility plus direct recent damage
 
 ## In Progress
 
