@@ -25,6 +25,14 @@ type RouteTrace = {
     hitObstacle?: Obstacle;
 };
 
+type WarehouseTransition = {
+    buildingId: number;
+    mode: "enter" | "exit";
+    goal: Vec2;
+    opening: Vec2;
+    until: number;
+};
+
 export class BotNavigationLite {
     waypoint?: Vec2;
     waypointTtl = 0;
@@ -47,6 +55,7 @@ export class BotNavigationLite {
     private _nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
     private _fallbackGoal?: Vec2;
     private _fallbackMode?: "waypoint" | "center";
+    private _warehouseTransition?: WarehouseTransition;
     private readonly _routeTraceCache = new Map<string, RouteTrace>();
 
     tick(dt: number, hasTarget: boolean): void {
@@ -61,6 +70,12 @@ export class BotNavigationLite {
         }
         if (this._forceDetourGoal && this._time >= this._forceDetourUntil) {
             this._clearForcedDetour();
+        }
+        if (
+            this._warehouseTransition &&
+            this._time >= this._warehouseTransition.until
+        ) {
+            this._clearWarehouseTransition();
         }
 
         this._failedWaypoints = this._failedWaypoints.filter(
@@ -103,6 +118,7 @@ export class BotNavigationLite {
             this._clearDetour();
             this._clearFallback();
             this._clearForcedDetour();
+            this._clearWarehouseTransition();
         }
 
         if (
@@ -116,6 +132,16 @@ export class BotNavigationLite {
             this._reachedPoint(player.pos, this._fallbackGoal, arriveDist)
         ) {
             this._clearFallback();
+        }
+        if (
+            this._warehouseTransition &&
+            this._reachedPoint(
+                player.pos,
+                this._warehouseTransition.opening,
+                arriveDist,
+            )
+        ) {
+            this._clearWarehouseTransition();
         }
 
         const routeGoal = this._fallbackMode
@@ -724,6 +750,14 @@ export class BotNavigationLite {
         goal: Vec2,
         gasEmergency: boolean,
     ): Vec2 | undefined {
+        const committedTransition = this._getCommittedWarehouseTransition(
+            player,
+            goal,
+        );
+        if (committedTransition) {
+            return committedTransition;
+        }
+
         const currentWarehouse = this._getContainingWarehouse(
             game,
             player.pos,
@@ -733,7 +767,7 @@ export class BotNavigationLite {
             currentWarehouse &&
             !this._isPointInsideBuilding(currentWarehouse, goal, player.layer)
         ) {
-            return this._pickWarehouseOpeningGoal(
+            const opening = this._pickWarehouseOpeningGoal(
                 game,
                 player,
                 currentWarehouse,
@@ -741,11 +775,20 @@ export class BotNavigationLite {
                 gasEmergency,
                 "exit",
             );
+            if (opening) {
+                this._setWarehouseTransition(
+                    currentWarehouse.__id,
+                    "exit",
+                    goal,
+                    opening,
+                );
+            }
+            return opening;
         }
 
         const goalWarehouse = this._getContainingWarehouse(game, goal, player.layer);
         if (!currentWarehouse && goalWarehouse) {
-            return this._pickWarehouseOpeningGoal(
+            const opening = this._pickWarehouseOpeningGoal(
                 game,
                 player,
                 goalWarehouse,
@@ -753,9 +796,46 @@ export class BotNavigationLite {
                 gasEmergency,
                 "enter",
             );
+            if (opening) {
+                this._setWarehouseTransition(
+                    goalWarehouse.__id,
+                    "enter",
+                    goal,
+                    opening,
+                );
+            }
+            return opening;
         }
 
+        this._clearWarehouseTransition();
         return undefined;
+    }
+
+    private _getCommittedWarehouseTransition(
+        player: Player,
+        goal: Vec2,
+    ): Vec2 | undefined {
+        const transition = this._warehouseTransition;
+        if (!transition) return undefined;
+        if (this._time >= transition.until) {
+            this._clearWarehouseTransition();
+            return undefined;
+        }
+        if (!this._sameGoal(goal, transition.goal)) {
+            this._clearWarehouseTransition();
+            return undefined;
+        }
+        if (
+            this._reachedPoint(
+                player.pos,
+                transition.opening,
+                BotTuning.navigation.arriveDist,
+            )
+        ) {
+            this._clearWarehouseTransition();
+            return undefined;
+        }
+        return transition.opening;
     }
 
     private _getContainingWarehouse(
@@ -964,6 +1044,21 @@ export class BotNavigationLite {
         return v2.add(v2.rotate(local, building.rot), building.pos);
     }
 
+    private _setWarehouseTransition(
+        buildingId: number,
+        mode: "enter" | "exit",
+        goal: Vec2,
+        opening: Vec2,
+    ): void {
+        this._warehouseTransition = {
+            buildingId,
+            mode,
+            goal: v2.copy(goal),
+            opening: v2.copy(opening),
+            until: this._time + BotTuning.navigation.warehouseTransitionCommitSec,
+        };
+    }
+
     private _pickWallSlideWaypoint(
         game: Game,
         player: Player,
@@ -1159,6 +1254,10 @@ export class BotNavigationLite {
     private _clearFallback(): void {
         this._fallbackGoal = undefined;
         this._fallbackMode = undefined;
+    }
+
+    private _clearWarehouseTransition(): void {
+        this._warehouseTransition = undefined;
     }
 
     private _getRouteTraceCacheKey(layer: number, start: Vec2, goal: Vec2): string {

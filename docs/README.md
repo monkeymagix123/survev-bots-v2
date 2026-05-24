@@ -50,6 +50,7 @@ Bots follow a lightweight priority stack:
 - Refresh completed idle waypoints immediately so bots do not stand still waiting for roam TTL to expire
 - Can route out through container exits instead of face-hugging the container walls
 - Can route into and out of simple warehouses through the big side openings, including actually crossing the threshold on entry
+- Keep a short committed warehouse opening target so bots are less likely to bounce in/out at the doorway threshold
 - Can bias detours to slide along or peel away from large indestructible walls
 - Use local cover-lite sampling under pressure
 - Respect gas/safe-zone pressure first

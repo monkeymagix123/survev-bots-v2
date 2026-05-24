@@ -64,6 +64,7 @@ export const BotTuning = {
         containerExitOutsideDist: 1.35,
         warehouseEntryInsideInset: 2.25,
         warehouseEntryExitOutsideDist: 1.6,
+        warehouseTransitionCommitSec: 0.9,
         detourTtlSec: 1.0,
         detourCommitSec: 0.65,
         failedWaypointTtlSec: 2.5,

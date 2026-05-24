@@ -35,6 +35,7 @@ Last updated: 2026-05-23
 - Improved repositioning when combat LOS is blocked
 - Added first-pass structured navigation for containers, simple warehouses, and large wall blockers
 - Tightened warehouse entry so bots step through the opening rather than hovering outside it
+- Added a short warehouse-transition commitment so bots are less likely to oscillate back and forth right on the entrance threshold
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

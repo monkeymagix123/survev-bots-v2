@@ -88,6 +88,8 @@ Last updated: 2026-05-23
   - completed waypoints are now refreshed immediately instead of being kept until TTL expiry
 - Fixed armed melee-break recovery:
   - bots now remember and restore a gun slot after temporarily equipping fists for crate breaking
+- Reduced warehouse doorway oscillation:
+  - warehouse enter/exit routing now keeps a short committed opening target so bots do not immediately flip direction at the threshold
 
 ## In Progress
 
