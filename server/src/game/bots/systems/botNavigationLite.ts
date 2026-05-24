@@ -68,9 +68,13 @@ export class BotNavigationLite {
         );
     }
 
-    ensureWaypoint(game: Game, _player: Player): void {
-        if (!this.waypoint || this.waypointTtl <= 0) {
-            this.waypoint = this._pickWaypoint(game, _player);
+    ensureWaypoint(game: Game, player: Player): void {
+        const waypointReached =
+            !!this.waypoint &&
+            v2.distance(player.pos, this.waypoint) <= BotTuning.navigation.arriveDist;
+
+        if (!this.waypoint || this.waypointTtl <= 0 || waypointReached) {
+            this.waypoint = this._pickWaypoint(game, player);
             this.waypointTtl = util.random(5, 10);
         }
     }

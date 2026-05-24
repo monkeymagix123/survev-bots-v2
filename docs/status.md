@@ -42,6 +42,7 @@ Last updated: 2026-05-05
 - Stopped route-blocker redirects from choosing explosive props like oil barrels
 - Made unarmed bots less likely to idle at short range from another visible unarmed hostile
 - Made normal-mode idle roaming more local/interesting so bots spread less by all collapsing toward the same safe-zone area
+- Fixed an idle-roam bug where bots could keep a completed waypoint until TTL expiry and stand still doing nothing
 - Kept docs aligned with the new primary/details/status structure
 
 ## Next Likely Work
