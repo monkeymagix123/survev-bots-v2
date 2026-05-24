@@ -1,3 +1,6 @@
+import { util } from "./utils/util";
+import gameConfig from "../game-config.json";
+
 export enum TeamMode {
     Solo = 1,
     Duo = 2,
@@ -118,7 +121,7 @@ export enum Input {
     Count,
 }
 
-export const GameConfig = {
+const GameConfigBase = {
     // started with 1000 to distinguish us from the original surviv protocol
     // the protocol we originated from was 78
     // remember to bump this every time a serialization function is changed
@@ -414,5 +417,7 @@ export const GameConfig = {
         xp: 1,
     } as Record<string, number>,
 };
+
+export const GameConfig = util.mergeDeep({}, GameConfigBase, gameConfig);
 
 export type InventoryItem = keyof (typeof GameConfig)["bagSizes"];
