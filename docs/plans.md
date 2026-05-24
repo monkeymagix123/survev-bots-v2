@@ -94,6 +94,8 @@ Last updated: 2026-05-23
   - when a pursuit route is blocked by a building child obstacle and both bot/goal are outside, nav now tries exterior building-corner detours before tiny generic sidesteps
 - Smoothed automatic-weapon visible aim:
   - AR/SMG/LMG spray now keeps a short persistent offset instead of snapping to a fresh random visible angle every shot
+- Fixed a melee-break stall:
+  - crate/object punch checks now use intended same-tick aim direction instead of stale previous-tick facing
 
 ## In Progress
 

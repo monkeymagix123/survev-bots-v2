@@ -281,7 +281,7 @@ export class UnarmedBotInputController {
         ) {
             if (player.curWeapIdx !== GameConfig.WeaponSlot.Melee) {
                 msg.addInput(GameConfig.Input.EquipMelee);
-            } else if (isInMeleeRange(player, objectTarget)) {
+            } else if (isInMeleeRange(player, objectTarget, aimUpdate.aimDir)) {
                 msg.shootHold = false;
                 msg.shootStart = true;
             }

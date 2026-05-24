@@ -181,6 +181,7 @@ Limits:
 - approaches the obstacle edge, not the center
 - uses its own arrival threshold
 - uses actual melee geometry from the melee def (`attack.offset` + `attack.rad`)
+- checks punch reach against the bot’s intended same-tick aim direction instead of only last tick’s facing, so bots are less likely to stall beside a crate without swinging
 - can be used on a destructible route-blocker for unarmed bots when that blocker directly gates access to a better nearby object target
 
 ## Unarmed Behavior
@@ -254,6 +255,7 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 - Idle waypoints are now refreshed on arrival so unarmed bots do not stall on a completed roam goal until TTL expiry.
 - Warehouse doorway routing now keeps a short committed opening target so bots do not oscillate between moving in and back out at the threshold.
 - Exterior pursuit now has a first-pass building-corner detour so bots can round structure shells more deliberately when a building wall/child obstacle is the real blocker.
+- Melee-break range checks now use intended same-tick aim direction, which fixes a stall where bots could stand beside a crate without punching because the helper was still reading stale previous-tick facing.
 
 ## Aim / Shooting
 

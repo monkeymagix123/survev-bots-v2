@@ -38,6 +38,7 @@ Last updated: 2026-05-23
 - Added a short warehouse-transition commitment so bots are less likely to oscillate back and forth right on the entrance threshold
 - Added a first exterior building-corner detour pass so pursuit around structure shells is less dependent on tiny left/right local detours
 - Smoothed visible automatic-weapon spray so AR/SMG/LMG fire no longer snaps between fresh random angles every shot
+- Fixed a melee-break edge case where bots could stand next to a crate without punching because the range check used stale facing
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
