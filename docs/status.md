@@ -2,7 +2,7 @@
 
 Short snapshot of current bot work.
 
-Last updated: 2026-05-05
+Last updated: 2026-05-23
 
 ## Current State
 
@@ -20,6 +20,7 @@ Last updated: 2026-05-05
 - Stability / sanity testing
 - Low-risk hot-path cleanup
 - Unarmed behavior polish
+- Navigation / movement correctness
 - Keeping armed vs unarmed controller logic cleanly separated
 - Practical object/LOS behavior polish
 
@@ -47,6 +48,8 @@ Last updated: 2026-05-05
 
 ## Next Likely Work
 
+- Container/building-edge pursuit fixes for armed bots
+- More anti-oscillation work for unarmed movement
 - Manual spectate tuning
 - Duo/squad behavior
 - Additional debug/stability events if needed

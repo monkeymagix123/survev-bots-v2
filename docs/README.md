@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-05
+Last updated: 2026-05-23
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -47,6 +47,7 @@ Bots follow a lightweight priority stack:
 - Use short detours and fallback recovery instead of full pathfinding
 - Keep short detour-side commitment around blockers so bots are less likely to jitter between equivalent left/right micro-routes
 - In normal idle roaming, prefer nearby loot-bearing destructible objects or nearby buildings before falling back to generic random wandering
+- Refresh completed idle waypoints immediately so bots do not stand still waiting for roam TTL to expire
 - Can route out through container exits instead of face-hugging the container walls
 - Can route into and out of simple warehouses through the big side openings, including actually crossing the threshold on entry
 - Can bias detours to slide along or peel away from large indestructible walls

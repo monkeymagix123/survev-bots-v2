@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-05
+Last updated: 2026-05-23
 
 ## Core Model
 
@@ -241,6 +241,14 @@ Recent optimization work stayed deliberately conservative:
 - added strict same-tick/local reuse for `BotPerception` scans and repeated `BotNavigationLite` route traces
 
 This was meant to reduce repeated hot-path scans and retry loops without materially changing bot personalities.
+
+## Recent Fixes
+
+- Unarmed bots now treat very close hostiles as melee pressure and back off instead of face-hugging.
+- If a visible hostile still appears unarmed, bots now keep pursuing nearby loot/object opportunities or deliberately disengage instead of idling.
+- Route-blocker redirection no longer chooses explosive blockers like oil barrels for melee clearing.
+- Normal-mode roaming now prefers nearby loot-bearing obstacles/buildings before generic local wander.
+- Idle waypoints are now refreshed on arrival so unarmed bots do not stall on a completed roam goal until TTL expiry.
 
 ## Aim / Shooting
 

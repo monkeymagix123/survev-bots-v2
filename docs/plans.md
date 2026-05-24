@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-05
+Last updated: 2026-05-23
 
 ## Done
 
@@ -84,6 +84,8 @@ Last updated: 2026-05-05
 - Improved normal-mode idle spread:
   - roaming now prefers nearby loot-bearing destructible objects
   - otherwise it biases toward nearby buildings before generic random local roam
+- Fixed a real idle-roam stall:
+  - completed waypoints are now refreshed immediately instead of being kept until TTL expiry
 
 ## In Progress
 
