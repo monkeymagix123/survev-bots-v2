@@ -1,5 +1,6 @@
 import { GameObjectDefs } from "../../../../shared/defs/gameObjectDefs";
 import type { GunDef } from "../../../../shared/defs/gameObjects/gunDefs";
+import type { WaveConfig, WaveEntry } from "../../../../shared/defs/mapDefs";
 import { GameConfig } from "../../../../shared/gameConfig";
 import * as net from "../../../../shared/net/net";
 import type { Vec2 } from "../../../../shared/utils/v2";
@@ -9,25 +10,6 @@ import type { Group, Team } from "../group";
 import { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import { BotController, type BotDifficulty } from "./botController";
-import * as fs from "fs";
-import * as path from "path";
-
-// ─── Wave config types ────────────────────────────────────────────────────────
-
-interface WaveEntry {
-    count: number;
-    /**
-     * Optional exact counts per brain type.
-     * Values are treated as counts, not weights.
-     * If omitted or counts don't sum to `count`, remaining slots use random brain selection.
-     */
-    brains?: Partial<Record<BotBrainType, number>>;
-    difficulty?: BotDifficulty;
-}
-
-interface WaveConfig {
-    waves: WaveEntry[];
-}
 
 // ─── Brain weight helpers ─────────────────────────────────────────────────────
 
@@ -139,8 +121,8 @@ interface WaveState {
     brainQueue: BotBrainType[];
 }
 
-/** Seconds to pause between waves. Adjust to taste. */
-const WAVE_INTER_DELAY_S = 3;
+/** Seconds to pause between waves if a map does not override it. */
+const DEFAULT_WAVE_INTER_DELAY_S = 3;
 
 // ─── BotManager ──────────────────────────────────────────────────────────────
 
@@ -153,9 +135,10 @@ export class BotManager {
     private readonly _controllers = new Map<number, BotController>();
 
     // ── Wave mode ──
-    /** Null when wave mode is disabled, or waves.json is absent/malformed */
+    /** Null when wave mode is disabled, or the active map has no valid wave data */
     private readonly _waveConfig: WaveConfig | null;
     private _wave: WaveState | null = null;
+    private _wavesComplete = false;
     /** Countdown timer used for the inter-wave delay */
     private _waveDelayRemaining = 0;
     /** True when waves are paused due to insufficient connected humans */
@@ -177,47 +160,28 @@ export class BotManager {
         }
     }
 
+    get wavesComplete(): boolean {
+        return this._wavesComplete;
+    }
+
     // ── Wave config loading ──────────────────────────────────────────────────
 
     private _loadWaveConfig(): WaveConfig | null {
-        // Look for waves.json next to this file (server/src/game/bots/waves.json)
-        const candidates = [
-            path.resolve(__dirname, "waves.json"),
-            path.resolve(process.cwd(), "../waves.json"),
-            path.resolve(process.cwd(), "waves.json"),
-        ];
+        const config = this.game.map.mapDef.wave;
 
-        for (const filePath of candidates) {
-            if (!fs.existsSync(filePath)) continue;
-
-            try {
-                const raw = fs.readFileSync(filePath, "utf8");
-                const parsed = JSON.parse(raw) as WaveConfig;
-
-                if (
-                    !Array.isArray(parsed.waves) ||
-                    parsed.waves.length === 0 ||
-                    parsed.waves.some(
-                        (w) => typeof w.count !== "number" || w.count < 1,
-                    )
-                ) {
-                    console.warn(
-                        `[BotManager] waves.json at ${filePath} is invalid — ignoring.`,
-                    );
-                    return null;
-                }
-
-                console.log(`[BotManager] Loaded waves.json from ${filePath}`);
-                return parsed;
-            } catch (err) {
-                console.warn(
-                    `[BotManager] Failed to parse waves.json at ${filePath}:`,
-                    err,
-                );
-            }
+        if (
+            !config ||
+            !Array.isArray(config.waves) ||
+            config.waves.length === 0 ||
+            config.waves.some((w) => typeof w.count !== "number" || w.count < 1)
+        ) {
+            console.warn(
+                `[BotManager] Wave map '${this.game.mapName}' has no valid map-driven wave data.`,
+            );
+            return null;
         }
 
-        return null;
+        return config;
     }
 
     // ── Wave lifecycle ───────────────────────────────────────────────────────
@@ -228,10 +192,13 @@ export class BotManager {
         if (index >= this._waveConfig.waves.length) {
             console.log("[BotManager] All waves complete.");
             this._wave = null;
+            this._wavesComplete = true;
+            this.game.checkGameOver();
             return;
         }
 
         this._cleanupDeadInternalBots();
+        this._wavesComplete = false;
 
         const entry = this._waveConfig.waves[index];
         const brainQueue = buildBrainQueue(entry, () => this._pickBrainType());
@@ -285,6 +252,7 @@ export class BotManager {
         this._wavePausedForNoHumans = true;
 
         this._wave = null;
+        this._wavesComplete = false;
         this._waveDelayRemaining = 0;
         this._spawnBudget = 0;
     }
@@ -416,11 +384,13 @@ export class BotManager {
 
             if (!anyAlive) {
                 this._cleanupWaveBots(wave.botIds);
+                const delay =
+                    this._waveConfig?.interWaveDelay ?? DEFAULT_WAVE_INTER_DELAY_S;
                 console.log(
-                    `[BotManager] Wave ${wave.index + 1} cleared — next wave in ${WAVE_INTER_DELAY_S}s.`,
+                    `[BotManager] Wave ${wave.index + 1} cleared — next wave in ${delay}s.`,
                 );
                 wave.waitingForNext = true;
-                this._waveDelayRemaining = WAVE_INTER_DELAY_S;
+                this._waveDelayRemaining = delay;
             }
         }
 

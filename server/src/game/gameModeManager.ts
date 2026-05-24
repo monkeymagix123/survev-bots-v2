@@ -126,7 +126,20 @@ export class GameModeManager {
     /** true if game needs to end */
     handleGameEnd(): boolean {
         if (this.game.map.mapDef.isWave) {
-            if (!this.game.started || this._countAliveHumans() > 0) return false;
+            if (!this.game.started) return false;
+
+            if (this.game.botManager.wavesComplete) {
+                for (const player of this.game.playerBarn.players) {
+                    if (player.hasClient && !player.disconnected && !player.bot) {
+                        player.addGameOverMsg(TeamColor.Red);
+                    }
+                }
+
+                this.game.playerBarn.killedPlayers.length = 0;
+                return true;
+            }
+
+            if (this._countAliveHumans() > 0) return false;
 
             for (const player of this.game.playerBarn.players) {
                 if (player.hasClient && !player.disconnected && !player.bot) {

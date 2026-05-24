@@ -174,21 +174,19 @@ export class PlayerBarn {
             }
         }
 
-        const result = this.getGroupAndTeam(joinData);
-        const group = result?.group;
         const isWaveMap = !!this.game.map.mapDef.isWave;
+        const waveTeam =
+            isWaveMap && this.game.map.factionMode
+                ? this.getWaveTeam(joinMsg.bot ? 2 : 1)
+                : undefined;
+        const result = this.getGroupAndTeam(joinData, waveTeam);
+        const group = result?.group;
         // solo 50v50 just chooses the smallest team everytime no matter what
         let team =
-            this.game.map.factionMode && !this.game.isTeamMode
+            waveTeam ??
+            (this.game.map.factionMode && !this.game.isTeamMode
                 ? this.getSmallestTeam()
-                : result?.team;
-
-        if (this.game.map.factionMode && !this.game.isTeamMode && isWaveMap) {
-            const forcedTeamId = Config.debug.allowBots && joinMsg.bot ? 2 : 1;
-            team =
-                this.teams.find((t) => t.id === forcedTeamId) ??
-                this.getSmallestTeam();
-        }
+                : result?.team);
 
         let pos: Vec2;
         let layer: number;
@@ -509,7 +507,11 @@ export class PlayerBarn {
         return team;
     }
 
-    getGroupAndTeam({ groupData }: JoinTokenData):
+    getWaveTeam(teamId: number): Team {
+        return this.teams.find((team) => team.id === teamId) ?? this.getSmallestTeam();
+    }
+
+    getGroupAndTeam({ groupData }: JoinTokenData, forcedTeam?: Team):
         | {
               group?: Group;
               team?: Team;
@@ -518,7 +520,16 @@ export class PlayerBarn {
         if (!this.game.isTeamMode) return undefined;
 
         let group = this.groupsByHash.get(groupData.groupHashToJoin);
-        let team = this.game.map.factionMode ? this.getSmallestTeam() : undefined;
+        let team = forcedTeam ?? (this.game.map.factionMode ? this.getSmallestTeam() : undefined);
+
+        if (
+            forcedTeam &&
+            group &&
+            group.players.length > 0 &&
+            group.players[0].team !== forcedTeam
+        ) {
+            group = undefined;
+        }
 
         if (!group && groupData.autoFill) {
             const groups = team ? team.getGroups() : this.groups;
@@ -545,7 +556,7 @@ export class PlayerBarn {
 
         // pre-existing group not created during this function call
         // players who join from the same group need the same team
-        if (this.game.map.factionMode && group.players.length > 0) {
+        if (this.game.map.factionMode && group.players.length > 0 && !forcedTeam) {
             team = group.players[0].team;
         }
 

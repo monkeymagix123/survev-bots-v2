@@ -8,6 +8,27 @@ import { Main, type PartialMapDef } from "./baseDefs";
 export const Wave2: MapDef = {
     mapId: MapId.Wave2,
     isWave: true,
+    wave: {
+        interWaveDelay: 3,
+        waves: [
+            {
+                count: 4,
+                brains: { practice: 2, realistic: 2 },
+            },
+            {
+                count: 6,
+                brains: { realistic: 4, competitive: 2 },
+            },
+            {
+                count: 8,
+                brains: { practice: 1, realistic: 4, competitive: 3 },
+            },
+            {
+                count: 10,
+                brains: { competitive: 10 },
+            },
+        ],
+    },
     desc: { name: "Wave2", icon: "", buttonCss: "", backgroundImg: "" },
     assets: {
         audio: [],

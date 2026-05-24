@@ -72,6 +72,7 @@ export const MapDefs = {
 export interface MapDef {
     mapId: MapId;
     isWave?: boolean;
+    wave?: WaveConfig;
     desc: {
         name: string;
         icon: string;
@@ -242,4 +243,18 @@ export interface MapDef {
         spawnReplacements: [Record<string, string>];
         importantSpawns: string[];
     };
+}
+
+export type WaveBotBrainType = "practice" | "realistic" | "competitive";
+export type WaveBotDifficulty = "normal" | "hard" | "pro";
+
+export interface WaveEntry {
+    count: number;
+    brains?: Partial<Record<WaveBotBrainType, number>>;
+    difficulty?: WaveBotDifficulty;
+}
+
+export interface WaveConfig {
+    interWaveDelay?: number;
+    waves: WaveEntry[];
 }
