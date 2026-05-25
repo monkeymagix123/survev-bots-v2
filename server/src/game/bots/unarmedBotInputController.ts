@@ -227,6 +227,7 @@ export class UnarmedBotInputController {
         }
 
         applyHealCancelInput({
+            game: this.game,
             msg,
             player,
             brainType: this.brainType,
@@ -270,6 +271,7 @@ export class UnarmedBotInputController {
             this.combat.objectInteractionMode === "melee_break";
 
         this._lastIdleReason = logIdleReason({
+            game: this.game,
             brainType: this.brainType,
             botId: player.__id,
             state: this.combat.state,

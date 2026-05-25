@@ -115,7 +115,8 @@ Bots follow a lightweight priority stack:
   - `true` → bots spawn ready to fight
   - `false` → bots must arm up first
 - `Config.bots.debugCombat`
-  - writes combat/state-transition debug logs to `server/logs/bot-combat.log`
+  - writes combat/state-transition debug logs to `server/logs/<game-create-time>_<game-id>/bot-combat.log`
+  - when `debugBotStability` is also enabled, its companion file lives beside it as `server/logs/<game-create-time>_<game-id>/bot-stability.log`
   - now includes chosen target/item ids plus final goal position / movement style
 
 ## Current Limits

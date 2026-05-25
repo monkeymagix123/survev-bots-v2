@@ -174,7 +174,7 @@ export class RealisticBotBrain implements BotBrain {
                     player.isReloading() ||
                     (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
 
-                logBotCombat({
+                logBotCombat(game, {
                     botId: player.__id,
                     brainType: this.type,
                     state: combat.state,
@@ -737,7 +737,7 @@ export class RealisticBotBrain implements BotBrain {
         }
 
         if (Config.bots.debugCombat && stateChanged) {
-            logBotCombat({
+            logBotCombat(game, {
                 botId: player.__id,
                 brainType: this.type,
                 state,
@@ -763,7 +763,7 @@ export class RealisticBotBrain implements BotBrain {
         }
 
         if (stateChanged) {
-            logBotStability("state_change", {
+            logBotStability(game, "state_change", {
                 brainType: this.type,
                 botId: player.__id,
                 state,

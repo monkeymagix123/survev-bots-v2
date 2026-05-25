@@ -1,9 +1,10 @@
 import fs from "fs";
 import path from "path";
 import { Config } from "../../config";
+import type { Game } from "../game";
+import { getBotLogDir } from "./botLogPaths";
 
 const enabled = Config.bots.debugBotStability;
-const logPath = path.join(process.cwd(), "logs/bot-stability.log");
 
 function toPrintable(value: unknown): string {
     if (typeof value === "number") return Number.isFinite(value) ? String(value) : "nan";
@@ -62,8 +63,14 @@ function buildSummary(event: string, fields: Record<string, unknown>): string {
     }
 }
 
-export function logBotStability(event: string, fields: Record<string, unknown>): void {
+export function logBotStability(
+    game: Game,
+    event: string,
+    fields: Record<string, unknown>,
+): void {
     if (!enabled) return;
+
+    const logPath = path.join(getBotLogDir(game), "bot-stability.log");
 
     const payload = {
         time: new Date().toISOString(),
@@ -80,5 +87,5 @@ export function logBotStability(event: string, fields: Record<string, unknown>):
 }
 
 export function getBotStabilityLogPath(): string {
-    return logPath;
+    return path.join(process.cwd(), "logs", "<game-create-time>_<game-id>", "bot-stability.log");
 }

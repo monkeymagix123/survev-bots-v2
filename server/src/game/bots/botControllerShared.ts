@@ -222,6 +222,7 @@ export function getMeleeApproachGoal(
 }
 
 export function logIdleReason(params: {
+    game: Game;
     brainType: BotBrainType;
     botId: number;
     state: string;
@@ -239,6 +240,7 @@ export function logIdleReason(params: {
     lastIdleReason?: string;
 }): string | undefined {
     const {
+        game,
         brainType,
         botId,
         state,
@@ -266,7 +268,7 @@ export function logIdleReason(params: {
     if (reason === lastIdleReason) return lastIdleReason;
     if (!reason) return undefined;
 
-    logBotStability("idle_reason", {
+    logBotStability(game, "idle_reason", {
         brainType,
         botId,
         reason,
@@ -328,6 +330,7 @@ export function shouldAbortObjectInteraction(params: {
 }
 
 export function applyHealCancelInput(params: {
+    game: Game;
     msg: net.InputMsg;
     player: Player;
     brainType: BotBrainType;
@@ -342,6 +345,7 @@ export function applyHealCancelInput(params: {
     visibleThreatSoftened?: boolean;
 }): void {
     const {
+        game,
         msg,
         player,
         brainType,
@@ -410,7 +414,7 @@ export function applyHealCancelInput(params: {
 
     if (!shouldCancelHeal) return;
 
-    logBotStability("heal_cancel", {
+    logBotStability(game, "heal_cancel", {
         brainType,
         botId,
         item: player.actionItem,

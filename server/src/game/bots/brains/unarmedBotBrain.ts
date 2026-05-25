@@ -650,7 +650,7 @@ export class UnarmedBotBrain implements BotBrain {
         }
 
         if (Config.bots.debugCombat && stateChanged) {
-            logBotCombat({
+            logBotCombat(game, {
                 botId: player.__id,
                 brainType,
                 state,
@@ -683,7 +683,7 @@ export class UnarmedBotBrain implements BotBrain {
         }
 
         if (stateChanged) {
-            logBotStability("state_change", {
+            logBotStability(game, "state_change", {
                 brainType,
                 botId: player.__id,
                 state,

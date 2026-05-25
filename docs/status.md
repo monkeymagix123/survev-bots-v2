@@ -44,7 +44,7 @@ Last updated: 2026-05-25
 - Tightened armed blocked-LOS behavior so recent enemy pressure keeps bots in reposition/combat mode instead of letting nearby loot/object logic steal the turn
 - Added stair-transition routing so tunnel/greenhouse-style surface-vs-underground movement is less likely to stall at the opening
 - Added simple auto-door building entry/exit routing so practical buildings like greenhouses are less likely to cause outside-target oscillation
-- Moved `debugCombat` logging into `server/logs/bot-combat.log` instead of the console
+- Moved bot debug logging into per-game `server/logs/<game-create-time>_<game-id>/` folders instead of writing a single shared console/file stream
 - Added chosen target/item ids plus final goal position to combat/stability bot logs
 - Added short unarmed recent-pressure memory before bots resume loot/object farming
 - Added unarmed crowd/armed-density scoring so retreat/wander/cover goals spread away from local clusters instead of all collapsing toward the same “safe” building/cover area

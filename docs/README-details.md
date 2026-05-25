@@ -325,13 +325,14 @@ Holds brain-type behavior overlays such as:
 
 ### Combat log
 - `debugCombat`
-- writes structured JSON lines to `server/logs/bot-combat.log`
+- writes structured JSON lines to `server/logs/<game-create-time>_<game-id>/bot-combat.log`
 - includes armed and unarmed brain combat/state transitions for quick tailing or later inspection
 - now also includes the chosen target id, loot/object target ids, final goal position, and movement style so the log reflects the actual selected goal, not just the state reason
 
 ### Stability log
 - `debugBotStability`
 - writes structured JSON lines
+- stores them beside the combat log as `server/logs/<game-create-time>_<game-id>/bot-stability.log`
 - includes readable summaries for easier tailing
 - `state_change` / `idle_reason` now also include chosen goal position and selected target/item ids for better “was this actually a good goal?” debugging
 

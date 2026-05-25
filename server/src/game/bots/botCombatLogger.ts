@@ -1,9 +1,10 @@
 import fs from "fs";
 import path from "path";
 import { Config } from "../../config";
+import type { Game } from "../game";
+import { getBotLogDir } from "./botLogPaths";
 
 const enabled = Config.bots.debugCombat;
-const logPath = path.join(process.cwd(), "logs/bot-combat.log");
 
 function toPrintable(value: unknown): string {
     if (typeof value === "number") return Number.isFinite(value) ? String(value) : "nan";
@@ -33,8 +34,10 @@ function buildSummary(fields: Record<string, unknown>): string {
     ].join(" ");
 }
 
-export function logBotCombat(fields: Record<string, unknown>): void {
+export function logBotCombat(game: Game, fields: Record<string, unknown>): void {
     if (!enabled) return;
+
+    const logPath = path.join(getBotLogDir(game), "bot-combat.log");
 
     const payload = {
         time: new Date().toISOString(),
@@ -51,5 +54,5 @@ export function logBotCombat(fields: Record<string, unknown>): void {
 }
 
 export function getBotCombatLogPath(): string {
-    return logPath;
+    return path.join(process.cwd(), "logs", "<game-create-time>_<game-id>", "bot-combat.log");
 }

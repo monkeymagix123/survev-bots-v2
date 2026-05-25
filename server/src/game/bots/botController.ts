@@ -404,6 +404,7 @@ export class BotController {
         }
 
         applyHealCancelInput({
+            game: this.game,
             msg,
             player,
             brainType: this.brainType,
@@ -486,6 +487,7 @@ export class BotController {
             });
 
         this._lastIdleReason = logIdleReason({
+            game: this.game,
             brainType: this.brainType,
             botId: player.__id,
             state: this._combat.state,
