@@ -52,6 +52,8 @@ Bots follow a lightweight priority stack:
 - Can route out through container exits instead of face-hugging the container walls
 - Can route into and out of simple warehouses through the big side openings, including actually crossing the threshold on entry
 - Keep a short committed warehouse opening target so bots are less likely to bounce in/out at the doorway threshold
+- Can now use simple auto-door building entry/exit points for practical buildings like greenhouses, instead of oscillating between an outside loot target and the building shell
+- Stair-connected structures now get their own short committed transition target, so bots can step through tunnel/stair openings more deliberately when switching between surface and underground
 - Can now choose exterior building-corner detours when a structure shell is the thing blocking a pursuit route, instead of only doing tiny local sidesteps
 - Can bias detours to slide along or peel away from large indestructible walls
 - Use local cover-lite sampling under pressure

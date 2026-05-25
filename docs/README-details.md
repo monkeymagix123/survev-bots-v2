@@ -125,6 +125,8 @@ Movement is state-driven and separate from shooting.
 - special-case warehouse entry/exit routing through the large side openings
 - warehouse entry now uses an interior opening point so bots cross the threshold instead of stalling just outside
 - warehouse transitions now keep a short committed opening target so bots do not flip between enter/exit while hovering on the doorway threshold
+- stair-connected structures now get a short committed transition target, so bots can more reliably move through surface/underground stair openings instead of dithering at the threshold
+- simple auto-door building entry/exit routing now helps practical buildings like greenhouses, so bots can leave for nearby outside loot or enter for an inside goal without treating the shell like a generic wall
 - when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
 
@@ -256,6 +258,8 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 - Normal-mode roaming now prefers nearby loot-bearing obstacles/buildings before generic local wander.
 - Idle waypoints are now refreshed on arrival so unarmed bots do not stall on a completed roam goal until TTL expiry.
 - Warehouse doorway routing now keeps a short committed opening target so bots do not oscillate between moving in and back out at the threshold.
+- Stair-linked tunnel/structure routing now keeps a short committed transition target so bots can exit or descend more reliably instead of hovering at the stair opening.
+- Simple auto-door building entry/exit routing now helps greenhouses and similar buildings stop oscillating between an outside target and the shell.
 - Exterior pursuit now has a first-pass building-corner detour so bots can round structure shells more deliberately when a building wall/child obstacle is the real blocker.
 - Melee-break range checks now use intended same-tick aim direction, which fixes a stall where bots could stand beside a crate without punching because the helper was still reading stale previous-tick facing.
 - Melee-break now has a tiny configurable post-swing plant window so crate punches look cleaner without hard-coding a long immobile stall.

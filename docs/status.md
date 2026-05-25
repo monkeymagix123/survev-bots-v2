@@ -42,6 +42,8 @@ Last updated: 2026-05-24
 - Added a tiny configurable melee-break swing-plant window so crate punches read more cleanly, with tuning available if that pause feels too risky
 - Tightened heal/boost start logic so bots are less likely to instantly med the moment LOS briefly breaks during an active fight
 - Tightened armed blocked-LOS behavior so recent enemy pressure keeps bots in reposition/combat mode instead of letting nearby loot/object logic steal the turn
+- Added stair-transition routing so tunnel/greenhouse-style surface-vs-underground movement is less likely to stall at the opening
+- Added simple auto-door building entry/exit routing so practical buildings like greenhouses are less likely to cause outside-target oscillation
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
@@ -57,6 +59,7 @@ Last updated: 2026-05-24
 ## Next Likely Work
 
 - Container/building-edge pursuit fixes for armed bots
+- More practical stair/building entry-exit sanity testing
 - More anti-oscillation work for unarmed movement
 - Manual spectate tuning
 - Duo/squad behavior

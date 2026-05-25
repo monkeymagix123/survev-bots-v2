@@ -102,6 +102,9 @@ Last updated: 2026-05-24
   - heal/boost starts now also respect short recent-enemy pressure memory instead of only current visibility plus direct recent damage
 - Tightened blocked-LOS combat discipline:
   - recent-enemy pressure now also suppresses opportunistic loot/object branches right after LOS breaks, so armed bots keep repositioning more reliably around blockers like trees
+- Extended structured navigation again:
+  - stair-linked structures now get explicit surface/underground transition routing
+  - simple auto-door buildings now get practical enter/exit routing for nearby outside/inside goals
 
 ## In Progress
 
@@ -114,6 +117,9 @@ Last updated: 2026-05-24
   - bots inside containers can now route toward an exit instead of driving straight into the container shell
   - bots can now route into and out of simple warehouses through their large side openings, with entry targeting pushed inside the threshold
   - large indestructible wall blockers now bias navigation toward sliding/peeling off the wall instead of sitting on it
+- Continued practical structure navigation:
+  - greenhouse/tunnel-style stair openings now have explicit transition routing
+  - practical auto-door buildings now have lightweight entry/exit routing
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.
 
 ## Next

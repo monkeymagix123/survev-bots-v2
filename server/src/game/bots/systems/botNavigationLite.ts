@@ -11,6 +11,7 @@ import type { Game } from "../../game";
 import type { Building } from "../../objects/building";
 import type { Obstacle } from "../../objects/obstacle";
 import type { Player } from "../../objects/player";
+import type { Structure } from "../../objects/structure";
 import { BotTuning } from "../botTuning";
 
 type FailedWaypoint = {
@@ -26,6 +27,22 @@ type RouteTrace = {
 };
 
 type WarehouseTransition = {
+    buildingId: number;
+    mode: "enter" | "exit";
+    goal: Vec2;
+    opening: Vec2;
+    until: number;
+};
+
+type StairTransition = {
+    structureId: number;
+    targetLayer: 0 | 1;
+    goal: Vec2;
+    opening: Vec2;
+    until: number;
+};
+
+type BuildingDoorTransition = {
     buildingId: number;
     mode: "enter" | "exit";
     goal: Vec2;
@@ -55,6 +72,8 @@ export class BotNavigationLite {
     private _nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
     private _fallbackGoal?: Vec2;
     private _fallbackMode?: "waypoint" | "center";
+    private _stairTransition?: StairTransition;
+    private _buildingDoorTransition?: BuildingDoorTransition;
     private _warehouseTransition?: WarehouseTransition;
     private readonly _routeTraceCache = new Map<string, RouteTrace>();
 
@@ -70,6 +89,15 @@ export class BotNavigationLite {
         }
         if (this._forceDetourGoal && this._time >= this._forceDetourUntil) {
             this._clearForcedDetour();
+        }
+        if (this._stairTransition && this._time >= this._stairTransition.until) {
+            this._clearStairTransition();
+        }
+        if (
+            this._buildingDoorTransition &&
+            this._time >= this._buildingDoorTransition.until
+        ) {
+            this._clearBuildingDoorTransition();
         }
         if (
             this._warehouseTransition &&
@@ -118,6 +146,8 @@ export class BotNavigationLite {
             this._clearDetour();
             this._clearFallback();
             this._clearForcedDetour();
+            this._clearStairTransition();
+            this._clearBuildingDoorTransition();
             this._clearWarehouseTransition();
         }
 
@@ -132,6 +162,22 @@ export class BotNavigationLite {
             this._reachedPoint(player.pos, this._fallbackGoal, arriveDist)
         ) {
             this._clearFallback();
+        }
+        if (
+            this._stairTransition &&
+            this._reachedPoint(player.pos, this._stairTransition.opening, arriveDist)
+        ) {
+            this._clearStairTransition();
+        }
+        if (
+            this._buildingDoorTransition &&
+            this._reachedPoint(
+                player.pos,
+                this._buildingDoorTransition.opening,
+                arriveDist,
+            )
+        ) {
+            this._clearBuildingDoorTransition();
         }
         if (
             this._warehouseTransition &&
@@ -778,9 +824,57 @@ export class BotNavigationLite {
         gasEmergency: boolean,
     ): Vec2 | undefined {
         return (
+            this._getStairTransitionGoal(game, player, goal, gasEmergency) ??
             this._getContainerExitGoal(game, player, goal, gasEmergency) ??
-            this._getWarehouseTransitionGoal(game, player, goal, gasEmergency)
+            this._getWarehouseTransitionGoal(game, player, goal, gasEmergency) ??
+            this._getBuildingDoorTransitionGoal(game, player, goal, gasEmergency)
         );
+    }
+
+    private _getStairTransitionGoal(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+        gasEmergency: boolean,
+    ): Vec2 | undefined {
+        const committedTransition = this._getCommittedStairTransition(player, goal);
+        if (committedTransition) {
+            return committedTransition;
+        }
+
+        const structure = this._getContainingStairStructure(game, player.pos, player.layer);
+        if (!structure) {
+            this._clearStairTransition();
+            return undefined;
+        }
+
+        const currentBaseLayer = util.toGroundLayer(player.layer) as 0 | 1;
+        const goalBaseLayer = this._getGoalBaseLayer(game, goal);
+        if (player.layer < 2 && currentBaseLayer === goalBaseLayer) {
+            this._clearStairTransition();
+            return undefined;
+        }
+
+        const opening = this._pickStairTransitionGoal(
+            game,
+            player,
+            structure,
+            goalBaseLayer,
+            gasEmergency,
+        );
+        if (!opening) {
+            this._clearStairTransition();
+            return undefined;
+        }
+
+        this._stairTransition = {
+            structureId: structure.__id,
+            targetLayer: goalBaseLayer,
+            goal: v2.copy(goal),
+            opening: v2.copy(opening),
+            until: this._time + BotTuning.navigation.stairTransitionCommitSec,
+        };
+        return opening;
     }
 
     private _getContainerExitGoal(
@@ -1030,6 +1124,330 @@ export class BotNavigationLite {
         }
 
         return exits;
+    }
+
+    private _getCommittedStairTransition(
+        player: Player,
+        goal: Vec2,
+    ): Vec2 | undefined {
+        const transition = this._stairTransition;
+        if (!transition) return undefined;
+        if (this._time >= transition.until) {
+            this._clearStairTransition();
+            return undefined;
+        }
+        if (!this._sameGoal(goal, transition.goal)) {
+            this._clearStairTransition();
+            return undefined;
+        }
+        if (
+            util.toGroundLayer(player.layer) === transition.targetLayer &&
+            this._reachedPoint(
+                player.pos,
+                transition.opening,
+                BotTuning.navigation.arriveDist,
+            )
+        ) {
+            this._clearStairTransition();
+            return undefined;
+        }
+        return transition.opening;
+    }
+
+    private _getGoalBaseLayer(game: Game, goal: Vec2): 0 | 1 {
+        const stairSideLayer = this._getGoalStairSideLayer(game, goal);
+        if (stairSideLayer !== undefined) {
+            return stairSideLayer;
+        }
+
+        const objs = game.grid.intersectPos(goal);
+        let bestBuilding: Building | undefined;
+        let bestZIdx = -Infinity;
+        for (const obj of objs) {
+            if (obj.__type !== ObjectType.Building) continue;
+            const building = obj as Building;
+            if (building.zIdx < bestZIdx) continue;
+            if (!this._isPointInsideBuildingLayerExact(building, goal, building.layer)) {
+                continue;
+            }
+            bestBuilding = building;
+            bestZIdx = building.zIdx;
+        }
+
+        return bestBuilding?.layer === 1 ? 1 : 0;
+    }
+
+    private _getGoalStairSideLayer(game: Game, goal: Vec2): 0 | 1 | undefined {
+        const objs = game.grid.intersectPos(goal);
+        for (const obj of objs) {
+            if (obj.__type !== ObjectType.Structure) continue;
+            const structure = obj as Structure;
+            for (const stair of structure.stairs) {
+                if (coldet.testCircleAabb(goal, 0.05, stair.downAabb.min, stair.downAabb.max)) {
+                    return 1;
+                }
+                if (coldet.testCircleAabb(goal, 0.05, stair.upAabb.min, stair.upAabb.max)) {
+                    return 0;
+                }
+            }
+        }
+        return undefined;
+    }
+
+    private _getContainingStairStructure(
+        game: Game,
+        point: Vec2,
+        layer: number,
+    ): Structure | undefined {
+        const objs = game.grid.intersectPos(point);
+        for (const obj of objs) {
+            if (obj.__type !== ObjectType.Structure) continue;
+            const structure = obj as Structure;
+            for (const stair of structure.stairs) {
+                if (
+                    coldet.testCircleAabb(
+                        point,
+                        0.25,
+                        stair.collision.min,
+                        stair.collision.max,
+                    )
+                ) {
+                    return structure;
+                }
+            }
+        }
+
+        const building = this._getContainingStructuredBuilding(game, point, layer, () => true);
+        return building?.parentStructure?.stairs.length ? building.parentStructure : undefined;
+    }
+
+    private _pickStairTransitionGoal(
+        game: Game,
+        player: Player,
+        structure: Structure,
+        targetLayer: 0 | 1,
+        gasEmergency: boolean,
+    ): Vec2 | undefined {
+        let bestCandidate: Vec2 | undefined;
+        let bestScore = Infinity;
+
+        for (const stair of structure.stairs) {
+            const sideAabb = targetLayer === 0 ? stair.upAabb : stair.downAabb;
+            const sideCenter = this._getAabbCenter(sideAabb);
+            const pushDir = v2.normalizeSafe(
+                v2.sub(sideCenter, stair.center),
+                targetLayer === 0 ? v2.create(0, 1) : v2.create(0, -1),
+            );
+            const candidate = v2.add(
+                sideCenter,
+                v2.mul(pushDir, BotTuning.navigation.stairExitInset),
+            );
+            game.map.clampToMapBounds(candidate, player.rad);
+            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
+
+            const trace = this._traceRoute(game, player, player.pos, candidate);
+            if (trace.blocked) continue;
+
+            const score = v2.distance(player.pos, candidate);
+            if (score < bestScore) {
+                bestScore = score;
+                bestCandidate = v2.copy(candidate);
+            }
+        }
+
+        return bestCandidate;
+    }
+
+    private _getBuildingDoorTransitionGoal(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+        gasEmergency: boolean,
+    ): Vec2 | undefined {
+        const committedTransition = this._getCommittedBuildingDoorTransition(
+            player,
+            goal,
+        );
+        if (committedTransition) {
+            return committedTransition;
+        }
+
+        const currentBuilding = this._getContainingStructuredBuilding(
+            game,
+            player.pos,
+            player.layer,
+            () => true,
+        );
+        if (
+            currentBuilding &&
+            !this._isPointInsideBuilding(currentBuilding, goal, player.layer)
+        ) {
+            const opening = this._pickBuildingDoorGoal(
+                game,
+                player,
+                currentBuilding,
+                goal,
+                gasEmergency,
+                "exit",
+            );
+            if (opening) {
+                this._buildingDoorTransition = {
+                    buildingId: currentBuilding.__id,
+                    mode: "exit",
+                    goal: v2.copy(goal),
+                    opening: v2.copy(opening),
+                    until:
+                        this._time + BotTuning.navigation.buildingDoorTransitionCommitSec,
+                };
+            }
+            return opening;
+        }
+
+        const goalBuilding = this._getContainingStructuredBuilding(
+            game,
+            goal,
+            this._getGoalBaseLayer(game, goal),
+            () => true,
+        );
+        if (!currentBuilding && goalBuilding) {
+            const opening = this._pickBuildingDoorGoal(
+                game,
+                player,
+                goalBuilding,
+                goal,
+                gasEmergency,
+                "enter",
+            );
+            if (opening) {
+                this._buildingDoorTransition = {
+                    buildingId: goalBuilding.__id,
+                    mode: "enter",
+                    goal: v2.copy(goal),
+                    opening: v2.copy(opening),
+                    until:
+                        this._time + BotTuning.navigation.buildingDoorTransitionCommitSec,
+                };
+            }
+            return opening;
+        }
+
+        this._clearBuildingDoorTransition();
+        return undefined;
+    }
+
+    private _getCommittedBuildingDoorTransition(
+        player: Player,
+        goal: Vec2,
+    ): Vec2 | undefined {
+        const transition = this._buildingDoorTransition;
+        if (!transition) return undefined;
+        if (this._time >= transition.until) {
+            this._clearBuildingDoorTransition();
+            return undefined;
+        }
+        if (!this._sameGoal(goal, transition.goal)) {
+            this._clearBuildingDoorTransition();
+            return undefined;
+        }
+        if (
+            this._reachedPoint(
+                player.pos,
+                transition.opening,
+                BotTuning.navigation.arriveDist,
+            )
+        ) {
+            this._clearBuildingDoorTransition();
+            return undefined;
+        }
+        return transition.opening;
+    }
+
+    private _pickBuildingDoorGoal(
+        game: Game,
+        player: Player,
+        building: Building,
+        goal: Vec2,
+        gasEmergency: boolean,
+        mode: "enter" | "exit",
+    ): Vec2 | undefined {
+        const candidates = this._getBuildingDoorCandidates(
+            game,
+            player,
+            building,
+            mode,
+        );
+        let bestCandidate: Vec2 | undefined;
+        let bestScore = Infinity;
+
+        for (const candidate of candidates) {
+            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
+            if (this._traceRoute(game, player, player.pos, candidate).blocked) continue;
+
+            const score =
+                v2.distance(player.pos, candidate) * 0.35 + v2.distance(candidate, goal);
+            if (score < bestScore) {
+                bestScore = score;
+                bestCandidate = candidate;
+            }
+        }
+
+        return bestCandidate;
+    }
+
+    private _getBuildingDoorCandidates(
+        game: Game,
+        player: Player,
+        building: Building,
+        mode: "enter" | "exit",
+    ): Vec2[] {
+        const candidates: Vec2[] = [];
+        const insideInset = BotTuning.navigation.buildingDoorInsideInset;
+        const outsideInset = BotTuning.navigation.buildingDoorOutsideInset;
+
+        for (const obj of building.childObjects) {
+            if (obj.__type !== ObjectType.Obstacle) continue;
+            const obstacle = obj as Obstacle;
+            if (!obstacle.isDoor || !obstacle.door?.autoOpen || obstacle.door.locked) {
+                continue;
+            }
+            if (!util.sameLayer(obstacle.layer, player.layer)) continue;
+
+            const outward = v2.normalizeSafe(
+                v2.sub(obstacle.pos, building.pos),
+                v2.create(0, 1),
+            );
+            const candidate = v2.add(
+                obstacle.pos,
+                v2.mul(
+                    outward,
+                    mode === "enter" ? -insideInset : outsideInset,
+                ),
+            );
+            game.map.clampToMapBounds(candidate, player.rad);
+            candidates.push(candidate);
+        }
+
+        return candidates;
+    }
+
+    private _isPointInsideBuildingLayerExact(
+        building: Building,
+        point: Vec2,
+        layer: number,
+    ): boolean {
+        if (building.layer !== layer) return false;
+        for (const surface of building.surfaces) {
+            for (const collision of surface.colliders) {
+                if (collider.intersectCircle(collision, point, 0.01)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private _getAabbCenter(aabb: { min: Vec2; max: Vec2 }): Vec2 {
+        return v2.mul(v2.add(aabb.min, aabb.max), 0.5);
     }
 
     private _pickWarehouseOpeningGoal(
@@ -1335,6 +1753,14 @@ export class BotNavigationLite {
     private _clearFallback(): void {
         this._fallbackGoal = undefined;
         this._fallbackMode = undefined;
+    }
+
+    private _clearStairTransition(): void {
+        this._stairTransition = undefined;
+    }
+
+    private _clearBuildingDoorTransition(): void {
+        this._buildingDoorTransition = undefined;
     }
 
     private _clearWarehouseTransition(): void {
