@@ -48,7 +48,9 @@ Bots follow a lightweight priority stack:
 - Use short detours and fallback recovery instead of full pathfinding
 - Keep short detour-side commitment around blockers so bots are less likely to jitter between equivalent left/right micro-routes
 - In normal idle roaming, prefer nearby loot-bearing destructible objects or nearby buildings before falling back to generic random wandering
+- Regional wandering now ranks buildings/zones by practical value (distance, live loot-object richness, and nearby player density) instead of just drifting aimlessly
 - When already safe, waypoint picking no longer nudges bots toward the exact gas center; it now prefers local/regional crates, buildings, and safer spread-out roam points instead
+- Chosen roam zones now keep a longer commitment window, so bots can walk toward a chosen building/area, take only small safe loot detours on the way, and then resume that zone goal
 - Refresh completed idle waypoints immediately so bots do not stand still waiting for roam TTL to expire
 - Can route out through container exits instead of face-hugging the container walls
 - Can route into and out of simple warehouses through the big side openings, including actually crossing the threshold on entry
@@ -70,6 +72,7 @@ Bots follow a lightweight priority stack:
   4. meds / boosts
   5. ammo
   6. clear upgrades
+- While traveling to a chosen building/zone, bots still opportunistically pick up safe nearby loot or break nearby loot crates, but those detours stay small and resumable because the underlying zone waypoint is preserved
 
 ### Object Interaction
 - Can melee-break nearby loot obstacles

@@ -51,6 +51,16 @@ type BuildingDoorTransition = {
     until: number;
 };
 
+type WaypointPick = {
+    pos: Vec2;
+    ttl: number;
+};
+
+type InterestWaypointCandidate = {
+    pos: Vec2;
+    score: number;
+};
+
 export class BotNavigationLite {
     waypoint?: Vec2;
     waypointTtl = 0;
@@ -118,8 +128,9 @@ export class BotNavigationLite {
             v2.distance(player.pos, this.waypoint) <= BotTuning.navigation.arriveDist;
 
         if (!this.waypoint || this.waypointTtl <= 0 || waypointReached) {
-            this.waypoint = this._pickWaypoint(game, player);
-            this.waypointTtl = util.random(5, 10);
+            const nextWaypoint = this._pickWaypoint(game, player);
+            this.waypoint = nextWaypoint.pos;
+            this.waypointTtl = nextWaypoint.ttl;
         }
     }
 
@@ -324,7 +335,7 @@ export class BotNavigationLite {
             !this._fallbackMode
         ) {
             this._fallbackMode = "waypoint";
-            this._fallbackGoal = this._pickWaypoint(game, player);
+            this._fallbackGoal = this._pickWaypoint(game, player).pos;
             this._clearDetour();
             this._clearForcedDetour();
         }
@@ -419,7 +430,7 @@ export class BotNavigationLite {
         }
     }
 
-    private _pickWaypoint(game: Game, player?: Player): Vec2 {
+    private _pickWaypoint(game: Game, player?: Player): WaypointPick {
         if (player) {
             const interesting = this._pickLocalInterestWaypoint(game, player);
             if (interesting) {
@@ -444,12 +455,18 @@ export class BotNavigationLite {
             }
         }
 
-        return v2.copy(game.gas.posNew);
+        return {
+            pos: v2.copy(game.gas.posNew),
+            ttl: this._getRoamWaypointTtl(),
+        };
     }
 
-    private _pickLocalInterestWaypoint(game: Game, player: Player): Vec2 | undefined {
-        const obstacleCandidates: Vec2[] = [];
-        const buildingCandidates: Vec2[] = [];
+    private _pickLocalInterestWaypoint(
+        game: Game,
+        player: Player,
+    ): WaypointPick | undefined {
+        const obstacleCandidates: InterestWaypointCandidate[] = [];
+        const buildingCandidates: InterestWaypointCandidate[] = [];
         const nearby = game.grid.intersectCollider(
             collider.createCircle(player.pos, BotTuning.navigation.waypointBuildingSearchDist),
         );
@@ -468,7 +485,10 @@ export class BotNavigationLite {
                         BotTuning.navigation.waypointInterestSearchDist,
                     )
                 ) {
-                    obstacleCandidates.push(v2.copy(obstacle.pos));
+                    obstacleCandidates.push({
+                        pos: v2.copy(obstacle.pos),
+                        score: this._scoreInterestingObstacleWaypoint(player, obstacle),
+                    });
                 }
                 continue;
             }
@@ -480,24 +500,30 @@ export class BotNavigationLite {
                     v2.distance(player.pos, building.pos) <=
                     BotTuning.navigation.waypointBuildingSearchDist
                 ) {
-                    buildingCandidates.push(v2.copy(building.pos));
+                    buildingCandidates.push({
+                        pos: v2.copy(building.pos),
+                        score: this._scoreInterestingBuildingWaypoint(game, player, building),
+                    });
                 }
             }
         }
 
-        const obstacleChoice = this._pickBestValidWaypoint(
+        const obstacleChoice = this._pickBestInterestWaypoint(
             game,
             player,
             obstacleCandidates,
         );
         if (obstacleChoice) return obstacleChoice;
 
-        return this._pickBestValidWaypoint(game, player, buildingCandidates);
+        return this._pickBestInterestWaypoint(game, player, buildingCandidates);
     }
 
-    private _pickRegionalInterestWaypoint(game: Game, player: Player): Vec2 | undefined {
-        const obstacleCandidates: Vec2[] = [];
-        const buildingCandidates: Vec2[] = [];
+    private _pickRegionalInterestWaypoint(
+        game: Game,
+        player: Player,
+    ): WaypointPick | undefined {
+        const obstacleCandidates: InterestWaypointCandidate[] = [];
+        const buildingCandidates: InterestWaypointCandidate[] = [];
         const searchDist = Math.max(
             BotTuning.navigation.waypointRegionalSearchDist,
             BotTuning.navigation.waypointBuildingSearchDist,
@@ -520,7 +546,10 @@ export class BotNavigationLite {
                         searchDist,
                     )
                 ) {
-                    obstacleCandidates.push(v2.copy(obstacle.pos));
+                    obstacleCandidates.push({
+                        pos: v2.copy(obstacle.pos),
+                        score: this._scoreInterestingObstacleWaypoint(player, obstacle),
+                    });
                 }
                 continue;
             }
@@ -529,18 +558,25 @@ export class BotNavigationLite {
                 const building = obj as Building;
                 if (building.__id === currentBuildingId) continue;
                 if (v2.distance(player.pos, building.pos) <= searchDist) {
-                    buildingCandidates.push(v2.copy(building.pos));
+                    buildingCandidates.push({
+                        pos: v2.copy(building.pos),
+                        score: this._scoreInterestingBuildingWaypoint(game, player, building),
+                    });
                 }
             }
         }
 
-        const obstacleChoice = this._pickBestValidWaypoint(game, player, obstacleCandidates);
+        const obstacleChoice = this._pickBestInterestWaypoint(
+            game,
+            player,
+            obstacleCandidates,
+        );
         if (obstacleChoice) return obstacleChoice;
 
-        return this._pickBestValidWaypoint(game, player, buildingCandidates);
+        return this._pickBestInterestWaypoint(game, player, buildingCandidates);
     }
 
-    private _pickLocalRoamWaypoint(game: Game, player: Player): Vec2 | undefined {
+    private _pickLocalRoamWaypoint(game: Game, player: Player): WaypointPick | undefined {
         let best: Vec2 | undefined;
         let bestScore = Infinity;
         for (let attempts = 0; attempts < 10; attempts++) {
@@ -562,14 +598,19 @@ export class BotNavigationLite {
                 best = v2.copy(candidate);
             }
         }
-        return best;
+        return best
+            ? {
+                  pos: best,
+                  ttl: this._getRoamWaypointTtl(),
+              }
+            : undefined;
     }
 
-    private _pickBestValidWaypoint(
+    private _pickBestInterestWaypoint(
         game: Game,
         player: Player,
-        candidates: Vec2[],
-    ): Vec2 | undefined {
+        candidates: InterestWaypointCandidate[],
+    ): WaypointPick | undefined {
         if (candidates.length === 0) return undefined;
 
         const shuffled = [...candidates];
@@ -579,28 +620,39 @@ export class BotNavigationLite {
         }
 
         let best: Vec2 | undefined;
-        let bestScore = Infinity;
+        let bestScore = -Infinity;
 
         for (const candidate of shuffled) {
-            game.map.clampToMapBounds(candidate, player.rad);
-            if (!this._isNavPointValid(game, player, candidate, false)) continue;
+            const pos = v2.copy(candidate.pos);
+            game.map.clampToMapBounds(pos, player.rad);
+            if (!this._isNavPointValid(game, player, pos, false)) continue;
             if (
-                v2.distance(player.pos, candidate) <
+                v2.distance(player.pos, pos) <
                 BotTuning.navigation.waypointLocalRoamMinStep
             ) {
                 continue;
             }
-            const score = this._getWaypointCandidateScore(game, player, candidate);
-            if (score < bestScore) {
+            const score =
+                candidate.score -
+                v2.distance(player.pos, pos) *
+                    BotTuning.navigation.waypointInterestDistancePenalty -
+                this._getWaypointCrowdScore(game, player, pos) *
+                    BotTuning.navigation.waypointInterestCrowdPenalty;
+            if (score > bestScore) {
                 bestScore = score;
-                best = v2.copy(candidate);
+                best = pos;
             }
         }
 
-        return best;
+        return best
+            ? {
+                  pos: best,
+                  ttl: this._getZoneWaypointTtl(),
+              }
+            : undefined;
     }
 
-    private _pickSafeRoamWaypoint(game: Game, player: Player): Vec2 | undefined {
+    private _pickSafeRoamWaypoint(game: Game, player: Player): WaypointPick | undefined {
         let best: Vec2 | undefined;
         let bestScore = Infinity;
 
@@ -627,7 +679,12 @@ export class BotNavigationLite {
             }
         }
 
-        return best;
+        return best
+            ? {
+                  pos: best,
+                  ttl: this._getRoamWaypointTtl(),
+              }
+            : undefined;
     }
 
     private _getWaypointCandidateScore(
@@ -670,6 +727,65 @@ export class BotNavigationLite {
         return score;
     }
 
+    private _getRoamWaypointTtl(): number {
+        return util.random(
+            BotTuning.navigation.waypointRoamTtlMinSec,
+            BotTuning.navigation.waypointRoamTtlMaxSec,
+        );
+    }
+
+    private _getZoneWaypointTtl(): number {
+        return util.random(
+            BotTuning.navigation.waypointZoneTtlMinSec,
+            BotTuning.navigation.waypointZoneTtlMaxSec,
+        );
+    }
+
+    private _scoreInterestingObstacleWaypoint(
+        player: Player,
+        obstacle: Obstacle,
+    ): number {
+        const def = MapObjectDefs[obstacle.type];
+        if (def.type !== "obstacle") return 0;
+
+        return (
+            this._getObstacleInterestValue(def as ObstacleDef) -
+            v2.distance(player.pos, obstacle.pos) * 0.2
+        );
+    }
+
+    private _scoreInterestingBuildingWaypoint(
+        game: Game,
+        player: Player,
+        building: Building,
+    ): number {
+        let score = BotTuning.navigation.waypointBuildingBaseScore;
+        let lootScore = 0;
+
+        for (const child of building.childObjects) {
+            if (child.__type !== ObjectType.Obstacle) continue;
+            const obstacle = child as Obstacle;
+            if (obstacle.dead || !util.sameLayer(obstacle.layer, player.layer)) continue;
+
+            const def = MapObjectDefs[obstacle.type];
+            if (def.type !== "obstacle") continue;
+            lootScore += this._getObstacleInterestValue(def as ObstacleDef);
+        }
+
+        score += lootScore * BotTuning.navigation.waypointBuildingLootScale;
+        score -= v2.distance(player.pos, building.pos) * 0.16;
+        score -= this._getWaypointCrowdScore(game, player, building.pos) * 12;
+        return score;
+    }
+
+    private _getObstacleInterestValue(def: ObstacleDef): number {
+        return (
+            def.loot.length * BotTuning.navigation.waypointObstacleLootScore +
+            (def.destroyType ? BotTuning.navigation.waypointObstacleDestroyScore : 0) +
+            (def.airdropCrate ? BotTuning.navigation.waypointObstacleAirdropScore : 0)
+        );
+    }
+
     private _getDesiredGoal(
         game: Game,
         gasEmergency: boolean,
@@ -696,7 +812,7 @@ export class BotNavigationLite {
             return game.gas.posNew;
         }
         if (this._fallbackMode === "waypoint") {
-            this._fallbackGoal ??= this._pickWaypoint(game);
+            this._fallbackGoal ??= this._pickWaypoint(game).pos;
             return this._fallbackGoal;
         }
         return undefined;

@@ -117,7 +117,12 @@ Movement is state-driven and separate from shooting.
 - short detour waypoints around blockers
 - short side-commitment around a chosen detour/wall-follow side so bots do not re-flip as easily between near-equivalent routes
 - normal idle roaming now first looks for nearby interesting local destinations (loot-bearing destructible obstacles, then nearby buildings), then broader regional interest, and only then falls back to a local spread-out roam step
+- regional interest is now scored more explicitly as a “zone target”:
+  - loot-bearing obstacles get direct interest value
+  - buildings get ranked by rough live loot-object richness from their child obstacles
+  - both also pay distance and nearby-player / armed-density penalties
 - idle waypoints are refreshed once reached, so bots do not stand on a completed roam goal waiting only for waypoint TTL to expire
+- zone-style waypoints now keep longer TTL than generic roam steps, so bots have more commitment to the chosen building/area and can resume it after short safe loot/object detours
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / center recovery only after local and regional interest fail
@@ -161,6 +166,11 @@ Priority remains conservative:
 4. meds / boosts
 5. ammo
 6. meaningful upgrades
+
+Zone-travel behavior now layers on top of that:
+- bots can commit to a building/zone waypoint for longer
+- nearby loot/object opportunities still have to pass the existing small-distance/safety gates
+- after the detour, the waypoint remains, so the bot naturally resumes moving toward the broader chosen zone instead of forgetting the longer goal
 
 ### Object interaction
 Bots can:

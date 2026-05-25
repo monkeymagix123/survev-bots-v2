@@ -110,6 +110,7 @@ Last updated: 2026-05-25
 - Added short unarmed recent-pressure memory before resuming loot/object farming, to reduce immediate bounce-back onto the same goal after visible pressure
 - Added unarmed crowd/armed-density goal scoring so visible enemies behave more like repulsors and unarmed retreat/wander/cover goals spread away from local clusters unless nearby gun loot is worth contesting
 - Removed the remaining safe-zone center-magnet roaming bias and added regional waypoint crowd scoring, so general bot wandering now prefers nearby/regional crates and buildings over collapsing toward the exact safe-zone center
+- Added zone-style regional waypoint ranking and longer waypoint commitment, so bots can head toward a chosen building/area, grab only small safe loot detours on the way, and then resume the broader zone goal
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
 ## In Progress
