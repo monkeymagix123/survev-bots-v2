@@ -116,11 +116,11 @@ Movement is state-driven and separate from shooting.
 - direct goals when possible
 - short detour waypoints around blockers
 - short side-commitment around a chosen detour/wall-follow side so bots do not re-flip as easily between near-equivalent routes
-- normal idle roaming now first looks for nearby interesting local destinations (loot-bearing destructible obstacles, then nearby buildings), and only then falls back to a local random roam step
+- normal idle roaming now first looks for nearby interesting local destinations (loot-bearing destructible obstacles, then nearby buildings), then broader regional interest, and only then falls back to a local spread-out roam step
 - idle waypoints are refreshed once reached, so bots do not stand on a completed roam goal waiting only for waypoint TTL to expire
 - stuck detection
 - forced re-path attempts
-- safe fallback waypoint / gas-center recovery
+- safe fallback waypoint / center recovery only after local and regional interest fail
 - special-case container exit routing when a bot is inside a container but needs to leave it
 - special-case warehouse entry/exit routing through the large side openings
 - warehouse entry now uses an interior opening point so bots cross the threshold instead of stalling just outside
@@ -129,6 +129,7 @@ Movement is state-driven and separate from shooting.
 - simple auto-door building entry/exit routing now helps practical buildings like greenhouses, so bots can leave for nearby outside loot or enter for an inside goal without treating the shell like a generic wall
 - when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
+- waypoint candidate scoring now applies a regional crowd penalty, with extra weight for nearby armed players, so safe-zone roaming does not keep pulling the whole lobby toward the same cluster
 
 It is **not** full pathfinding.
 
@@ -270,6 +271,7 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 - Armed blocked-LOS fights now also keep recent-enemy pressure over opportunistic loot/object branches, which helps stop cases where a tree briefly breaks LOS and the bot stops repositioning.
 - Unarmed farm-state resumption now also uses a short pressure memory, which should reduce rapid `back_off`/`wander`/`interact_object` oscillation around the same loot or crate target.
 - Unarmed spread-out goal scoring now penalizes crowding around armed players and visible-hostile positions, which should reduce the large same-area clusters that were still forming even when bots were individually backing off.
+- Safe-zone waypoint generation now also avoids gas-center magnet behavior in favor of nearby/regional crates, buildings, and lower-density roam points, which should help both armed and unarmed bots spread out better.
 
 ## Aim / Shooting
 

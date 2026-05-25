@@ -433,7 +433,7 @@ export class UnarmedBotBrain implements BotBrain {
             );
 
             const raw = v2.add(player.pos, v2.mul(dir, retreatDist));
-            const base = sanitizeGoal(v2.lerp(0.22, raw, game.gas.posNew));
+            const base = sanitizeGoal(raw);
             const perpSide = v2.mul(perp, BotTuning.unarmed.retreatSpreadSideDist);
             const candidates = [
                 base,

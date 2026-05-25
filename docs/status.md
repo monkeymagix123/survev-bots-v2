@@ -51,7 +51,8 @@ Last updated: 2026-05-25
 - Added a distinct blue bot debug marker so solo-mode minimap testing is easier to visually confirm
 - Fixed solo-mode bot debug positions not appearing by enabling player-status ticking for that debug path
 - Added unarmed crowd/armed-density scoring so retreat/wander/cover goals spread away from local clusters instead of all collapsing toward the same “safe” building/cover area
-- Added a debug minimap option for live bot-position indicators using the existing map-indicator path
+- Removed the remaining safe-zone center bias from general waypoint picking, so bots now prefer nearby/regional crates, buildings, and spread-out roam points while inside the safe zone
+- Added regional waypoint crowd scoring so general roaming is less likely to collapse large groups into the same pocket of cover/buildings
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

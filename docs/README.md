@@ -48,6 +48,7 @@ Bots follow a lightweight priority stack:
 - Use short detours and fallback recovery instead of full pathfinding
 - Keep short detour-side commitment around blockers so bots are less likely to jitter between equivalent left/right micro-routes
 - In normal idle roaming, prefer nearby loot-bearing destructible objects or nearby buildings before falling back to generic random wandering
+- When already safe, waypoint picking no longer nudges bots toward the exact gas center; it now prefers local/regional crates, buildings, and safer spread-out roam points instead
 - Refresh completed idle waypoints immediately so bots do not stand still waiting for roam TTL to expire
 - Can route out through container exits instead of face-hugging the container walls
 - Can route into and out of simple warehouses through the big side openings, including actually crossing the threshold on entry
@@ -57,6 +58,7 @@ Bots follow a lightweight priority stack:
 - Can now choose exterior building-corner detours when a structure shell is the thing blocking a pursuit route, instead of only doing tiny local sidesteps
 - Can bias detours to slide along or peel away from large indestructible walls
 - Use local cover-lite sampling under pressure
+- Waypoint scoring now also penalizes regional crowding, especially around armed players, so bots spread out more naturally instead of collapsing into one “safe” area
 - Respect gas/safe-zone pressure first
 
 ### Looting

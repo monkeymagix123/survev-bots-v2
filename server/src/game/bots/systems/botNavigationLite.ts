@@ -12,6 +12,7 @@ import type { Building } from "../../objects/building";
 import type { Obstacle } from "../../objects/obstacle";
 import type { Player } from "../../objects/player";
 import type { Structure } from "../../objects/structure";
+import { isBotUnarmed } from "../botDecisionSupport";
 import { BotTuning } from "../botTuning";
 
 type FailedWaypoint = {
@@ -425,31 +426,25 @@ export class BotNavigationLite {
                 return interesting;
             }
 
+            const regionalInterest = this._pickRegionalInterestWaypoint(game, player);
+            if (regionalInterest) {
+                return regionalInterest;
+            }
+
             const localRoam = this._pickLocalRoamWaypoint(game, player);
             if (localRoam) {
                 return localRoam;
             }
         }
 
-        const map = game.map;
-        const gas = game.gas;
-
-        const center = gas.posNew;
-        const baseRad = math.max(gas.radNew * 0.75, 10);
-
-        for (let attempts = 0; attempts < 12; attempts++) {
-            const candidate = v2.add(center, util.randomPointInCircle(baseRad));
-
-            candidate.x = math.clamp(candidate.x, 0, map.width);
-            candidate.y = math.clamp(candidate.y, 0, map.height);
-
-            if (gas.isOutSideSafeZone(candidate)) continue;
-            if (map.isOnWater(candidate, 0)) continue;
-
-            return candidate;
+        if (player) {
+            const safeRoam = this._pickSafeRoamWaypoint(game, player);
+            if (safeRoam) {
+                return safeRoam;
+            }
         }
 
-        return v2.copy(center);
+        return v2.copy(game.gas.posNew);
     }
 
     private _pickLocalInterestWaypoint(game: Game, player: Player): Vec2 | undefined {
@@ -466,7 +461,13 @@ export class BotNavigationLite {
 
             if (obj.__type === ObjectType.Obstacle) {
                 const obstacle = obj as Obstacle;
-                if (this._isInterestingRoamObstacle(obstacle, player)) {
+                if (
+                    this._isInterestingRoamObstacle(
+                        obstacle,
+                        player,
+                        BotTuning.navigation.waypointInterestSearchDist,
+                    )
+                ) {
                     obstacleCandidates.push(v2.copy(obstacle.pos));
                 }
                 continue;
@@ -484,17 +485,64 @@ export class BotNavigationLite {
             }
         }
 
-        const obstacleChoice = this._pickRandomValidWaypoint(
+        const obstacleChoice = this._pickBestValidWaypoint(
             game,
             player,
             obstacleCandidates,
         );
         if (obstacleChoice) return obstacleChoice;
 
-        return this._pickRandomValidWaypoint(game, player, buildingCandidates);
+        return this._pickBestValidWaypoint(game, player, buildingCandidates);
+    }
+
+    private _pickRegionalInterestWaypoint(game: Game, player: Player): Vec2 | undefined {
+        const obstacleCandidates: Vec2[] = [];
+        const buildingCandidates: Vec2[] = [];
+        const searchDist = Math.max(
+            BotTuning.navigation.waypointRegionalSearchDist,
+            BotTuning.navigation.waypointBuildingSearchDist,
+        );
+        const nearby = game.grid.intersectCollider(
+            collider.createCircle(player.pos, searchDist),
+        );
+        const currentBuildingId = this._getContainingBuildingId(game, player.pos, player.layer);
+
+        for (const obj of nearby) {
+            if (!obj || !("pos" in obj)) continue;
+            if (!util.sameLayer(obj.layer, player.layer)) continue;
+
+            if (obj.__type === ObjectType.Obstacle) {
+                const obstacle = obj as Obstacle;
+                if (
+                    this._isInterestingRoamObstacle(
+                        obstacle,
+                        player,
+                        searchDist,
+                    )
+                ) {
+                    obstacleCandidates.push(v2.copy(obstacle.pos));
+                }
+                continue;
+            }
+
+            if (obj.__type === ObjectType.Building) {
+                const building = obj as Building;
+                if (building.__id === currentBuildingId) continue;
+                if (v2.distance(player.pos, building.pos) <= searchDist) {
+                    buildingCandidates.push(v2.copy(building.pos));
+                }
+            }
+        }
+
+        const obstacleChoice = this._pickBestValidWaypoint(game, player, obstacleCandidates);
+        if (obstacleChoice) return obstacleChoice;
+
+        return this._pickBestValidWaypoint(game, player, buildingCandidates);
     }
 
     private _pickLocalRoamWaypoint(game: Game, player: Player): Vec2 | undefined {
+        let best: Vec2 | undefined;
+        let bestScore = Infinity;
         for (let attempts = 0; attempts < 10; attempts++) {
             const candidate = v2.add(
                 player.pos,
@@ -508,12 +556,16 @@ export class BotNavigationLite {
                 continue;
             }
             if (!this._isNavPointValid(game, player, candidate, false)) continue;
-            return candidate;
+            const score = this._getWaypointCandidateScore(game, player, candidate);
+            if (score < bestScore) {
+                bestScore = score;
+                best = v2.copy(candidate);
+            }
         }
-        return undefined;
+        return best;
     }
 
-    private _pickRandomValidWaypoint(
+    private _pickBestValidWaypoint(
         game: Game,
         player: Player,
         candidates: Vec2[],
@@ -526,6 +578,9 @@ export class BotNavigationLite {
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
 
+        let best: Vec2 | undefined;
+        let bestScore = Infinity;
+
         for (const candidate of shuffled) {
             game.map.clampToMapBounds(candidate, player.rad);
             if (!this._isNavPointValid(game, player, candidate, false)) continue;
@@ -535,10 +590,84 @@ export class BotNavigationLite {
             ) {
                 continue;
             }
-            return candidate;
+            const score = this._getWaypointCandidateScore(game, player, candidate);
+            if (score < bestScore) {
+                bestScore = score;
+                best = v2.copy(candidate);
+            }
         }
 
-        return undefined;
+        return best;
+    }
+
+    private _pickSafeRoamWaypoint(game: Game, player: Player): Vec2 | undefined {
+        let best: Vec2 | undefined;
+        let bestScore = Infinity;
+
+        for (let attempts = 0; attempts < 16; attempts++) {
+            const candidate = v2.add(
+                player.pos,
+                util.randomPointInCircle(BotTuning.navigation.waypointRegionalSearchDist),
+            );
+            game.map.clampToMapBounds(candidate, player.rad);
+            if (game.gas.isOutSideSafeZone(candidate)) continue;
+            if (game.map.isOnWater(candidate, player.layer)) continue;
+            if (
+                v2.distance(player.pos, candidate) <
+                BotTuning.navigation.waypointLocalRoamMinStep
+            ) {
+                continue;
+            }
+            if (!this._isNavPointValid(game, player, candidate, false)) continue;
+
+            const score = this._getWaypointCandidateScore(game, player, candidate);
+            if (score < bestScore) {
+                bestScore = score;
+                best = v2.copy(candidate);
+            }
+        }
+
+        return best;
+    }
+
+    private _getWaypointCandidateScore(
+        game: Game,
+        player: Player,
+        candidate: Vec2,
+    ): number {
+        return (
+            v2.distance(player.pos, candidate) * 0.02 +
+            this._getWaypointCrowdScore(game, player, candidate)
+        );
+    }
+
+    private _getWaypointCrowdScore(
+        game: Game,
+        player: Player,
+        candidate: Vec2,
+    ): number {
+        const radius = BotTuning.navigation.waypointCrowdRadius;
+        const nearby = game.grid.intersectCollider(collider.createCircle(candidate, radius));
+        let score = 0;
+
+        for (const obj of nearby) {
+            if (obj.__type !== ObjectType.Player) continue;
+            const other = obj as Player;
+            if (other.__id === player.__id || other.dead || other.downed || other.disconnected) {
+                continue;
+            }
+            if (!util.sameLayer(other.layer, player.layer)) continue;
+
+            const dist = v2.distance(candidate, other.pos);
+            if (dist > radius) continue;
+            const proximity = 1 - dist / radius;
+            score += proximity * BotTuning.navigation.waypointCrowdPlayerWeight;
+            if (!isBotUnarmed(other)) {
+                score += proximity * BotTuning.navigation.waypointCrowdArmedWeight;
+            }
+        }
+
+        return score;
     }
 
     private _getDesiredGoal(
@@ -1054,14 +1183,17 @@ export class BotNavigationLite {
         return this._getContainingStructuredBuilding(game, point, layer, () => true)?.__id;
     }
 
-    private _isInterestingRoamObstacle(obstacle: Obstacle, player: Player): boolean {
+    private _isInterestingRoamObstacle(
+        obstacle: Obstacle,
+        player: Player,
+        maxDist: number,
+    ): boolean {
         if (
             obstacle.dead ||
             obstacle.isWindow ||
             !obstacle.destructible ||
             obstacle.health <= 0 ||
-            v2.distance(player.pos, obstacle.pos) >
-                BotTuning.navigation.waypointInterestSearchDist
+            v2.distance(player.pos, obstacle.pos) > maxDist
         ) {
             return false;
         }

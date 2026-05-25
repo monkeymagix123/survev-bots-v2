@@ -500,8 +500,7 @@ export class RealisticBotBrain implements BotBrain {
             );
 
             const raw = v2.add(player.pos, v2.mul(dir, retreatDist));
-            const biased = v2.lerp(0.22, raw, game.gas.posNew);
-            return sanitizeGoal(biased);
+            return sanitizeGoal(raw);
         };
 
         const coverState =
