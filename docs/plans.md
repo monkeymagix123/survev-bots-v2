@@ -100,6 +100,8 @@ Last updated: 2026-05-24
   - crate punches can briefly plant via `BotTuning.objectInteract.meleeSwingStopSec`, with `0` available as a no-stop option
 - Tightened support-item start discipline:
   - heal/boost starts now also respect short recent-enemy pressure memory instead of only current visibility plus direct recent damage
+- Tightened blocked-LOS combat discipline:
+  - recent-enemy pressure now also suppresses opportunistic loot/object branches right after LOS breaks, so armed bots keep repositioning more reliably around blockers like trees
 
 ## In Progress
 

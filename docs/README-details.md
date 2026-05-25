@@ -132,6 +132,7 @@ It is **not** full pathfinding.
 
 Combat-side movement also now uses “reposition on blocked LOS” behavior:
 - if an armed bot wants to fight but LOS is lost/blocked, it can prefer `chase_last_seen`-style repositioning over passively holding a useless angle
+- recent-enemy pressure now also suppresses opportunistic loot/object branches immediately after LOS breaks, so armed bots are less likely to freeze near a tree because the fight briefly looked “safe enough” for a distraction
 
 ### Cover-lite
 - samples nearby local points
@@ -259,6 +260,7 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 - Melee-break range checks now use intended same-tick aim direction, which fixes a stall where bots could stand beside a crate without punching because the helper was still reading stale previous-tick facing.
 - Melee-break now has a tiny configurable post-swing plant window so crate punches look cleaner without hard-coding a long immobile stall.
 - Heal/boost start logic now respects short recent-enemy pressure memory, which helps stop bots from ducking behind cover and instantly starting a med/boost while the fight is still hot.
+- Armed blocked-LOS fights now also keep recent-enemy pressure over opportunistic loot/object branches, which helps stop cases where a tree briefly breaks LOS and the bot stops repositioning.
 
 ## Aim / Shooting
 

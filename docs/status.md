@@ -41,6 +41,7 @@ Last updated: 2026-05-24
 - Fixed a melee-break edge case where bots could stand next to a crate without punching because the range check used stale facing
 - Added a tiny configurable melee-break swing-plant window so crate punches read more cleanly, with tuning available if that pause feels too risky
 - Tightened heal/boost start logic so bots are less likely to instantly med the moment LOS briefly breaks during an active fight
+- Tightened armed blocked-LOS behavior so recent enemy pressure keeps bots in reposition/combat mode instead of letting nearby loot/object logic steal the turn
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

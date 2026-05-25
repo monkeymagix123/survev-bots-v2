@@ -40,6 +40,7 @@ Bots follow a lightweight priority stack:
 - Keep short `lastSeen` memory for brief chase behavior
 - Competitive bots score targets a bit better than the other brains
 - When a target is obscured by terrain/objects, armed bots try to reposition instead of passively sitting on a blocked shot
+- Recent enemy pressure now also suppresses opportunistic loot/object detours right after LOS breaks, so armed bots are more likely to keep repositioning around blockers like trees instead of getting distracted
 - Armed bots treat lone visibly unarmed hostiles as less threatening unless they get close or show gun evidence
 
 ### Movement

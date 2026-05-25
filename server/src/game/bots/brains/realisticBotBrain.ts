@@ -235,6 +235,7 @@ export class RealisticBotBrain implements BotBrain {
             !lowHp &&
             !needsReload &&
             !recentlyDamaged &&
+            !threat.hasRecentEnemy &&
             danger <= BotTuning.loot.opportunisticDangerMax &&
             threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
                 ? lootScorer.chooseLoot({
@@ -251,6 +252,7 @@ export class RealisticBotBrain implements BotBrain {
             !lowHp &&
             !needsReload &&
             !recentlyDamaged &&
+            !threat.hasRecentEnemy &&
             danger <= BotTuning.objectInteract.opportunisticDangerMax &&
             threat.nearestNearbyHostileDist > BotTuning.combat.enemyCloseDist
                 ? objectInteractionScorer.chooseObject({
@@ -404,6 +406,7 @@ export class RealisticBotBrain implements BotBrain {
                 prevState === "loot" &&
                 !visible &&
                 !threat.anyHostileVisible &&
+                !threat.hasRecentEnemy &&
                 combat.lootTargetId !== undefined &&
                 state !== "seek_cover" &&
                 state !== "retreat_reload" &&
@@ -415,6 +418,7 @@ export class RealisticBotBrain implements BotBrain {
                 prevState === "interact_object" &&
                 !visible &&
                 !threat.anyHostileVisible &&
+                !threat.hasRecentEnemy &&
                 combat.objectTargetId !== undefined &&
                 state !== "seek_cover" &&
                 state !== "retreat_reload" &&
