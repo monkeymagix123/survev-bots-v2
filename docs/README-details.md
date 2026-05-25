@@ -208,6 +208,7 @@ Unarmed bots default to:
 - distracted armed hostiles allow more opportunistic crate/object behavior
 - very close hostiles still count as melee pressure, so unarmed bots back off instead of passively standing on top of each other
 - if a visible hostile still appears unarmed and no immediate gun/object is available, bots now prefer nearby fallback loot or disengage instead of stalling in place
+- short recent-pressure memory now delays the return to loot/object farming after visible pressure or recent damage, so unarmed bots do not immediately snap back onto the same goal the moment pressure briefly drops
 
 ### Armed-vs-unarmed threat softening
 Armed bots now also use that visible-hostile classification in a limited way:
@@ -265,6 +266,7 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 - Melee-break now has a tiny configurable post-swing plant window so crate punches look cleaner without hard-coding a long immobile stall.
 - Heal/boost start logic now respects short recent-enemy pressure memory, which helps stop bots from ducking behind cover and instantly starting a med/boost while the fight is still hot.
 - Armed blocked-LOS fights now also keep recent-enemy pressure over opportunistic loot/object branches, which helps stop cases where a tree briefly breaks LOS and the bot stops repositioning.
+- Unarmed farm-state resumption now also uses a short pressure memory, which should reduce rapid `back_off`/`wander`/`interact_object` oscillation around the same loot or crate target.
 
 ## Aim / Shooting
 

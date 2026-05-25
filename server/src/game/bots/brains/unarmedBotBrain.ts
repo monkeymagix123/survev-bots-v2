@@ -113,6 +113,22 @@ export class UnarmedBotBrain implements BotBrain {
             hostilePos: visibleHostile ? v2.copy(actionableTarget!.pos) : undefined,
         };
 
+        if (actionableTarget) {
+            combat.unarmedThreatPos = v2.copy(actionableTarget.pos);
+        }
+        if (recentlyDamaged) {
+            combat.unarmedPressureUntil = Math.max(
+                combat.unarmedPressureUntil,
+                timeNow + BotTuning.unarmed.recentDamageResumeSec,
+            );
+        } else if (visibleHostile || enemyVeryClose) {
+            combat.unarmedPressureUntil = Math.max(
+                combat.unarmedPressureUntil,
+                timeNow + BotTuning.unarmed.recentPressureResumeSec,
+            );
+        }
+        const underRecentPressure = timeNow < combat.unarmedPressureUntil;
+
         const lowHp = player.health < BotTuning.heal.lowHp;
         const baseDanger = computeBotDanger({
             targetVisible: visibleHostile,
@@ -153,6 +169,7 @@ export class UnarmedBotBrain implements BotBrain {
 
         const canFarmObjects =
             !gasEmergency &&
+            !underRecentPressure &&
             !recentlyDamaged &&
             (!visibleHostile ||
                 threatContext.hostileAppearsUnarmed ||
@@ -173,6 +190,7 @@ export class UnarmedBotBrain implements BotBrain {
             !immediateGun &&
             !objectGoal &&
             !gasEmergency &&
+            !underRecentPressure &&
             (!visibleHostile ||
                 threatContext.hostileAppearsUnarmed ||
                 threatContext.hostileDistracted)
@@ -220,6 +238,9 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (visibleHostile && threatContext.hostileAppearsUnarmed) {
             state = "back_off";
             reason = "unarmed_visible_melee_disengage";
+        } else if (underRecentPressure && combat.unarmedThreatPos) {
+            state = lowHp || danger >= brainProfile.highDangerMin ? "seek_cover" : "back_off";
+            reason = "unarmed_recent_pressure";
         } else {
             state = "wander";
             reason = "unarmed_seek_object";
@@ -228,6 +249,7 @@ export class UnarmedBotBrain implements BotBrain {
         const stateLocked = timeNow < combat.stateLockUntil;
         if (stateLocked) {
             const canPreserveFarmState =
+                !underRecentPressure &&
                 !recentlyDamaged &&
                 (!visibleHostile ||
                     threatContext.hostileAppearsUnarmed ||
@@ -450,7 +472,10 @@ export class UnarmedBotBrain implements BotBrain {
                 }
                 break;
             case "back_off": {
-                const retreatFrom = actionableTarget?.pos ?? perception.lastSeenPos;
+                const retreatFrom =
+                    actionableTarget?.pos ??
+                    combat.unarmedThreatPos ??
+                    perception.lastSeenPos;
                 combat.goalPos = retreatFrom
                     ? retreatPointFrom(retreatFrom, 14)
                     : navigation.waypoint
@@ -459,7 +484,10 @@ export class UnarmedBotBrain implements BotBrain {
                 break;
             }
             case "seek_cover": {
-                const retreatFrom = actionableTarget?.pos ?? perception.lastSeenPos;
+                const retreatFrom =
+                    actionableTarget?.pos ??
+                    combat.unarmedThreatPos ??
+                    perception.lastSeenPos;
                 combat.goalPos = retreatFrom
                     ? pickCoverPoint(retreatFrom) ?? retreatPointFrom(retreatFrom, 16)
                     : navigation.waypoint

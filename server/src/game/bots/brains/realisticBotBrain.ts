@@ -175,6 +175,7 @@ export class RealisticBotBrain implements BotBrain {
                     (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
 
                 logBotCombat({
+                    botId: player.__id,
                     brainType: this.type,
                     state: combat.state,
                     stateReason: combat.stateReason,
@@ -186,6 +187,13 @@ export class RealisticBotBrain implements BotBrain {
                     needsReload,
                     gasEmergency,
                     weaponClass,
+                    targetId: undefined,
+                    goalX: combat.goalPos ? Number(combat.goalPos.x.toFixed(2)) : undefined,
+                    goalY: combat.goalPos ? Number(combat.goalPos.y.toFixed(2)) : undefined,
+                    movementStyle: combat.movementStyle,
+                    lootTargetId: combat.lootTargetId,
+                    objectTargetId: combat.objectTargetId,
+                    objectInteractionMode: combat.objectInteractionMode,
                 });
             }
             return;

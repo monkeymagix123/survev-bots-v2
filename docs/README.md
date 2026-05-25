@@ -89,6 +89,7 @@ Bots follow a lightweight priority stack:
 - Become much more cautious around hostiles that have shown a gun
 - Treat very close visible hostiles as melee pressure and back off instead of passively face-hugging
 - If a visible hostile still appears unarmed, bots can keep taking nearby loot/object opportunities; otherwise they more deliberately disengage instead of idling
+- Keep a short recent-pressure memory before resuming loot/object farming, so bots are less likely to bounce immediately back onto the same crate/loot goal the moment a hostile flickers out of sight
 - Can redirect from a desired crate/object to a destructible route-blocker when that blocker is the only thing in the way
 
 ### Healing

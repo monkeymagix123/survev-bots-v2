@@ -107,6 +107,7 @@ Last updated: 2026-05-24
   - simple auto-door buildings now get practical enter/exit routing for nearby outside/inside goals
 - Moved `debugCombat` output from console spam to `server/logs/bot-combat.log`
 - Expanded bot debug logs so combat/stability entries now include the selected target/item ids and final goal position
+- Added short unarmed recent-pressure memory before resuming loot/object farming, to reduce immediate bounce-back onto the same goal after visible pressure
 
 ## In Progress
 

@@ -50,6 +50,13 @@ export class BotCombatMemory {
     coverUntil = -Infinity;
 
     /**
+     * Short unarmed pressure memory so bots do not instantly resume loot/object
+     * farming the moment a hostile flickers out of sight.
+     */
+    unarmedPressureUntil = -Infinity;
+    unarmedThreatPos?: Vec2;
+
+    /**
      * Movement intent derived from the combat state machine.
      * These are consumed by navigation/movement only.
      */

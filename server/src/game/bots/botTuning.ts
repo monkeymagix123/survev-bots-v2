@@ -29,6 +29,8 @@ export const BotTuning = {
         distractedArmedDangerRelief: 0.16,
         distractedFightRadius: 10,
         hostileProximityRef: 8,
+        recentPressureResumeSec: 1.1,
+        recentDamageResumeSec: 1.45,
         shownGunObjectPenalty: 300,
         distractedShownGunObjectRelief: 180,
         unarmedHostileObjectBonus: 130,
