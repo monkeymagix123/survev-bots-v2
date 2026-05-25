@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Core Model
 
@@ -209,6 +209,8 @@ Unarmed bots default to:
 - very close hostiles still count as melee pressure, so unarmed bots back off instead of passively standing on top of each other
 - if a visible hostile still appears unarmed and no immediate gun/object is available, bots now prefer nearby fallback loot or disengage instead of stalling in place
 - short recent-pressure memory now delays the return to loot/object farming after visible pressure or recent damage, so unarmed bots do not immediately snap back onto the same goal the moment pressure briefly drops
+- unarmed goal scoring now also includes nearby crowd / armed density, so retreat, cover, and wander goals are biased away from clusters instead of all collapsing toward the same cover/building pocket
+- nearby gun loot is still allowed to override some of that repulsion, so bots can contest a practical arm-up opportunity without treating every visible enemy as a magnet
 
 ### Armed-vs-unarmed threat softening
 Armed bots now also use that visible-hostile classification in a limited way:
@@ -267,6 +269,7 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 - Heal/boost start logic now respects short recent-enemy pressure memory, which helps stop bots from ducking behind cover and instantly starting a med/boost while the fight is still hot.
 - Armed blocked-LOS fights now also keep recent-enemy pressure over opportunistic loot/object branches, which helps stop cases where a tree briefly breaks LOS and the bot stops repositioning.
 - Unarmed farm-state resumption now also uses a short pressure memory, which should reduce rapid `back_off`/`wander`/`interact_object` oscillation around the same loot or crate target.
+- Unarmed spread-out goal scoring now penalizes crowding around armed players and visible-hostile positions, which should reduce the large same-area clusters that were still forming even when bots were individually backing off.
 
 ## Aim / Shooting
 

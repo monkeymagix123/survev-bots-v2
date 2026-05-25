@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -90,6 +90,8 @@ Bots follow a lightweight priority stack:
 - Treat very close visible hostiles as melee pressure and back off instead of passively face-hugging
 - If a visible hostile still appears unarmed, bots can keep taking nearby loot/object opportunities; otherwise they more deliberately disengage instead of idling
 - Keep a short recent-pressure memory before resuming loot/object farming, so bots are less likely to bounce immediately back onto the same crate/loot goal the moment a hostile flickers out of sight
+- Score crowd density around wander / retreat / cover goals, so visible enemies act more like repulsors unless there is nearby gun loot worth contesting
+- Penalize goals that drift toward armed clusters, which helps unarmed bots spread out instead of all converging on the same “safe” building or cover pocket
 - Can redirect from a desired crate/object to a destructible route-blocker when that blocker is the only thing in the way
 
 ### Healing

@@ -2,7 +2,7 @@
 
 Short snapshot of current bot work.
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Current State
 
@@ -47,6 +47,7 @@ Last updated: 2026-05-24
 - Moved `debugCombat` logging into `server/logs/bot-combat.log` instead of the console
 - Added chosen target/item ids plus final goal position to combat/stability bot logs
 - Added short unarmed recent-pressure memory before bots resume loot/object farming
+- Added unarmed crowd/armed-density scoring so retreat/wander/cover goals spread away from local clusters instead of all collapsing toward the same “safe” building/cover area
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

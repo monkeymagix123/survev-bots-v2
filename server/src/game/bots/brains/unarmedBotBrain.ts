@@ -2,6 +2,7 @@ import { GameConfig } from "../../../../../shared/gameConfig";
 import { ObjectType } from "../../../../../shared/net/objectSerializeFns";
 import { coldet } from "../../../../../shared/utils/coldet";
 import { collisionHelpers } from "../../../../../shared/utils/collisionHelpers";
+import { collider } from "../../../../../shared/utils/collider";
 import { math } from "../../../../../shared/utils/math";
 import { util } from "../../../../../shared/utils/util";
 import { type Vec2, v2 } from "../../../../../shared/utils/v2";
@@ -9,6 +10,7 @@ import { Config } from "../../../config";
 import {
     type BotUnarmedThreatContext,
     computeBotDanger,
+    isBotUnarmed,
 } from "../botDecisionSupport";
 import { logBotCombat } from "../botCombatLogger";
 import { logBotStability } from "../botStabilityLogger";
@@ -113,6 +115,97 @@ export class UnarmedBotBrain implements BotBrain {
             hostilePos: visibleHostile ? v2.copy(actionableTarget!.pos) : undefined,
         };
 
+        const isFriendlyPlayer = (other: typeof player) =>
+            other.groupId === player.groupId ||
+            (game.map.factionMode && other.teamId === player.teamId);
+
+        const getGoalCrowdScore = (
+            goal: Vec2,
+            options?: {
+                targetPos?: Vec2;
+                ignoreTargetId?: number;
+                visibleHostileWeight?: number;
+            },
+        ) => {
+            const radius = BotTuning.unarmed.goalCrowdRadius;
+            const nearby = game.grid.intersectCollider(collider.createCircle(goal, radius));
+            let score = 0;
+
+            for (const obj of nearby) {
+                if (obj.__type !== ObjectType.Player) continue;
+                const other = obj as typeof player;
+                if (other.__id === player.__id || other.dead || other.downed) continue;
+                if (!util.sameLayer(other.layer, player.layer)) continue;
+                if (isFriendlyPlayer(other)) continue;
+                if (
+                    options?.ignoreTargetId !== undefined &&
+                    other.__id === options.ignoreTargetId
+                ) {
+                    continue;
+                }
+
+                const dist = v2.distance(goal, other.pos);
+                if (dist > radius) continue;
+                const proximity = 1 - dist / radius;
+                score += proximity * BotTuning.unarmed.goalCrowdPlayerWeight;
+                if (!isBotUnarmed(other)) {
+                    score += proximity * BotTuning.unarmed.goalCrowdArmedWeight;
+                }
+            }
+
+            if (options?.targetPos) {
+                const targetDist = v2.distance(goal, options.targetPos);
+                if (targetDist < radius) {
+                    const proximity = 1 - targetDist / radius;
+                    score +=
+                        proximity *
+                        (options.visibleHostileWeight ??
+                            BotTuning.unarmed.goalCrowdVisibleHostileWeight);
+                }
+            }
+
+            return score;
+        };
+
+        const isGoalOvercrowded = (
+            goal: Vec2,
+            options?: {
+                targetPos?: Vec2;
+                ignoreTargetId?: number;
+                visibleHostileWeight?: number;
+            },
+        ) =>
+            getGoalCrowdScore(goal, options) >=
+            BotTuning.unarmed.goalCrowdRejectScore;
+
+        const chooseSpreadOutGoal = (baseGoal: Vec2): Vec2 => {
+            let bestGoal = v2.copy(baseGoal);
+            let bestScore = getGoalCrowdScore(bestGoal, {
+                targetPos: visibleHostile ? threatContext.hostilePos : undefined,
+                ignoreTargetId: actionableTarget?.__id,
+            });
+
+            for (let i = 0; i < BotTuning.unarmed.wanderSpreadSampleCount; i++) {
+                const candidate = v2.add(
+                    baseGoal,
+                    util.randomPointInCircle(BotTuning.unarmed.wanderSpreadSampleRadius),
+                );
+                const sanitized = sanitizeGoal(candidate);
+                const score =
+                    getGoalCrowdScore(sanitized, {
+                        targetPos: visibleHostile ? threatContext.hostilePos : undefined,
+                        ignoreTargetId: actionableTarget?.__id,
+                    }) +
+                    v2.distance(sanitized, baseGoal) * 0.06;
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestGoal = sanitized;
+                }
+            }
+
+            return bestGoal;
+        };
+
         if (actionableTarget) {
             combat.unarmedThreatPos = v2.copy(actionableTarget.pos);
         }
@@ -166,6 +259,14 @@ export class UnarmedBotBrain implements BotBrain {
                   unarmedThreat: threatContext,
               })
             : undefined;
+        const immediateGunCrowded =
+            !!immediateGun &&
+            isGoalOvercrowded(immediateGun.pos, {
+                targetPos: visibleHostile ? threatContext.hostilePos : undefined,
+                ignoreTargetId: actionableTarget?.__id,
+                visibleHostileWeight:
+                    BotTuning.unarmed.goalCrowdVisibleHostileWeight * 0.35,
+            });
 
         const canFarmObjects =
             !gasEmergency &&
@@ -186,6 +287,15 @@ export class UnarmedBotBrain implements BotBrain {
                   unarmedThreat: threatContext,
               })
             : undefined;
+        const objectGoalAllowed =
+            !objectGoal ||
+            !isGoalOvercrowded(objectGoal.pos, {
+                targetPos:
+                    visibleHostile && !immediateGunCrowded
+                        ? threatContext.hostilePos
+                        : undefined,
+                ignoreTargetId: actionableTarget?.__id,
+            });
         const fallbackLoot =
             !immediateGun &&
             !objectGoal &&
@@ -203,6 +313,12 @@ export class UnarmedBotBrain implements BotBrain {
                       unarmedThreat: threatContext,
                   })
                 : undefined;
+        const fallbackLootAllowed =
+            !fallbackLoot ||
+            !isGoalOvercrowded(fallbackLoot.pos, {
+                targetPos: visibleHostile ? threatContext.hostilePos : undefined,
+                ignoreTargetId: actionableTarget?.__id,
+            });
 
         type State = typeof combat.state;
         let state: State = "wander";
@@ -229,10 +345,10 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (immediateGun) {
             state = "loot";
             reason = "unarmed_find_gun";
-        } else if (objectGoal) {
+        } else if (objectGoal && objectGoalAllowed) {
             state = "interact_object";
             reason = objectGoal.reason;
-        } else if (fallbackLoot) {
+        } else if (fallbackLoot && fallbackLootAllowed) {
             state = "loot";
             reason = fallbackLoot.reason;
         } else if (visibleHostile && threatContext.hostileAppearsUnarmed) {
@@ -317,7 +433,32 @@ export class UnarmedBotBrain implements BotBrain {
             );
 
             const raw = v2.add(player.pos, v2.mul(dir, retreatDist));
-            return sanitizeGoal(v2.lerp(0.22, raw, game.gas.posNew));
+            const base = sanitizeGoal(v2.lerp(0.22, raw, game.gas.posNew));
+            const perpSide = v2.mul(perp, BotTuning.unarmed.retreatSpreadSideDist);
+            const candidates = [
+                base,
+                sanitizeGoal(v2.add(base, perpSide)),
+                sanitizeGoal(v2.sub(base, perpSide)),
+            ];
+
+            let best = candidates[0];
+            let bestScore = getGoalCrowdScore(best, {
+                targetPos: visibleHostile ? threatContext.hostilePos : source,
+                ignoreTargetId: actionableTarget?.__id,
+            });
+            for (let i = 1; i < candidates.length; i++) {
+                const candidate = candidates[i];
+                const score = getGoalCrowdScore(candidate, {
+                    targetPos: visibleHostile ? threatContext.hostilePos : source,
+                    ignoreTargetId: actionableTarget?.__id,
+                });
+                if (score < bestScore) {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+
+            return best;
         };
 
         const pickCoverPoint = (source: { x: number; y: number }) => {
@@ -384,7 +525,12 @@ export class UnarmedBotBrain implements BotBrain {
                     1000 -
                     distFromBot * brainProfile.coverBotDistWeight +
                     distFromEnemy * brainProfile.coverEnemyDistWeight -
-                    (reachable ? 0 : brainProfile.coverReachPenalty);
+                    (reachable ? 0 : brainProfile.coverReachPenalty) -
+                    getGoalCrowdScore(candidate, {
+                        targetPos: visibleHostile ? threatContext.hostilePos : source,
+                        ignoreTargetId: actionableTarget?.__id,
+                    }) *
+                        45;
                 candidates.push({ pos: v2.copy(candidate), score });
             };
 
@@ -446,7 +592,7 @@ export class UnarmedBotBrain implements BotBrain {
                     combat.lootWeaponSlot = chosenLoot.weaponSlot;
                 } else {
                     combat.goalPos = navigation.waypoint
-                        ? sanitizeGoal(navigation.waypoint)
+                        ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
                         : sanitizeGoal(game.gas.posNew);
                 }
                 break;
@@ -467,7 +613,7 @@ export class UnarmedBotBrain implements BotBrain {
                     combat.objectInteractionMode = prevObjectInteractionMode;
                 } else {
                     combat.goalPos = navigation.waypoint
-                        ? sanitizeGoal(navigation.waypoint)
+                        ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
                         : sanitizeGoal(game.gas.posNew);
                 }
                 break;
@@ -479,7 +625,7 @@ export class UnarmedBotBrain implements BotBrain {
                 combat.goalPos = retreatFrom
                     ? retreatPointFrom(retreatFrom, 14)
                     : navigation.waypoint
-                      ? sanitizeGoal(navigation.waypoint)
+                      ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
                       : sanitizeGoal(game.gas.posNew);
                 break;
             }
@@ -491,14 +637,14 @@ export class UnarmedBotBrain implements BotBrain {
                 combat.goalPos = retreatFrom
                     ? pickCoverPoint(retreatFrom) ?? retreatPointFrom(retreatFrom, 16)
                     : navigation.waypoint
-                      ? sanitizeGoal(navigation.waypoint)
+                      ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
                       : sanitizeGoal(game.gas.posNew);
                 break;
             }
             case "wander":
             default:
                 combat.goalPos = navigation.waypoint
-                    ? sanitizeGoal(navigation.waypoint)
+                    ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
                     : sanitizeGoal(game.gas.posNew);
                 break;
         }

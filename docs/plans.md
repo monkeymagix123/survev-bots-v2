@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Done
 
@@ -108,6 +108,7 @@ Last updated: 2026-05-24
 - Moved `debugCombat` output from console spam to `server/logs/bot-combat.log`
 - Expanded bot debug logs so combat/stability entries now include the selected target/item ids and final goal position
 - Added short unarmed recent-pressure memory before resuming loot/object farming, to reduce immediate bounce-back onto the same goal after visible pressure
+- Added unarmed crowd/armed-density goal scoring so visible enemies behave more like repulsors and unarmed retreat/wander/cover goals spread away from local clusters unless nearby gun loot is worth contesting
 
 ## In Progress
 
