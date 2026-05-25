@@ -25,6 +25,11 @@ function buildSummary(event: string, fields: Record<string, unknown>): string {
                 `danger=${toPrintable(fields.danger)}`,
                 `dist=${toPrintable(fields.distToTarget)}`,
                 `visible=${toPrintable(fields.visible)}`,
+                `target=${toPrintable(fields.targetId)}`,
+                `loot=${toPrintable(fields.lootTargetId)}`,
+                `obj=${toPrintable(fields.objectTargetId)}`,
+                `goal=(${toPrintable(fields.goalX)},${toPrintable(fields.goalY)})`,
+                `style=${toPrintable(fields.movementStyle)}`,
             ].join(" ");
         case "heal_cancel":
             return [
@@ -45,6 +50,10 @@ function buildSummary(event: string, fields: Record<string, unknown>): string {
                 `idle=${toPrintable(fields.reason)}`,
                 `state=${toPrintable(fields.state)}`,
                 `why=${toPrintable(fields.stateReason)}`,
+                `goal=(${toPrintable(fields.goalX)},${toPrintable(fields.goalY)})`,
+                `target=${toPrintable(fields.targetId)}`,
+                `loot=${toPrintable(fields.lootTargetId)}`,
+                `obj=${toPrintable(fields.objectTargetId)}`,
             ].join(" ");
         default:
             return Object.entries(fields)

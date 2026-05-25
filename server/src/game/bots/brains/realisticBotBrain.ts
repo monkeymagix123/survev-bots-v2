@@ -458,38 +458,6 @@ export class RealisticBotBrain implements BotBrain {
             }
         }
 
-        if (Config.bots.debugCombat && stateChanged) {
-            logBotCombat({
-                brainType: this.type,
-                state,
-                stateReason: reason,
-                danger: Number(danger.toFixed(3)),
-                hp: Math.round(player.health),
-                dist: Number(distToTarget.toFixed(2)),
-                visible,
-                recentlyDamaged,
-                needsReload,
-                gasEmergency,
-                weaponClass,
-            });
-        }
-
-        if (stateChanged) {
-            logBotStability("state_change", {
-                brainType: this.type,
-                botId: player.__id,
-                state,
-                reason,
-                previousState: prevState,
-                hp: Math.round(player.health),
-                danger: Number(danger.toFixed(3)),
-                distToTarget: Number(distToTarget.toFixed(2)),
-                visible,
-                gasEmergency,
-                weaponClass,
-            });
-        }
-
         const rangePoint = (desiredDist: number) => {
             const dirFromTarget = v2.normalizeSafe(
                 v2.sub(player.pos, target.pos),
@@ -758,6 +726,57 @@ export class RealisticBotBrain implements BotBrain {
                 combat.goalPos = v2.copy(player.pos);
                 combat.movementStyle = "anchor";
                 break;
+        }
+
+        if (Config.bots.debugCombat && stateChanged) {
+            logBotCombat({
+                botId: player.__id,
+                brainType: this.type,
+                state,
+                stateReason: reason,
+                danger: Number(danger.toFixed(3)),
+                hp: Math.round(player.health),
+                dist: Number(distToTarget.toFixed(2)),
+                visible,
+                recentlyDamaged,
+                needsReload,
+                gasEmergency,
+                weaponClass,
+                targetId: target.__id,
+                targetX: Number(target.pos.x.toFixed(2)),
+                targetY: Number(target.pos.y.toFixed(2)),
+                goalX: combat.goalPos ? Number(combat.goalPos.x.toFixed(2)) : undefined,
+                goalY: combat.goalPos ? Number(combat.goalPos.y.toFixed(2)) : undefined,
+                movementStyle: combat.movementStyle,
+                lootTargetId: combat.lootTargetId,
+                objectTargetId: combat.objectTargetId,
+                objectInteractionMode: combat.objectInteractionMode,
+            });
+        }
+
+        if (stateChanged) {
+            logBotStability("state_change", {
+                brainType: this.type,
+                botId: player.__id,
+                state,
+                reason,
+                previousState: prevState,
+                hp: Math.round(player.health),
+                danger: Number(danger.toFixed(3)),
+                distToTarget: Number(distToTarget.toFixed(2)),
+                visible,
+                gasEmergency,
+                weaponClass,
+                targetId: target.__id,
+                targetX: Number(target.pos.x.toFixed(2)),
+                targetY: Number(target.pos.y.toFixed(2)),
+                goalX: combat.goalPos ? Number(combat.goalPos.x.toFixed(2)) : undefined,
+                goalY: combat.goalPos ? Number(combat.goalPos.y.toFixed(2)) : undefined,
+                movementStyle: combat.movementStyle,
+                lootTargetId: combat.lootTargetId,
+                objectTargetId: combat.objectTargetId,
+                objectInteractionMode: combat.objectInteractionMode,
+            });
         }
     }
 }

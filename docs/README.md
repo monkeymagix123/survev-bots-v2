@@ -113,6 +113,7 @@ Bots follow a lightweight priority stack:
   - `false` → bots must arm up first
 - `Config.bots.debugCombat`
   - writes combat/state-transition debug logs to `server/logs/bot-combat.log`
+  - now includes chosen target/item ids plus final goal position / movement style
 
 ## Current Limits
 

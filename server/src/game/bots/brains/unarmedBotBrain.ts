@@ -275,46 +275,6 @@ export class UnarmedBotBrain implements BotBrain {
             }
         }
 
-        if (Config.bots.debugCombat && stateChanged) {
-            logBotCombat({
-                brainType,
-                state,
-                stateReason: reason,
-                danger: Number(danger.toFixed(3)),
-                hp: Math.round(player.health),
-                dist: actionableTarget
-                    ? Number(v2.distance(player.pos, actionableTarget.pos).toFixed(2))
-                    : undefined,
-                visible: visibleHostile,
-                recentlyDamaged,
-                gasEmergency,
-                unarmed: true,
-                hostileHasShownGun: threatContext.hostileHasShownGun,
-                hostileDistracted: threatContext.hostileDistracted,
-            });
-        }
-
-        if (stateChanged) {
-            logBotStability("state_change", {
-                brainType,
-                botId: player.__id,
-                state,
-                reason,
-                previousState: prevState,
-                hp: Math.round(player.health),
-                danger: Number(danger.toFixed(3)),
-                distToTarget: actionableTarget
-                    ? Number(v2.distance(player.pos, actionableTarget.pos).toFixed(2))
-                    : undefined,
-                visible: visibleHostile,
-                gasEmergency,
-                unarmed: true,
-                hostileHasShownGun: threatContext.hostileHasShownGun,
-                hostileAppearsUnarmed: threatContext.hostileAppearsUnarmed,
-                hostileDistracted: threatContext.hostileDistracted,
-            });
-        }
-
         const retreatPointFrom = (source: { x: number; y: number }, retreatDist: number) => {
             const enteringRetreat =
                 stateChanged && (state === "seek_cover" || state === "back_off");
@@ -513,6 +473,73 @@ export class UnarmedBotBrain implements BotBrain {
                     ? sanitizeGoal(navigation.waypoint)
                     : sanitizeGoal(game.gas.posNew);
                 break;
+        }
+
+        if (Config.bots.debugCombat && stateChanged) {
+            logBotCombat({
+                botId: player.__id,
+                brainType,
+                state,
+                stateReason: reason,
+                danger: Number(danger.toFixed(3)),
+                hp: Math.round(player.health),
+                dist: actionableTarget
+                    ? Number(v2.distance(player.pos, actionableTarget.pos).toFixed(2))
+                    : undefined,
+                visible: visibleHostile,
+                recentlyDamaged,
+                gasEmergency,
+                unarmed: true,
+                hostileHasShownGun: threatContext.hostileHasShownGun,
+                hostileDistracted: threatContext.hostileDistracted,
+                targetId: actionableTarget?.__id,
+                targetX: actionableTarget
+                    ? Number(actionableTarget.pos.x.toFixed(2))
+                    : undefined,
+                targetY: actionableTarget
+                    ? Number(actionableTarget.pos.y.toFixed(2))
+                    : undefined,
+                goalX: combat.goalPos ? Number(combat.goalPos.x.toFixed(2)) : undefined,
+                goalY: combat.goalPos ? Number(combat.goalPos.y.toFixed(2)) : undefined,
+                movementStyle: combat.movementStyle,
+                lootTargetId: combat.lootTargetId,
+                objectTargetId: combat.objectTargetId,
+                objectInteractionMode: combat.objectInteractionMode,
+            });
+        }
+
+        if (stateChanged) {
+            logBotStability("state_change", {
+                brainType,
+                botId: player.__id,
+                state,
+                reason,
+                previousState: prevState,
+                hp: Math.round(player.health),
+                danger: Number(danger.toFixed(3)),
+                distToTarget: actionableTarget
+                    ? Number(v2.distance(player.pos, actionableTarget.pos).toFixed(2))
+                    : undefined,
+                visible: visibleHostile,
+                gasEmergency,
+                unarmed: true,
+                hostileHasShownGun: threatContext.hostileHasShownGun,
+                hostileAppearsUnarmed: threatContext.hostileAppearsUnarmed,
+                hostileDistracted: threatContext.hostileDistracted,
+                targetId: actionableTarget?.__id,
+                targetX: actionableTarget
+                    ? Number(actionableTarget.pos.x.toFixed(2))
+                    : undefined,
+                targetY: actionableTarget
+                    ? Number(actionableTarget.pos.y.toFixed(2))
+                    : undefined,
+                goalX: combat.goalPos ? Number(combat.goalPos.x.toFixed(2)) : undefined,
+                goalY: combat.goalPos ? Number(combat.goalPos.y.toFixed(2)) : undefined,
+                movementStyle: combat.movementStyle,
+                lootTargetId: combat.lootTargetId,
+                objectTargetId: combat.objectTargetId,
+                objectInteractionMode: combat.objectInteractionMode,
+            });
         }
     }
 }

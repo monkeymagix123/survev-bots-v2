@@ -15,6 +15,7 @@ function toPrintable(value: unknown): string {
 
 function buildSummary(fields: Record<string, unknown>): string {
     return [
+        `bot=${toPrintable(fields.botId)}`,
         `brain=${toPrintable(fields.brainType)}`,
         `state=${toPrintable(fields.state)}`,
         `why=${toPrintable(fields.stateReason)}`,
@@ -24,6 +25,11 @@ function buildSummary(fields: Record<string, unknown>): string {
         `visible=${toPrintable(fields.visible)}`,
         `reload=${toPrintable(fields.needsReload)}`,
         `gas=${toPrintable(fields.gasEmergency)}`,
+        `target=${toPrintable(fields.targetId)}`,
+        `loot=${toPrintable(fields.lootTargetId)}`,
+        `obj=${toPrintable(fields.objectTargetId)}`,
+        `goal=(${toPrintable(fields.goalX)},${toPrintable(fields.goalY)})`,
+        `style=${toPrintable(fields.movementStyle)}`,
     ].join(" ");
 }
 

@@ -45,6 +45,7 @@ Last updated: 2026-05-24
 - Added stair-transition routing so tunnel/greenhouse-style surface-vs-underground movement is less likely to stall at the opening
 - Added simple auto-door building entry/exit routing so practical buildings like greenhouses are less likely to cause outside-target oscillation
 - Moved `debugCombat` logging into `server/logs/bot-combat.log` instead of the console
+- Added chosen target/item ids plus final goal position to combat/stability bot logs
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

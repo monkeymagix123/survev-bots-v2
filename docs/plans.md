@@ -106,6 +106,7 @@ Last updated: 2026-05-24
   - stair-linked structures now get explicit surface/underground transition routing
   - simple auto-door buildings now get practical enter/exit routing for nearby outside/inside goals
 - Moved `debugCombat` output from console spam to `server/logs/bot-combat.log`
+- Expanded bot debug logs so combat/stability entries now include the selected target/item ids and final goal position
 
 ## In Progress
 

@@ -227,6 +227,9 @@ export function logIdleReason(params: {
     state: string;
     stateReason: string;
     goal?: Vec2;
+    targetId?: number;
+    lootTargetId?: number;
+    objectTargetId?: number;
     allowShooting: boolean;
     weakLosAnchor: boolean;
     moveLeft: boolean;
@@ -241,6 +244,9 @@ export function logIdleReason(params: {
         state,
         stateReason,
         goal,
+        targetId,
+        lootTargetId,
+        objectTargetId,
         allowShooting,
         weakLosAnchor,
         moveLeft,
@@ -266,6 +272,11 @@ export function logIdleReason(params: {
         reason,
         state,
         stateReason,
+        goalX: goal ? Number(goal.x.toFixed(2)) : undefined,
+        goalY: goal ? Number(goal.y.toFixed(2)) : undefined,
+        targetId,
+        lootTargetId,
+        objectTargetId,
     });
 
     return reason;
