@@ -10,6 +10,7 @@ import {
     type BotUnarmedThreatContext,
     computeBotDanger,
 } from "../botDecisionSupport";
+import { logBotCombat } from "../botCombatLogger";
 import { logBotStability } from "../botStabilityLogger";
 import { BotTuning } from "../botTuning";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
@@ -275,7 +276,7 @@ export class UnarmedBotBrain implements BotBrain {
         }
 
         if (Config.bots.debugCombat && stateChanged) {
-            console.log("[botCombat]", {
+            logBotCombat({
                 brainType,
                 state,
                 stateReason: reason,

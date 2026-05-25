@@ -11,6 +11,7 @@ import {
     getBotTacticalSnapshot,
     getBotReloadSnapshot,
 } from "../botDecisionSupport";
+import { logBotCombat } from "../botCombatLogger";
 import { logBotStability } from "../botStabilityLogger";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
 import { BotTuning } from "../botTuning";
@@ -173,7 +174,7 @@ export class RealisticBotBrain implements BotBrain {
                     player.isReloading() ||
                     (!!gunDef && activeWeapon.ammo === 0 && spareAmmo > 0);
 
-                console.log("[botCombat]", {
+                logBotCombat({
                     brainType: this.type,
                     state: combat.state,
                     stateReason: combat.stateReason,
@@ -458,7 +459,7 @@ export class RealisticBotBrain implements BotBrain {
         }
 
         if (Config.bots.debugCombat && stateChanged) {
-            console.log("[botCombat]", {
+            logBotCombat({
                 brainType: this.type,
                 state,
                 stateReason: reason,

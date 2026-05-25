@@ -105,6 +105,7 @@ Last updated: 2026-05-24
 - Extended structured navigation again:
   - stair-linked structures now get explicit surface/underground transition routing
   - simple auto-door buildings now get practical enter/exit routing for nearby outside/inside goals
+- Moved `debugCombat` output from console spam to `server/logs/bot-combat.log`
 
 ## In Progress
 

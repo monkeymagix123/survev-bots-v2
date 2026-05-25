@@ -318,9 +318,10 @@ Holds brain-type behavior overlays such as:
 
 ## Debugging / Observability
 
-### Console combat log
+### Combat log
 - `debugCombat`
-- prints armed and unarmed brain combat state transitions to console for quick live inspection
+- writes structured JSON lines to `server/logs/bot-combat.log`
+- includes armed and unarmed brain combat/state transitions for quick tailing or later inspection
 
 ### Stability log
 - `debugBotStability`

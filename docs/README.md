@@ -111,6 +111,8 @@ Bots follow a lightweight priority stack:
 - `Config.bots.giveStartingWeapons`
   - `true` → bots spawn ready to fight
   - `false` → bots must arm up first
+- `Config.bots.debugCombat`
+  - writes combat/state-transition debug logs to `server/logs/bot-combat.log`
 
 ## Current Limits
 
