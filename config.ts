@@ -88,6 +88,7 @@ export function getConfig(isProduction: boolean, dir: string) {
             giveStartingWeapons: true,
             debugCombat: false,
             debugBotStability: false,
+            debugMapIndicators: false,
             enableQuickSwitch: true,
             allowBotVsBot: true,
         },

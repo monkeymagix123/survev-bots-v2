@@ -332,7 +332,11 @@ export class PlayerBarn {
             }
         }
 
-        if (this.game.isTeamMode || this.game.map.factionMode) {
+        if (
+            this.game.isTeamMode ||
+            this.game.map.factionMode ||
+            Config.bots.debugMapIndicators
+        ) {
             this.playerStatusTicker += dt;
         }
 
@@ -4015,7 +4019,10 @@ export class Player extends BaseGameObject {
         const players: Player[] = this.game.modeManager.getPlayerStatusPlayers(this)!;
         const isWaveMap = !!this.game.map.mapDef.isWave;
         return players.map((p) => {
+            const debugBotVisible =
+                Config.bots.debugMapIndicators && (p.isAi || p.bot);
             const visible =
+                debugBotVisible ||
                 (isWaveMap && (p.isAi || p.bot)) ||
                 p.teamId === this.teamId ||
                 p.timeUntilHidden > 0;
@@ -4025,7 +4032,7 @@ export class Player extends BaseGameObject {
                 visible,
                 dead: p.dead,
                 downed: p.downed,
-                role: p.role,
+                role: debugBotVisible ? "bot_debug_indicator" : p.role,
             };
         });
     }

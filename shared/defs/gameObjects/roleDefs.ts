@@ -114,6 +114,15 @@ export function createDefaultItems(e: DeepPartial<DefaultItems>): DefaultItems {
 }
 
 export const RoleDefs: Record<string, RoleDef> = {
+    bot_debug_indicator: {
+        type: "role",
+        announce: false,
+        sound: {},
+        mapIcon: {
+            alive: "player-map-inner.img",
+            dead: "skull-outlined.img",
+        },
+    },
     leader: {
         type: "role",
         announce: true,

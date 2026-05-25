@@ -2611,6 +2611,7 @@ export class PlayerBarn {
     > = {};
 
     playerStatus: Record<number, PlayerStatus> = {};
+    debugAllPlayerStatus = false;
     anonPlayerNames = false;
 
     m_update(
@@ -2716,7 +2717,11 @@ export class PlayerBarn {
             // @HACK: Fix issue in non-faction mode when spectating and swapping
             // between teams. We don't want the old player indicators to fade out
             // after moving to the new team
-            if (!map.factionMode && playerInfo.teamId != activeInfo.teamId) {
+            if (
+                !map.factionMode &&
+                !this.debugAllPlayerStatus &&
+                playerInfo.teamId != activeInfo.teamId
+            ) {
                 status.minimapAlpha = 0;
             }
             status.minimapVisible = status.minimapAlpha > 0.01;
@@ -2842,7 +2847,9 @@ export class PlayerBarn {
         // In factionMode, playerStatus refers to all playerIds in the game.
         // In all other modes, playerStatus refers to only playerIds in our team.
         const team = this.getTeamInfo(teamId);
-        const playerIds = factionMode ? this.playerIds : team.playerIds;
+        const useAllPlayerIds = factionMode || playerStatus.length === this.playerIds.length;
+        this.debugAllPlayerStatus = !factionMode && useAllPlayerIds;
+        const playerIds = useAllPlayerIds ? this.playerIds : team.playerIds;
 
         if (playerIds.length != playerStatus.length) {
             errorLogManager.logError(

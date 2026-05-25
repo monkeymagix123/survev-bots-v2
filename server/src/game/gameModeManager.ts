@@ -4,6 +4,7 @@ import { ObjectType } from "../../../shared/net/objectSerializeFns";
 import { collider } from "../../../shared/utils/collider";
 import { util } from "../../../shared/utils/util";
 import { v2 } from "../../../shared/utils/v2";
+import { Config } from "../config";
 import type { Game } from "./game";
 import type { DamageParams } from "./objects/gameObject";
 import type { Player } from "./objects/player";
@@ -216,6 +217,10 @@ export class GameModeManager {
     }
 
     getPlayerStatusPlayers(player: Player): Player[] {
+        if (Config.bots.debugMapIndicators) {
+            return this.game.playerBarn.players;
+        }
+
         switch (this.mode) {
             case GameMode.Solo:
                 return [];

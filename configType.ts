@@ -399,6 +399,7 @@ export interface ConfigType {
         giveStartingWeapons: boolean;
         debugCombat: boolean;
         debugBotStability: boolean;
+        debugMapIndicators: boolean;
         enableQuickSwitch: boolean;
         allowBotVsBot: boolean;
     };

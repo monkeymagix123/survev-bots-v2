@@ -47,7 +47,11 @@ Last updated: 2026-05-25
 - Moved bot debug logging into per-game `server/logs/<game-create-time>_<game-id>/` folders instead of writing a single shared console/file stream
 - Added chosen target/item ids plus final goal position to combat/stability bot logs
 - Added short unarmed recent-pressure memory before bots resume loot/object farming
+- Switched bot minimap debug positions over to the faction-style player-status path so large bot counts are no longer limited by the generic map-indicator cap
+- Added a distinct blue bot debug marker so solo-mode minimap testing is easier to visually confirm
+- Fixed solo-mode bot debug positions not appearing by enabling player-status ticking for that debug path
 - Added unarmed crowd/armed-density scoring so retreat/wander/cover goals spread away from local clusters instead of all collapsing toward the same “safe” building/cover area
+- Added a debug minimap option for live bot-position indicators using the existing map-indicator path
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

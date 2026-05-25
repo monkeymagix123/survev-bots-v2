@@ -109,6 +109,7 @@ Last updated: 2026-05-25
 - Expanded bot debug logs so combat/stability entries now include the selected target/item ids and final goal position
 - Added short unarmed recent-pressure memory before resuming loot/object farming, to reduce immediate bounce-back onto the same goal after visible pressure
 - Added unarmed crowd/armed-density goal scoring so visible enemies behave more like repulsors and unarmed retreat/wander/cover goals spread away from local clusters unless nearby gun loot is worth contesting
+- Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
 ## In Progress
 

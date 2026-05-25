@@ -336,6 +336,14 @@ Holds brain-type behavior overlays such as:
 - includes readable summaries for easier tailing
 - `state_change` / `idle_reason` now also include chosen goal position and selected target/item ids for better “was this actually a good goal?” debugging
 
+### Debug minimap markers
+- `debugMapIndicators`
+- extends the player-status / minimap-position path so bots can show up like faction-style live position markers
+- avoids the generic map-indicator cap, which was too small for large bot counts
+- tags bots with a dedicated debug role/icon so the client can tint them as blue minimap dots
+- explicitly enables player-status ticking in solo-mode debug runs, since that ticker normally only advances for team/faction matches
+- meant for local debugging / spectating, not normal gameplay
+
 Current useful events include:
 - `state_change`
 - `heal_cancel`

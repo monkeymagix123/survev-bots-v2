@@ -1019,6 +1019,9 @@ export class UiManager {
             let tint = sameGroup
                 ? playerBarn.getGroupColor(playerId)
                 : playerBarn.getTeamColor(playerInfo.teamId);
+            if (playerStatus.role == "bot_debug_indicator") {
+                tint = 0x66ccff;
+            }
             if (map.factionMode && customMapIcon) {
                 tint = playerBarn.getTeamColor(playerInfo.teamId);
             }
