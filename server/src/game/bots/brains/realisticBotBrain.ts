@@ -10,6 +10,7 @@ import type { BotBrainType } from "../botBrain";
 import {
     getDecisionLogFields,
     setDecisionContext,
+    tacticalGoalFromCombatState,
 } from "../botControllerShared";
 import {
     getBotTacticalSnapshot,
@@ -79,6 +80,9 @@ export class RealisticBotBrain implements BotBrain {
         }
 
         const prevState = combat.state;
+        const prevEmergencyState = combat.emergencyState;
+        const prevMacroGoal = combat.macroGoal;
+        const prevTacticalGoal = combat.tacticalGoal;
         const prevObjectTargetId = combat.objectTargetId;
         const prevObjectInteractionMode = combat.objectInteractionMode;
         const prevObjectGoal = combat.goalPos ? v2.copy(combat.goalPos) : undefined;
@@ -105,6 +109,81 @@ export class RealisticBotBrain implements BotBrain {
 
             return goal;
         };
+
+        if (gasEmergency) {
+            combat.setState("wander", timeNow, "gas_escape");
+            combat.stateLockUntil = timeNow;
+            combat.goalPos = sanitizeGoal(game.gas.posNew);
+            combat.movementStyle = "direct";
+            combat.lootTargetId = undefined;
+            combat.lootWeaponSlot = undefined;
+            combat.objectTargetId = undefined;
+            combat.objectInteractionMode = undefined;
+            setDecisionContext(combat, {
+                timeNow,
+                emergencyState: "gas_escape",
+                emergencyReason: "in_gas_or_outside_safe",
+                macroGoal: "rotate_safe",
+                macroReason: "gas_escape",
+                tacticalGoal: "move_to_safe_zone",
+                tacticalReason: "gas_escape",
+                targetZonePos: game.gas.posNew,
+            });
+
+            const decisionChanged =
+                prevState !== combat.state ||
+                prevEmergencyState !== combat.emergencyState ||
+                prevMacroGoal !== combat.macroGoal ||
+                prevTacticalGoal !== combat.tacticalGoal;
+            if (Config.bots.debugCombat && decisionChanged) {
+                const { weaponClass } = weaponLogic.getWeaponInfo(player);
+                logBotCombat(game, {
+                    botId: player.__id,
+                    brainType: this.type,
+                    state: combat.state,
+                    stateReason: combat.stateReason,
+                    danger: 0,
+                    hp: Math.round(player.health),
+                    dist: undefined,
+                    visible: false,
+                    recentlyDamaged,
+                    needsReload: false,
+                    gasEmergency,
+                    weaponClass,
+                    targetId: undefined,
+                    goalX: Number(combat.goalPos.x.toFixed(2)),
+                    goalY: Number(combat.goalPos.y.toFixed(2)),
+                    movementStyle: combat.movementStyle,
+                    lootTargetId: undefined,
+                    objectTargetId: undefined,
+                    objectInteractionMode: undefined,
+                    ...getDecisionLogFields(combat),
+                });
+            }
+            if (decisionChanged) {
+                logBotStability(game, "state_change", {
+                    brainType: this.type,
+                    botId: player.__id,
+                    state: combat.state,
+                    reason: combat.stateReason,
+                    previousState: prevState,
+                    hp: Math.round(player.health),
+                    danger: 0,
+                    distToTarget: undefined,
+                    visible: false,
+                    gasEmergency,
+                    targetId: undefined,
+                    goalX: Number(combat.goalPos.x.toFixed(2)),
+                    goalY: Number(combat.goalPos.y.toFixed(2)),
+                    movementStyle: combat.movementStyle,
+                    lootTargetId: undefined,
+                    objectTargetId: undefined,
+                    objectInteractionMode: undefined,
+                    ...getDecisionLogFields(combat),
+                });
+            }
+            return;
+        }
 
         if (!perception.targetId) {
             const threat = perception.threat;
@@ -152,13 +231,18 @@ export class RealisticBotBrain implements BotBrain {
                 combat.objectTargetId = idleObject.obstacleId;
                 combat.objectInteractionMode = idleObject.mode;
                 setDecisionContext(combat, {
+                    timeNow,
                     macroGoal: zoneMeta?.macroGoal ?? "loot_zone",
+                    macroReason: zoneMeta?.macroGoal
+                        ? "zone_commit"
+                        : "idle_object_opportunity",
+                    tacticalGoal:
+                        idleObject.mode === "use" ? "use_door" : "break_crate",
+                    tacticalReason: idleObject.reason,
                     targetZoneId: zoneMeta?.targetZoneId ?? idleObject.obstacleId,
                     targetBuildingId: zoneMeta?.targetBuildingId,
                     targetZonePos: zoneMeta?.targetZonePos ?? idleObject.pos,
                     zoneScore: zoneMeta?.zoneScore,
-                    subGoal:
-                        idleObject.mode === "use" ? "use_door" : "break_crate",
                     resumeAfterSubGoal: !!zoneMeta,
                 });
             } else if (idleLoot) {
@@ -170,12 +254,17 @@ export class RealisticBotBrain implements BotBrain {
                 combat.objectTargetId = undefined;
                 combat.objectInteractionMode = undefined;
                 setDecisionContext(combat, {
+                    timeNow,
                     macroGoal: zoneMeta?.macroGoal ?? "loot_zone",
+                    macroReason: zoneMeta?.macroGoal
+                        ? "zone_commit"
+                        : "idle_loot_opportunity",
+                    tacticalGoal: "pickup_loot",
+                    tacticalReason: idleLoot.reason,
                     targetZoneId: zoneMeta?.targetZoneId ?? idleLoot.lootId,
                     targetBuildingId: zoneMeta?.targetBuildingId,
                     targetZonePos: zoneMeta?.targetZonePos ?? idleLoot.pos,
                     zoneScore: zoneMeta?.zoneScore,
-                    subGoal: "pickup_loot",
                     resumeAfterSubGoal: !!zoneMeta,
                 });
             } else {
@@ -187,7 +276,14 @@ export class RealisticBotBrain implements BotBrain {
                 combat.objectTargetId = undefined;
                 combat.objectInteractionMode = undefined;
                 setDecisionContext(combat, {
+                    timeNow,
                     macroGoal: zoneMeta?.macroGoal ?? "rotate_safe",
+                    macroReason: zoneMeta?.macroGoal ? "zone_commit" : "no_target",
+                    tacticalGoal:
+                        (zoneMeta?.macroGoal ?? "rotate_safe") === "rotate_safe"
+                            ? "move_to_safe_zone"
+                            : "move_to_zone",
+                    tacticalReason: "follow_waypoint",
                     targetZoneId: zoneMeta?.targetZoneId,
                     targetBuildingId: zoneMeta?.targetBuildingId,
                     targetZonePos: zoneMeta?.targetZonePos,
@@ -195,7 +291,13 @@ export class RealisticBotBrain implements BotBrain {
                 });
             }
 
-            if (Config.bots.debugCombat && prevState !== combat.state) {
+            const decisionChanged =
+                prevState !== combat.state ||
+                prevEmergencyState !== combat.emergencyState ||
+                prevMacroGoal !== combat.macroGoal ||
+                prevTacticalGoal !== combat.tacticalGoal;
+
+            if (Config.bots.debugCombat && decisionChanged) {
                 const { gunDef, weaponClass } = weaponLogic.getWeaponInfo(player);
                 const activeWeapon = player.weapons[player.curWeapIdx];
                 const ammoType = gunDef?.ammo;
@@ -218,6 +320,28 @@ export class RealisticBotBrain implements BotBrain {
                     needsReload,
                     gasEmergency,
                     weaponClass,
+                    targetId: undefined,
+                    goalX: combat.goalPos ? Number(combat.goalPos.x.toFixed(2)) : undefined,
+                    goalY: combat.goalPos ? Number(combat.goalPos.y.toFixed(2)) : undefined,
+                    movementStyle: combat.movementStyle,
+                    lootTargetId: combat.lootTargetId,
+                    objectTargetId: combat.objectTargetId,
+                    objectInteractionMode: combat.objectInteractionMode,
+                    ...getDecisionLogFields(combat),
+                });
+            }
+            if (decisionChanged) {
+                logBotStability(game, "state_change", {
+                    brainType: this.type,
+                    botId: player.__id,
+                    state: combat.state,
+                    reason: combat.stateReason,
+                    previousState: prevState,
+                    hp: Math.round(player.health),
+                    danger: 0,
+                    distToTarget: undefined,
+                    visible: false,
+                    gasEmergency,
                     targetId: undefined,
                     goalX: combat.goalPos ? Number(combat.goalPos.x.toFixed(2)) : undefined,
                     goalY: combat.goalPos ? Number(combat.goalPos.y.toFixed(2)) : undefined,
@@ -767,38 +891,81 @@ export class RealisticBotBrain implements BotBrain {
                 break;
         }
 
+        const playerSafeMargin = gas.radNew - v2.distance(player.pos, gas.posNew);
+        const goalSafeMargin = combat.goalPos
+            ? gas.radNew - v2.distance(combat.goalPos, gas.posNew)
+            : playerSafeMargin;
+        const movesDeeperIntoSafeZone =
+            combat.goalPos !== undefined && goalSafeMargin > playerSafeMargin + 1.25;
+
         if (state === "retreat_heal") {
             setDecisionContext(combat, {
+                timeNow,
                 macroGoal: "heal",
+                macroReason: "low_hp",
+                tacticalGoal: movesDeeperIntoSafeZone
+                    ? "move_to_safe_zone"
+                    : "retreat_heal",
+                tacticalReason: movesDeeperIntoSafeZone
+                    ? "safe_zone_heal_route"
+                    : reason,
             });
         } else if (state === "loot" && opportunisticLoot) {
             setDecisionContext(combat, {
+                timeNow,
                 macroGoal: "fight",
+                macroReason: "opportunistic_detour",
+                tacticalGoal: "pickup_loot",
+                tacticalReason: opportunisticLoot.reason,
                 targetZoneId: opportunisticLoot.lootId,
                 targetZonePos: opportunisticLoot.pos,
                 zoneScore: opportunisticLoot.score,
-                subGoal: "pickup_loot",
                 resumeAfterSubGoal: true,
             });
         } else if (state === "interact_object" && opportunisticObject) {
             setDecisionContext(combat, {
+                timeNow,
                 macroGoal: "fight",
-                targetZoneId: opportunisticObject.obstacleId,
-                targetZonePos: opportunisticObject.pos,
-                zoneScore: opportunisticObject.score,
-                subGoal:
+                macroReason: "opportunistic_detour",
+                tacticalGoal:
                     opportunisticObject.mode === "use"
                         ? "use_door"
                         : "break_crate",
+                tacticalReason: opportunisticObject.reason,
+                targetZoneId: opportunisticObject.obstacleId,
+                targetZonePos: opportunisticObject.pos,
+                zoneScore: opportunisticObject.score,
                 resumeAfterSubGoal: true,
             });
         } else {
+            const disengageState =
+                state === "seek_cover" ||
+                state === "back_off" ||
+                state === "retreat_reload";
             setDecisionContext(combat, {
-                macroGoal: "fight",
+                timeNow,
+                macroGoal:
+                    disengageState ? "disengage" : "fight",
+                macroReason:
+                    disengageState ? reason : "engaged_target",
+                tacticalGoal:
+                    disengageState && movesDeeperIntoSafeZone
+                        ? "move_to_safe_zone"
+                        : tacticalGoalFromCombatState(state),
+                tacticalReason:
+                    disengageState && movesDeeperIntoSafeZone
+                        ? "safe_zone_disengage_route"
+                        : reason,
             });
         }
 
-        if (Config.bots.debugCombat && stateChanged) {
+        const decisionChanged =
+            stateChanged ||
+            prevEmergencyState !== combat.emergencyState ||
+            prevMacroGoal !== combat.macroGoal ||
+            prevTacticalGoal !== combat.tacticalGoal;
+
+        if (Config.bots.debugCombat && decisionChanged) {
             logBotCombat(game, {
                 botId: player.__id,
                 brainType: this.type,
@@ -825,7 +992,7 @@ export class RealisticBotBrain implements BotBrain {
             });
         }
 
-        if (stateChanged) {
+        if (decisionChanged) {
             logBotStability(game, "state_change", {
                 brainType: this.type,
                 botId: player.__id,

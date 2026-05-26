@@ -16,14 +16,158 @@ export type BotCombatState =
 
 export type BotMovementStyle = "direct" | "strafe" | "anchor";
 export type BotObjectInteractionMode = "melee_break" | "use";
-export type BotMacroGoal = "loot_zone" | "rotate_safe" | "fight" | "heal";
+export type BotEmergencyState = "gas_escape" | "hard_unstuck" | "panic_survive";
+export type BotMacroGoal =
+    | "loot_zone"
+    | "loot_building"
+    | "rotate_safe"
+    | "fight"
+    | "disengage"
+    | "heal";
+export type BotTacticalGoal =
+    | "move_to_zone"
+    | "move_to_safe_zone"
+    | "enter_building"
+    | "exit_building"
+    | "pickup_loot"
+    | "break_crate"
+    | "use_door"
+    | "push"
+    | "back_off"
+    | "seek_cover"
+    | "hold_range"
+    | "hold_position"
+    | "strafe"
+    | "chase_last_seen"
+    | "retreat_reload"
+    | "retreat_heal";
 export type BotSubGoal = "pickup_loot" | "break_crate" | "use_door";
+
+export function isZoneMacroGoal(
+    macroGoal: BotMacroGoal | undefined,
+): macroGoal is "loot_zone" | "loot_building" | "rotate_safe" {
+    return (
+        macroGoal === "loot_zone" ||
+        macroGoal === "loot_building" ||
+        macroGoal === "rotate_safe"
+    );
+}
+
+export function isTravelTacticalGoal(
+    tacticalGoal: BotTacticalGoal | undefined,
+): tacticalGoal is
+    | "move_to_zone"
+    | "move_to_safe_zone"
+    | "enter_building"
+    | "exit_building" {
+    return (
+        tacticalGoal === "move_to_zone" ||
+        tacticalGoal === "move_to_safe_zone" ||
+        tacticalGoal === "enter_building" ||
+        tacticalGoal === "exit_building"
+    );
+}
+
+export function compatibilityStateFromTacticalGoal(
+    tacticalGoal: BotTacticalGoal | undefined,
+): BotCombatState | undefined {
+    switch (tacticalGoal) {
+        case "move_to_zone":
+        case "move_to_safe_zone":
+        case "enter_building":
+        case "exit_building":
+            return undefined;
+        case "pickup_loot":
+            return "loot";
+        case "break_crate":
+        case "use_door":
+            return "interact_object";
+        case "push":
+        case "hold_range":
+        case "hold_position":
+        case "back_off":
+        case "strafe":
+        case "chase_last_seen":
+        case "seek_cover":
+        case "retreat_reload":
+        case "retreat_heal":
+            return tacticalGoal;
+        default:
+            return undefined;
+    }
+}
+
+export const AllowedTacticalGoalsByMacroGoal: Record<
+    BotMacroGoal,
+    readonly BotTacticalGoal[]
+> = {
+    loot_zone: [
+        "move_to_zone",
+        "pickup_loot",
+        "break_crate",
+        "use_door",
+        "enter_building",
+        "exit_building",
+        "move_to_safe_zone",
+    ],
+    loot_building: [
+        "move_to_zone",
+        "enter_building",
+        "exit_building",
+        "pickup_loot",
+        "break_crate",
+        "use_door",
+        "move_to_safe_zone",
+    ],
+    rotate_safe: [
+        "move_to_safe_zone",
+        "enter_building",
+        "exit_building",
+        "pickup_loot",
+        "use_door",
+    ],
+    fight: [
+        "push",
+        "back_off",
+        "seek_cover",
+        "hold_range",
+        "hold_position",
+        "strafe",
+        "chase_last_seen",
+        "retreat_reload",
+        "retreat_heal",
+        "pickup_loot",
+        "break_crate",
+        "use_door",
+    ],
+    disengage: [
+        "back_off",
+        "seek_cover",
+        "move_to_safe_zone",
+        "enter_building",
+        "exit_building",
+        "retreat_reload",
+        "retreat_heal",
+    ],
+    heal: ["retreat_heal", "seek_cover", "back_off", "move_to_safe_zone"],
+} as const;
+
+export function isTacticalGoalAllowedForMacroGoal(
+    macroGoal: BotMacroGoal | undefined,
+    tacticalGoal: BotTacticalGoal | undefined,
+): boolean {
+    if (!macroGoal || !tacticalGoal) return true;
+    return AllowedTacticalGoalsByMacroGoal[macroGoal].includes(tacticalGoal);
+}
 
 export class BotCombatMemory {
     state: BotCombatState = "wander";
     stateSince = 0;
     stateReason = "";
     stateLockUntil = -Infinity;
+    emergencyState?: BotEmergencyState;
+    emergencyReason = "";
+    emergencySince = -Infinity;
 
     /**
      * Seconds timestamp of the last time this bot took health damage.
@@ -69,6 +213,13 @@ export class BotCombatMemory {
     objectTargetId?: number;
     objectInteractionMode?: BotObjectInteractionMode;
     macroGoal?: BotMacroGoal;
+    macroReason = "";
+    macroSince = -Infinity;
+    macroLockUntil = -Infinity;
+    tacticalGoal?: BotTacticalGoal;
+    tacticalReason = "";
+    tacticalSince = -Infinity;
+    tacticalLockUntil = -Infinity;
     targetZoneId?: number;
     targetBuildingId?: number;
     targetZonePos?: Vec2;
@@ -82,5 +233,41 @@ export class BotCombatMemory {
             this.stateSince = timeNow;
         }
         this.stateReason = reason;
+    }
+
+    setEmergencyState(
+        emergencyState: BotEmergencyState | undefined,
+        timeNow: number,
+        reason: string,
+    ): void {
+        if (this.emergencyState !== emergencyState) {
+            this.emergencyState = emergencyState;
+            this.emergencySince = timeNow;
+        }
+        this.emergencyReason = reason;
+    }
+
+    setMacroGoal(
+        macroGoal: BotMacroGoal | undefined,
+        timeNow: number,
+        reason: string,
+    ): void {
+        if (this.macroGoal !== macroGoal) {
+            this.macroGoal = macroGoal;
+            this.macroSince = timeNow;
+        }
+        this.macroReason = reason;
+    }
+
+    setTacticalGoal(
+        tacticalGoal: BotTacticalGoal | undefined,
+        timeNow: number,
+        reason: string,
+    ): void {
+        if (this.tacticalGoal !== tacticalGoal) {
+            this.tacticalGoal = tacticalGoal;
+            this.tacticalSince = timeNow;
+        }
+        this.tacticalReason = reason;
     }
 }

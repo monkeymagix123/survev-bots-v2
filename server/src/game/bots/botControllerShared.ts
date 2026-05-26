@@ -16,8 +16,16 @@ import type { BotBrainType } from "./botBrain";
 import type { BotBrainProfile } from "./botBrainProfiles";
 import type {
     BotCombatMemory,
+    BotEmergencyState,
     BotMacroGoal,
     BotSubGoal,
+    BotTacticalGoal,
+} from "./botCombat";
+import {
+    compatibilityStateFromTacticalGoal,
+    isTacticalGoalAllowedForMacroGoal,
+    isTravelTacticalGoal,
+    isZoneMacroGoal,
 } from "./botCombat";
 import {
     chooseBotBoostItem,
@@ -294,7 +302,13 @@ export function logIdleReason(params: {
 export function setDecisionContext(
     combat: BotCombatMemory,
     params: {
+        timeNow?: number;
+        emergencyState?: BotEmergencyState;
+        emergencyReason?: string;
         macroGoal?: BotMacroGoal;
+        macroReason?: string;
+        tacticalGoal?: BotTacticalGoal;
+        tacticalReason?: string;
         targetZoneId?: number;
         targetBuildingId?: number;
         targetZonePos?: Vec2;
@@ -302,19 +316,130 @@ export function setDecisionContext(
         subGoal?: BotSubGoal;
         resumeAfterSubGoal?: boolean;
     },
-): void {
-    combat.macroGoal = params.macroGoal;
-    combat.targetZoneId = params.targetZoneId;
-    combat.targetBuildingId = params.targetBuildingId;
-    combat.targetZonePos = params.targetZonePos ? v2.copy(params.targetZonePos) : undefined;
-    combat.zoneScore = params.zoneScore;
-    combat.subGoal = params.subGoal;
+): {
+    macroGoal?: BotMacroGoal;
+    macroReason?: string;
+    tacticalGoal?: BotTacticalGoal;
+    tacticalReason?: string;
+    state?: string;
+    stateReason?: string;
+    macroLocked: boolean;
+    tacticalLocked: boolean;
+} {
+    const timeNow =
+        params.timeNow ??
+        Math.max(combat.stateSince, combat.tacticalSince, combat.macroSince, 0);
+
+    const emergencyState = params.emergencyState;
+    const emergencyReason = params.emergencyReason ?? "";
+
+    let macroGoal = params.macroGoal;
+    let macroReason = params.macroReason ?? "";
+    let targetZoneId = params.targetZoneId;
+    let targetBuildingId = params.targetBuildingId;
+    let targetZonePos = params.targetZonePos;
+    let zoneScore = params.zoneScore;
+    let macroLocked = false;
+
+    if (
+        emergencyState === undefined &&
+        timeNow < combat.macroLockUntil &&
+        combat.macroGoal !== undefined &&
+        isZoneMacroGoal(combat.macroGoal) &&
+        isZoneMacroGoal(macroGoal)
+    ) {
+        macroGoal = combat.macroGoal;
+        macroReason = combat.macroReason || macroReason;
+        targetZoneId = combat.targetZoneId;
+        targetBuildingId = combat.targetBuildingId;
+        targetZonePos = combat.targetZonePos;
+        zoneScore = combat.zoneScore;
+        macroLocked = true;
+    }
+
+    let tacticalGoal = params.tacticalGoal;
+    let tacticalReason = params.tacticalReason ?? "";
+    let tacticalLocked = false;
+
+    if (
+        emergencyState === undefined &&
+        timeNow < combat.tacticalLockUntil &&
+        combat.tacticalGoal !== undefined &&
+        isTravelTacticalGoal(combat.tacticalGoal) &&
+        isTravelTacticalGoal(tacticalGoal) &&
+        combat.macroGoal === macroGoal
+    ) {
+        tacticalGoal = combat.tacticalGoal;
+        tacticalReason = combat.tacticalReason || tacticalReason;
+        tacticalLocked = true;
+    }
+
+    combat.setEmergencyState(emergencyState, timeNow, emergencyReason);
+    combat.setMacroGoal(macroGoal, timeNow, macroReason);
+    tacticalGoal = isTacticalGoalAllowedForMacroGoal(
+        macroGoal,
+        tacticalGoal,
+    )
+        ? tacticalGoal
+        : undefined;
+    combat.setTacticalGoal(tacticalGoal, timeNow, tacticalReason);
+    combat.targetZoneId = targetZoneId;
+    combat.targetBuildingId = targetBuildingId;
+    combat.targetZonePos = targetZonePos ? v2.copy(targetZonePos) : undefined;
+    combat.zoneScore = zoneScore;
+    const derivedSubGoal =
+        tacticalGoal === "pickup_loot" ||
+        tacticalGoal === "break_crate" ||
+        tacticalGoal === "use_door"
+            ? tacticalGoal
+            : undefined;
+    combat.subGoal = params.subGoal ?? derivedSubGoal;
     combat.resumeAfterSubGoal = !!params.resumeAfterSubGoal;
+
+    if (macroGoal && isZoneMacroGoal(macroGoal)) {
+        combat.macroLockUntil = Math.max(
+            combat.macroLockUntil,
+            timeNow + BotTuning.combat.macroZoneCommitSec,
+        );
+    } else {
+        combat.macroLockUntil = timeNow;
+    }
+
+    if (tacticalGoal === "move_to_safe_zone") {
+        combat.tacticalLockUntil = Math.max(
+            combat.tacticalLockUntil,
+            timeNow + BotTuning.combat.tacticalSafeZoneCommitSec,
+        );
+    } else if (isTravelTacticalGoal(tacticalGoal)) {
+        combat.tacticalLockUntil = Math.max(
+            combat.tacticalLockUntil,
+            timeNow + BotTuning.combat.tacticalTravelCommitSec,
+        );
+    } else {
+        combat.tacticalLockUntil = timeNow;
+    }
+
+    const compatibilityState = compatibilityStateFromTacticalGoal(tacticalGoal);
+    return {
+        macroGoal,
+        macroReason,
+        tacticalGoal,
+        tacticalReason,
+        state: compatibilityState,
+        stateReason: compatibilityState ? tacticalReason : undefined,
+        macroLocked,
+        tacticalLocked,
+    };
 }
 
 export function getDecisionLogFields(combat: BotCombatMemory): Record<string, unknown> {
     return {
+        emergencyState: combat.emergencyState,
+        emergencyReason: combat.emergencyReason || undefined,
         macroGoal: combat.macroGoal,
+        macroReason: combat.macroReason || undefined,
+        tacticalGoal: combat.tacticalGoal,
+        tacticalReason: combat.tacticalReason || undefined,
         targetZoneId: combat.targetZoneId,
         targetBuildingId: combat.targetBuildingId,
         zoneScore:
@@ -332,6 +457,25 @@ export function getDecisionLogFields(combat: BotCombatMemory): Record<string, un
                 ? Number(combat.targetZonePos.y.toFixed(2))
                 : undefined,
     };
+}
+
+export function tacticalGoalFromCombatState(
+    state: string,
+): BotTacticalGoal | undefined {
+    switch (state) {
+        case "push":
+        case "back_off":
+        case "seek_cover":
+        case "hold_range":
+        case "hold_position":
+        case "strafe":
+        case "chase_last_seen":
+        case "retreat_reload":
+        case "retreat_heal":
+            return state;
+        default:
+            return undefined;
+    }
 }
 
 export function shouldAbortObjectInteraction(params: {

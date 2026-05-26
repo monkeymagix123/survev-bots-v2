@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Core Model
 
@@ -59,6 +59,33 @@ Important distinction:
 - this keeps unarmed-specific caution, loot-object farming, and object-abort behavior separate from the armed path
 - shared controller mechanics now live in `botControllerShared.ts`, so common helper behavior stays aligned between both paths
 - once a bot acquires a primary or secondary gun again, it returns to the normal armed brain/controller path
+
+## Decision Layers
+
+The system is still incremental, but bots now carry explicit layered decision context:
+- **Emergency**
+  - `gas_escape`
+  - `hard_unstuck`
+  - `panic_survive`
+- **Macro**
+  - `loot_zone`
+  - `loot_building`
+  - `rotate_safe`
+  - `fight`
+  - `disengage`
+  - `heal`
+- **Tactical**
+  - `move_to_zone`
+  - `move_to_safe_zone`
+  - `enter_building`
+  - `exit_building`
+  - `pickup_loot`
+  - `break_crate`
+  - `use_door`
+  - combat movement goals like `push`, `back_off`, `seek_cover`, `hold_range`, `strafe`, `chase_last_seen`, `retreat_reload`, `retreat_heal`
+
+Existing `state` is still the compatibility movement/combat state for controllers, but macro/tactical fields now express the broader intent separately.
+Zone-style macro goals and travel-style tactical goals now also keep short explicit lock windows, so bots can preserve a chosen area or safe-route a bit longer instead of thrashing between near-equivalent options every tick.
 
 ## Modes
 
@@ -123,6 +150,9 @@ Movement is state-driven and separate from shooting.
   - both also pay distance and nearby-player / armed-density penalties
 - idle waypoints are refreshed once reached, so bots do not stand on a completed roam goal waiting only for waypoint TTL to expire
 - zone-style waypoints now keep longer TTL than generic roam steps, so bots have more commitment to the chosen building/area and can resume it after short safe loot/object detours
+- building targets now explicitly label `loot_building` while obstacle/outdoor targets label `loot_zone`
+- broader safety-oriented movement can now explicitly use tactical `move_to_safe_zone`, instead of relying only on implicit safe-zone clamping
+- `move_to_safe_zone` is now also used for some disengage/heal fallback routes when the chosen retreat point is really “go deeper into safety,” not just “step sideways from the target”
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / center recovery only after local and regional interest fail
@@ -266,11 +296,12 @@ This was meant to reduce repeated hot-path scans and retry loops without materia
 ## Debug Logging
 
 Bot debug logs now carry both immediate state and broader decision context:
+- `emergencyState`
+- `emergencyReason`
 - `macroGoal`
-  - `loot_zone`
-  - `rotate_safe`
-  - `fight`
-  - `heal`
+- `macroReason`
+- `tacticalGoal`
+- `tacticalReason`
 - `targetZoneId`
 - `targetBuildingId`
 - `zoneScore`
@@ -304,6 +335,7 @@ This makes it much easier to tell whether a bot picked a good broader area first
 - Unarmed farm-state resumption now also uses a short pressure memory, which should reduce rapid `back_off`/`wander`/`interact_object` oscillation around the same loot or crate target.
 - Unarmed spread-out goal scoring now penalizes crowding around armed players and visible-hostile positions, which should reduce the large same-area clusters that were still forming even when bots were individually backing off.
 - Safe-zone waypoint generation now also avoids gas-center magnet behavior in favor of nearby/regional crates, buildings, and lower-density roam points, which should help both armed and unarmed bots spread out better.
+- `gas_escape` now overrides before the rest of normal behavior selection and pushes tactical `move_to_safe_zone`, which makes that emergency path much clearer in both behavior and logs.
 
 ## Aim / Shooting
 

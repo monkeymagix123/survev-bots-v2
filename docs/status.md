@@ -2,7 +2,7 @@
 
 Short snapshot of current bot work.
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Current State
 
@@ -23,6 +23,7 @@ Last updated: 2026-05-25
 - Navigation / movement correctness
 - Keeping armed vs unarmed controller logic cleanly separated
 - Practical object/LOS behavior polish
+- Layered decision-model sanity testing
 
 ## Recent Changes
 
@@ -55,6 +56,14 @@ Last updated: 2026-05-25
 - Added regional waypoint crowd scoring so general roaming is less likely to collapse large groups into the same pocket of cover/buildings
 - Added explicit zone-style building/region ranking plus longer zone waypoint TTLs, so bots can commit to a chosen area, take only small safe loot detours, and then resume the same broader destination
 - Expanded combat/stability logs with macro-goal, zone/building, subgoal, resumability, and zone-position fields so it is easier to tell whether the chosen broader objective was good
+- Added the first explicit layered decision pass:
+  - emergency / macro / tactical context is now tracked separately
+  - `gas_escape` now overrides first and forces tactical `move_to_safe_zone`
+  - logs now split `macroReason` and `tacticalReason`
+- Added a follow-up tightening pass for that layered model:
+  - zone-style macro goals now keep a short commitment lock
+  - travel / safe-zone tactical goals now keep short locks
+  - some disengage/heal fallback routes now explicitly log as `move_to_safe_zone`
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
@@ -72,6 +81,7 @@ Last updated: 2026-05-25
 - Container/building-edge pursuit fixes for armed bots
 - More practical stair/building entry-exit sanity testing
 - More anti-oscillation work for unarmed movement
+- Manual sanity checks for the new layered decision model and `gas_escape` override path
 - Manual spectate tuning
 - Duo/squad behavior
 - Additional debug/stability events if needed

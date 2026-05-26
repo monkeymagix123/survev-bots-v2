@@ -61,6 +61,7 @@ type WaypointPick = {
 type InterestWaypointCandidate = {
     pos: Vec2;
     score: number;
+    macroGoal: BotMacroGoal;
     targetZoneId?: number;
     targetBuildingId?: number;
 };
@@ -506,6 +507,7 @@ export class BotNavigationLite {
                     obstacleCandidates.push({
                         pos: v2.copy(obstacle.pos),
                         score: this._scoreInterestingObstacleWaypoint(player, obstacle),
+                        macroGoal: "loot_zone",
                         targetZoneId: obstacle.__id,
                         targetBuildingId: obstacle.parentBuilding?.__id,
                     });
@@ -523,6 +525,7 @@ export class BotNavigationLite {
                     buildingCandidates.push({
                         pos: v2.copy(building.pos),
                         score: this._scoreInterestingBuildingWaypoint(game, player, building),
+                        macroGoal: "loot_building",
                         targetZoneId: building.__id,
                         targetBuildingId: building.__id,
                     });
@@ -571,6 +574,7 @@ export class BotNavigationLite {
                     obstacleCandidates.push({
                         pos: v2.copy(obstacle.pos),
                         score: this._scoreInterestingObstacleWaypoint(player, obstacle),
+                        macroGoal: "loot_zone",
                         targetZoneId: obstacle.__id,
                         targetBuildingId: obstacle.parentBuilding?.__id,
                     });
@@ -585,6 +589,7 @@ export class BotNavigationLite {
                     buildingCandidates.push({
                         pos: v2.copy(building.pos),
                         score: this._scoreInterestingBuildingWaypoint(game, player, building),
+                        macroGoal: "loot_building",
                         targetZoneId: building.__id,
                         targetBuildingId: building.__id,
                     });
@@ -679,15 +684,15 @@ export class BotNavigationLite {
         return best
             ? {
                   pos: best,
-                  ttl: this._getZoneWaypointTtl(),
-                  meta: {
-                      macroGoal: "loot_zone",
-                      targetZoneId: bestCandidate?.targetZoneId,
-                      targetBuildingId: bestCandidate?.targetBuildingId,
-                      targetZonePos: v2.copy(best),
-                      zoneScore: Number(bestScore.toFixed(2)),
-                  },
-              }
+                      ttl: this._getZoneWaypointTtl(),
+                      meta: {
+                          macroGoal: bestCandidate?.macroGoal ?? "loot_zone",
+                          targetZoneId: bestCandidate?.targetZoneId,
+                          targetBuildingId: bestCandidate?.targetBuildingId,
+                          targetZonePos: v2.copy(best),
+                          zoneScore: Number(bestScore.toFixed(2)),
+                      },
+                  }
             : undefined;
     }
 

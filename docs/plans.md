@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Done
 
@@ -112,6 +112,15 @@ Last updated: 2026-05-25
 - Removed the remaining safe-zone center-magnet roaming bias and added regional waypoint crowd scoring, so general bot wandering now prefers nearby/regional crates and buildings over collapsing toward the exact safe-zone center
 - Added zone-style regional waypoint ranking and longer waypoint commitment, so bots can head toward a chosen building/area, grab only small safe loot detours on the way, and then resume the broader zone goal
 - Expanded bot debug logs with broader decision context (`macroGoal`, zone/building ids, zone score, subgoal, resumability, and zone positions) so it is easier to judge whether a chosen goal was actually sensible
+- Added the first explicit layered decision pass:
+  - emergency / macro / tactical context is now tracked separately
+  - `gas_escape` now overrides first and forces tactical `move_to_safe_zone`
+  - tactical-goal legality is now checked against the current macro goal
+  - logs now split `macroReason` and `tacticalReason`
+- Tightened that layered pass further:
+  - zone-style macro goals now keep a short explicit lock
+  - travel / safe-zone tactical goals now keep short explicit locks
+  - `move_to_safe_zone` is now used more explicitly in some disengage/heal fallback routes, not just gas escape
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
 ## In Progress
@@ -129,6 +138,10 @@ Last updated: 2026-05-25
   - greenhouse/tunnel-style stair openings now have explicit transition routing
   - practical auto-door buildings now have lightweight entry/exit routing
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.
+- Manual sanity-checking of the new layered decision model is still useful:
+  - emergency / macro / tactical logs
+  - `gas_escape` behavior
+  - `move_to_safe_zone` routing
 
 ## Next
 
@@ -140,6 +153,9 @@ Last updated: 2026-05-25
   - loot commit
   - object commit
 - Continued cleanup of remaining shared bot-controller code into clearer common helpers where useful.
+- Keep the layered macro/tactical refactor incremental:
+  - preserve current feel first
+  - then tighten commitment/interruption rules once the logs confirm the structure is behaving sensibly
 
 ## Guardrails
 

@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -42,9 +42,13 @@ Bots follow a lightweight priority stack:
 - When a target is obscured by terrain/objects, armed bots try to reposition instead of passively sitting on a blocked shot
 - Recent enemy pressure now also suppresses opportunistic loot/object detours right after LOS breaks, so armed bots are more likely to keep repositioning around blockers like trees instead of getting distracted
 - Armed bots treat lone visibly unarmed hostiles as less threatening unless they get close or show gun evidence
+- Decision-making is now starting to separate broader **macro goals** from immediate **tactical goals**, instead of relying only on one flat state
+- Zone-style macro goals now keep a short commitment window, so bots are less likely to immediately abandon one chosen building/area for another equally-good waypoint on the next tick
 
 ### Movement
 - Use a lightweight movement state machine
+- `gas_escape` now acts as the first hard behavior override and forces tactical `move_to_safe_zone`
+- Safer retreat/heal routes can now also label tactical `move_to_safe_zone` outside pure gas cases, so “fall back toward safety” is more explicit in both behavior and logs
 - Use short detours and fallback recovery instead of full pathfinding
 - Keep short detour-side commitment around blockers so bots are less likely to jitter between equivalent left/right micro-routes
 - In normal idle roaming, prefer nearby loot-bearing destructible objects or nearby buildings before falling back to generic random wandering
@@ -123,7 +127,7 @@ Bots follow a lightweight priority stack:
   - writes combat/state-transition debug logs to `server/logs/<game-create-time>_<game-id>/bot-combat.log`
   - when `debugBotStability` is also enabled, its companion file lives beside it as `server/logs/<game-create-time>_<game-id>/bot-stability.log`
   - now includes chosen target/item ids plus final goal position / movement style
-  - now also includes higher-level decision context such as `macroGoal`, `targetZoneId`, `targetBuildingId`, `zoneScore`, `subGoal`, `resumeAfterSubGoal`, and zone/target positions
+  - now also includes higher-level decision context such as `emergencyState`, `macroGoal`, `macroReason`, `tacticalGoal`, `tacticalReason`, `targetZoneId`, `targetBuildingId`, `zoneScore`, `subGoal`, `resumeAfterSubGoal`, and zone/target positions
 - `Config.bots.debugMapIndicators`
   - shows live bot positions through the same player-status / minimap-position path used for faction-style player markers
   - bots are marked with a distinct blue debug dot so they are easier to spot in solo-mode testing
