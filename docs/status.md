@@ -54,6 +54,7 @@ Last updated: 2026-05-25
 - Removed the remaining safe-zone center bias from general waypoint picking, so bots now prefer nearby/regional crates, buildings, and spread-out roam points while inside the safe zone
 - Added regional waypoint crowd scoring so general roaming is less likely to collapse large groups into the same pocket of cover/buildings
 - Added explicit zone-style building/region ranking plus longer zone waypoint TTLs, so bots can commit to a chosen area, take only small safe loot detours, and then resume the same broader destination
+- Expanded combat/stability logs with macro-goal, zone/building, subgoal, resumability, and zone-position fields so it is easier to tell whether the chosen broader objective was good
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

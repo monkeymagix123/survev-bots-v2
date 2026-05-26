@@ -8,6 +8,10 @@ import { v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { BotBrainType } from "../botBrain";
 import {
+    getDecisionLogFields,
+    setDecisionContext,
+} from "../botControllerShared";
+import {
     getBotTacticalSnapshot,
     getBotReloadSnapshot,
 } from "../botDecisionSupport";
@@ -105,6 +109,7 @@ export class RealisticBotBrain implements BotBrain {
         if (!perception.targetId) {
             const threat = perception.threat;
             navigation.ensureWaypoint(game, player);
+            const zoneMeta = navigation.waypointMeta;
             const idleLoot =
                 !gasEmergency &&
                 !threat.anyHostileVisible &&
@@ -146,6 +151,16 @@ export class RealisticBotBrain implements BotBrain {
                 combat.lootWeaponSlot = undefined;
                 combat.objectTargetId = idleObject.obstacleId;
                 combat.objectInteractionMode = idleObject.mode;
+                setDecisionContext(combat, {
+                    macroGoal: zoneMeta?.macroGoal ?? "loot_zone",
+                    targetZoneId: zoneMeta?.targetZoneId ?? idleObject.obstacleId,
+                    targetBuildingId: zoneMeta?.targetBuildingId,
+                    targetZonePos: zoneMeta?.targetZonePos ?? idleObject.pos,
+                    zoneScore: zoneMeta?.zoneScore,
+                    subGoal:
+                        idleObject.mode === "use" ? "use_door" : "break_crate",
+                    resumeAfterSubGoal: !!zoneMeta,
+                });
             } else if (idleLoot) {
                 combat.setState("loot", timeNow, idleLoot.reason);
                 combat.goalPos = sanitizeGoal(idleLoot.pos);
@@ -154,6 +169,15 @@ export class RealisticBotBrain implements BotBrain {
                 combat.lootWeaponSlot = idleLoot.weaponSlot;
                 combat.objectTargetId = undefined;
                 combat.objectInteractionMode = undefined;
+                setDecisionContext(combat, {
+                    macroGoal: zoneMeta?.macroGoal ?? "loot_zone",
+                    targetZoneId: zoneMeta?.targetZoneId ?? idleLoot.lootId,
+                    targetBuildingId: zoneMeta?.targetBuildingId,
+                    targetZonePos: zoneMeta?.targetZonePos ?? idleLoot.pos,
+                    zoneScore: zoneMeta?.zoneScore,
+                    subGoal: "pickup_loot",
+                    resumeAfterSubGoal: !!zoneMeta,
+                });
             } else {
                 combat.setState("wander", timeNow, "no_target");
                 combat.goalPos = undefined;
@@ -162,6 +186,13 @@ export class RealisticBotBrain implements BotBrain {
                 combat.lootWeaponSlot = undefined;
                 combat.objectTargetId = undefined;
                 combat.objectInteractionMode = undefined;
+                setDecisionContext(combat, {
+                    macroGoal: zoneMeta?.macroGoal ?? "rotate_safe",
+                    targetZoneId: zoneMeta?.targetZoneId,
+                    targetBuildingId: zoneMeta?.targetBuildingId,
+                    targetZonePos: zoneMeta?.targetZonePos,
+                    zoneScore: zoneMeta?.zoneScore,
+                });
             }
 
             if (Config.bots.debugCombat && prevState !== combat.state) {
@@ -194,6 +225,7 @@ export class RealisticBotBrain implements BotBrain {
                     lootTargetId: combat.lootTargetId,
                     objectTargetId: combat.objectTargetId,
                     objectInteractionMode: combat.objectInteractionMode,
+                    ...getDecisionLogFields(combat),
                 });
             }
             return;
@@ -735,6 +767,37 @@ export class RealisticBotBrain implements BotBrain {
                 break;
         }
 
+        if (state === "retreat_heal") {
+            setDecisionContext(combat, {
+                macroGoal: "heal",
+            });
+        } else if (state === "loot" && opportunisticLoot) {
+            setDecisionContext(combat, {
+                macroGoal: "fight",
+                targetZoneId: opportunisticLoot.lootId,
+                targetZonePos: opportunisticLoot.pos,
+                zoneScore: opportunisticLoot.score,
+                subGoal: "pickup_loot",
+                resumeAfterSubGoal: true,
+            });
+        } else if (state === "interact_object" && opportunisticObject) {
+            setDecisionContext(combat, {
+                macroGoal: "fight",
+                targetZoneId: opportunisticObject.obstacleId,
+                targetZonePos: opportunisticObject.pos,
+                zoneScore: opportunisticObject.score,
+                subGoal:
+                    opportunisticObject.mode === "use"
+                        ? "use_door"
+                        : "break_crate",
+                resumeAfterSubGoal: true,
+            });
+        } else {
+            setDecisionContext(combat, {
+                macroGoal: "fight",
+            });
+        }
+
         if (Config.bots.debugCombat && stateChanged) {
             logBotCombat(game, {
                 botId: player.__id,
@@ -758,6 +821,7 @@ export class RealisticBotBrain implements BotBrain {
                 lootTargetId: combat.lootTargetId,
                 objectTargetId: combat.objectTargetId,
                 objectInteractionMode: combat.objectInteractionMode,
+                ...getDecisionLogFields(combat),
             });
         }
 
@@ -783,6 +847,7 @@ export class RealisticBotBrain implements BotBrain {
                 lootTargetId: combat.lootTargetId,
                 objectTargetId: combat.objectTargetId,
                 objectInteractionMode: combat.objectInteractionMode,
+                ...getDecisionLogFields(combat),
             });
         }
     }

@@ -123,6 +123,7 @@ Bots follow a lightweight priority stack:
   - writes combat/state-transition debug logs to `server/logs/<game-create-time>_<game-id>/bot-combat.log`
   - when `debugBotStability` is also enabled, its companion file lives beside it as `server/logs/<game-create-time>_<game-id>/bot-stability.log`
   - now includes chosen target/item ids plus final goal position / movement style
+  - now also includes higher-level decision context such as `macroGoal`, `targetZoneId`, `targetBuildingId`, `zoneScore`, `subGoal`, `resumeAfterSubGoal`, and zone/target positions
 - `Config.bots.debugMapIndicators`
   - shows live bot positions through the same player-status / minimap-position path used for faction-style player markers
   - bots are marked with a distinct blue debug dot so they are easier to spot in solo-mode testing

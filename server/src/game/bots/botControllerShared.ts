@@ -14,7 +14,11 @@ import type { Obstacle } from "../objects/obstacle";
 import type { Player } from "../objects/player";
 import type { BotBrainType } from "./botBrain";
 import type { BotBrainProfile } from "./botBrainProfiles";
-import type { BotCombatMemory } from "./botCombat";
+import type {
+    BotCombatMemory,
+    BotMacroGoal,
+    BotSubGoal,
+} from "./botCombat";
 import {
     chooseBotBoostItem,
     chooseBotHealItem,
@@ -225,6 +229,7 @@ export function logIdleReason(params: {
     game: Game;
     brainType: BotBrainType;
     botId: number;
+    combat: BotCombatMemory;
     state: string;
     stateReason: string;
     goal?: Vec2;
@@ -243,6 +248,7 @@ export function logIdleReason(params: {
         game,
         brainType,
         botId,
+        combat,
         state,
         stateReason,
         goal,
@@ -279,9 +285,53 @@ export function logIdleReason(params: {
         targetId,
         lootTargetId,
         objectTargetId,
+        ...getDecisionLogFields(combat),
     });
 
     return reason;
+}
+
+export function setDecisionContext(
+    combat: BotCombatMemory,
+    params: {
+        macroGoal?: BotMacroGoal;
+        targetZoneId?: number;
+        targetBuildingId?: number;
+        targetZonePos?: Vec2;
+        zoneScore?: number;
+        subGoal?: BotSubGoal;
+        resumeAfterSubGoal?: boolean;
+    },
+): void {
+    combat.macroGoal = params.macroGoal;
+    combat.targetZoneId = params.targetZoneId;
+    combat.targetBuildingId = params.targetBuildingId;
+    combat.targetZonePos = params.targetZonePos ? v2.copy(params.targetZonePos) : undefined;
+    combat.zoneScore = params.zoneScore;
+    combat.subGoal = params.subGoal;
+    combat.resumeAfterSubGoal = !!params.resumeAfterSubGoal;
+}
+
+export function getDecisionLogFields(combat: BotCombatMemory): Record<string, unknown> {
+    return {
+        macroGoal: combat.macroGoal,
+        targetZoneId: combat.targetZoneId,
+        targetBuildingId: combat.targetBuildingId,
+        zoneScore:
+            combat.zoneScore !== undefined
+                ? Number(combat.zoneScore.toFixed(2))
+                : undefined,
+        subGoal: combat.subGoal,
+        resumeAfterSubGoal: combat.resumeAfterSubGoal || undefined,
+        targetZoneX:
+            combat.targetZonePos !== undefined
+                ? Number(combat.targetZonePos.x.toFixed(2))
+                : undefined,
+        targetZoneY:
+            combat.targetZonePos !== undefined
+                ? Number(combat.targetZonePos.y.toFixed(2))
+                : undefined,
+    };
 }
 
 export function shouldAbortObjectInteraction(params: {

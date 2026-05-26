@@ -490,6 +490,7 @@ export class BotController {
             game: this.game,
             brainType: this.brainType,
             botId: player.__id,
+            combat: this._combat,
             state: this._combat.state,
             stateReason: this._combat.stateReason,
             goal,

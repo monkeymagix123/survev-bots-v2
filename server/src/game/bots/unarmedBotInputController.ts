@@ -274,6 +274,7 @@ export class UnarmedBotInputController {
             game: this.game,
             brainType: this.brainType,
             botId: player.__id,
+            combat: this.combat,
             state: this.combat.state,
             stateReason: this.combat.stateReason,
             goal,

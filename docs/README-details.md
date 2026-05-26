@@ -263,6 +263,28 @@ Recent optimization work stayed deliberately conservative:
 
 This was meant to reduce repeated hot-path scans and retry loops without materially changing bot personalities.
 
+## Debug Logging
+
+Bot debug logs now carry both immediate state and broader decision context:
+- `macroGoal`
+  - `loot_zone`
+  - `rotate_safe`
+  - `fight`
+  - `heal`
+- `targetZoneId`
+- `targetBuildingId`
+- `zoneScore`
+- `subGoal`
+  - `pickup_loot`
+  - `break_crate`
+  - `use_door`
+- `resumeAfterSubGoal`
+- zone positions (`targetZoneX` / `targetZoneY`)
+- target positions (`targetX` / `targetY`)
+- final movement goal (`goalX` / `goalY`)
+
+This makes it much easier to tell whether a bot picked a good broader area first and then took a reasonable small detour, versus choosing a bad broader objective.
+
 ## Recent Fixes
 
 - Armed bots now remember which gun slot they were using before temporary `melee_break`, and re-equip that gun afterward.

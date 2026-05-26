@@ -14,6 +14,7 @@ import type { Player } from "../../objects/player";
 import type { Structure } from "../../objects/structure";
 import { isBotUnarmed } from "../botDecisionSupport";
 import { BotTuning } from "../botTuning";
+import type { BotMacroGoal } from "../botCombat";
 
 type FailedWaypoint = {
     pos: Vec2;
@@ -54,16 +55,28 @@ type BuildingDoorTransition = {
 type WaypointPick = {
     pos: Vec2;
     ttl: number;
+    meta: WaypointMeta;
 };
 
 type InterestWaypointCandidate = {
     pos: Vec2;
     score: number;
+    targetZoneId?: number;
+    targetBuildingId?: number;
+};
+
+type WaypointMeta = {
+    macroGoal: BotMacroGoal;
+    targetZoneId?: number;
+    targetBuildingId?: number;
+    targetZonePos?: Vec2;
+    zoneScore?: number;
 };
 
 export class BotNavigationLite {
     waypoint?: Vec2;
     waypointTtl = 0;
+    waypointMeta?: WaypointMeta;
 
     private _time = 0;
     private _strafeTicker = 0;
@@ -131,6 +144,7 @@ export class BotNavigationLite {
             const nextWaypoint = this._pickWaypoint(game, player);
             this.waypoint = nextWaypoint.pos;
             this.waypointTtl = nextWaypoint.ttl;
+            this.waypointMeta = nextWaypoint.meta;
         }
     }
 
@@ -458,6 +472,10 @@ export class BotNavigationLite {
         return {
             pos: v2.copy(game.gas.posNew),
             ttl: this._getRoamWaypointTtl(),
+            meta: {
+                macroGoal: "rotate_safe",
+                targetZonePos: v2.copy(game.gas.posNew),
+            },
         };
     }
 
@@ -488,6 +506,8 @@ export class BotNavigationLite {
                     obstacleCandidates.push({
                         pos: v2.copy(obstacle.pos),
                         score: this._scoreInterestingObstacleWaypoint(player, obstacle),
+                        targetZoneId: obstacle.__id,
+                        targetBuildingId: obstacle.parentBuilding?.__id,
                     });
                 }
                 continue;
@@ -503,6 +523,8 @@ export class BotNavigationLite {
                     buildingCandidates.push({
                         pos: v2.copy(building.pos),
                         score: this._scoreInterestingBuildingWaypoint(game, player, building),
+                        targetZoneId: building.__id,
+                        targetBuildingId: building.__id,
                     });
                 }
             }
@@ -549,6 +571,8 @@ export class BotNavigationLite {
                     obstacleCandidates.push({
                         pos: v2.copy(obstacle.pos),
                         score: this._scoreInterestingObstacleWaypoint(player, obstacle),
+                        targetZoneId: obstacle.__id,
+                        targetBuildingId: obstacle.parentBuilding?.__id,
                     });
                 }
                 continue;
@@ -561,6 +585,8 @@ export class BotNavigationLite {
                     buildingCandidates.push({
                         pos: v2.copy(building.pos),
                         score: this._scoreInterestingBuildingWaypoint(game, player, building),
+                        targetZoneId: building.__id,
+                        targetBuildingId: building.__id,
                     });
                 }
             }
@@ -602,6 +628,10 @@ export class BotNavigationLite {
             ? {
                   pos: best,
                   ttl: this._getRoamWaypointTtl(),
+                  meta: {
+                      macroGoal: "rotate_safe",
+                      targetZonePos: v2.copy(best),
+                  },
               }
             : undefined;
     }
@@ -621,6 +651,7 @@ export class BotNavigationLite {
 
         let best: Vec2 | undefined;
         let bestScore = -Infinity;
+        let bestCandidate: InterestWaypointCandidate | undefined;
 
         for (const candidate of shuffled) {
             const pos = v2.copy(candidate.pos);
@@ -641,6 +672,7 @@ export class BotNavigationLite {
             if (score > bestScore) {
                 bestScore = score;
                 best = pos;
+                bestCandidate = candidate;
             }
         }
 
@@ -648,6 +680,13 @@ export class BotNavigationLite {
             ? {
                   pos: best,
                   ttl: this._getZoneWaypointTtl(),
+                  meta: {
+                      macroGoal: "loot_zone",
+                      targetZoneId: bestCandidate?.targetZoneId,
+                      targetBuildingId: bestCandidate?.targetBuildingId,
+                      targetZonePos: v2.copy(best),
+                      zoneScore: Number(bestScore.toFixed(2)),
+                  },
               }
             : undefined;
     }
@@ -683,6 +722,10 @@ export class BotNavigationLite {
             ? {
                   pos: best,
                   ttl: this._getRoamWaypointTtl(),
+                  meta: {
+                      macroGoal: "rotate_safe",
+                      targetZonePos: v2.copy(best),
+                  },
               }
             : undefined;
     }

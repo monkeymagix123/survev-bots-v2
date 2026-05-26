@@ -12,6 +12,10 @@ import {
     computeBotDanger,
     isBotUnarmed,
 } from "../botDecisionSupport";
+import {
+    getDecisionLogFields,
+    setDecisionContext,
+} from "../botControllerShared";
 import { logBotCombat } from "../botCombatLogger";
 import { logBotStability } from "../botStabilityLogger";
 import { BotTuning } from "../botTuning";
@@ -247,6 +251,7 @@ export class UnarmedBotBrain implements BotBrain {
         danger = math.clamp(danger, 0, 1);
 
         navigation.ensureWaypoint(game, player);
+        const zoneMeta = navigation.waypointMeta;
 
         const immediateGun = !gasEmergency
             ? lootScorer.chooseLoot({
@@ -649,6 +654,49 @@ export class UnarmedBotBrain implements BotBrain {
                 break;
         }
 
+        if (state === "loot") {
+            const chosenLoot = immediateGun ?? fallbackLoot;
+            setDecisionContext(combat, {
+                macroGoal: zoneMeta?.macroGoal ?? "loot_zone",
+                targetZoneId: zoneMeta?.targetZoneId ?? chosenLoot?.lootId,
+                targetBuildingId: zoneMeta?.targetBuildingId,
+                targetZonePos: zoneMeta?.targetZonePos ?? chosenLoot?.pos,
+                zoneScore: zoneMeta?.zoneScore ?? chosenLoot?.score,
+                subGoal: chosenLoot ? "pickup_loot" : undefined,
+                resumeAfterSubGoal: !!chosenLoot && !!zoneMeta,
+            });
+        } else if (state === "interact_object") {
+            setDecisionContext(combat, {
+                macroGoal: zoneMeta?.macroGoal ?? "loot_zone",
+                targetZoneId: zoneMeta?.targetZoneId ?? objectGoal?.obstacleId,
+                targetBuildingId: zoneMeta?.targetBuildingId,
+                targetZonePos: zoneMeta?.targetZonePos ?? objectGoal?.pos,
+                zoneScore: zoneMeta?.zoneScore ?? objectGoal?.score,
+                subGoal: objectGoal
+                    ? objectGoal.mode === "use"
+                        ? "use_door"
+                        : "break_crate"
+                    : undefined,
+                resumeAfterSubGoal: !!objectGoal && !!zoneMeta,
+            });
+        } else if (state === "seek_cover" || state === "back_off") {
+            setDecisionContext(combat, {
+                macroGoal: lowHp ? "heal" : "rotate_safe",
+                targetZoneId: zoneMeta?.targetZoneId,
+                targetBuildingId: zoneMeta?.targetBuildingId,
+                targetZonePos: zoneMeta?.targetZonePos,
+                zoneScore: zoneMeta?.zoneScore,
+            });
+        } else {
+            setDecisionContext(combat, {
+                macroGoal: zoneMeta?.macroGoal ?? "rotate_safe",
+                targetZoneId: zoneMeta?.targetZoneId,
+                targetBuildingId: zoneMeta?.targetBuildingId,
+                targetZonePos: zoneMeta?.targetZonePos,
+                zoneScore: zoneMeta?.zoneScore,
+            });
+        }
+
         if (Config.bots.debugCombat && stateChanged) {
             logBotCombat(game, {
                 botId: player.__id,
@@ -679,6 +727,7 @@ export class UnarmedBotBrain implements BotBrain {
                 lootTargetId: combat.lootTargetId,
                 objectTargetId: combat.objectTargetId,
                 objectInteractionMode: combat.objectInteractionMode,
+                ...getDecisionLogFields(combat),
             });
         }
 
@@ -713,6 +762,7 @@ export class UnarmedBotBrain implements BotBrain {
                 lootTargetId: combat.lootTargetId,
                 objectTargetId: combat.objectTargetId,
                 objectInteractionMode: combat.objectInteractionMode,
+                ...getDecisionLogFields(combat),
             });
         }
     }

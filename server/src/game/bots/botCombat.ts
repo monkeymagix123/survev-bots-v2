@@ -16,6 +16,8 @@ export type BotCombatState =
 
 export type BotMovementStyle = "direct" | "strafe" | "anchor";
 export type BotObjectInteractionMode = "melee_break" | "use";
+export type BotMacroGoal = "loot_zone" | "rotate_safe" | "fight" | "heal";
+export type BotSubGoal = "pickup_loot" | "break_crate" | "use_door";
 
 export class BotCombatMemory {
     state: BotCombatState = "wander";
@@ -66,6 +68,13 @@ export class BotCombatMemory {
     lootWeaponSlot?: number;
     objectTargetId?: number;
     objectInteractionMode?: BotObjectInteractionMode;
+    macroGoal?: BotMacroGoal;
+    targetZoneId?: number;
+    targetBuildingId?: number;
+    targetZonePos?: Vec2;
+    zoneScore?: number;
+    subGoal?: BotSubGoal;
+    resumeAfterSubGoal = false;
 
     setState(state: BotCombatState, timeNow: number, reason: string): void {
         if (this.state !== state) {
