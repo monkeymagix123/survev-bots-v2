@@ -356,7 +356,7 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (fallbackLoot && fallbackLootAllowed) {
             state = "loot";
             reason = fallbackLoot.reason;
-        } else if (visibleHostile && threatContext.hostileAppearsUnarmed) {
+        } else if (visibleHostile && threatContext.hostileAppearsUnarmed && threat.nearestNearbyHostileDist < 24) {
             state = "back_off";
             reason = "unarmed_visible_melee_disengage";
         } else if (underRecentPressure && combat.unarmedThreatPos) {
