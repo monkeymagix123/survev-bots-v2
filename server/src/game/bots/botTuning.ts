@@ -29,6 +29,7 @@ export const BotTuning = {
         distractedArmedDangerRelief: 0.16,
         distractedFightRadius: 10,
         hostileProximityRef: 12,
+        visibleMeleeDisengageDist: 14,
         recentPressureResumeSec: 1.1,
         recentDamageResumeSec: 1.45,
         goalCrowdRadius: 24,

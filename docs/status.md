@@ -63,7 +63,9 @@ Last updated: 2026-05-26
 - Added a follow-up tightening pass for that layered model:
   - zone-style macro goals now keep a short commitment lock
   - travel / safe-zone tactical goals now keep short locks
-  - some disengage/heal fallback routes now explicitly log as `move_to_safe_zone`
+  - `move_to_safe_zone` now refers to broader safe-zone progress, while `move_to_safe_position` covers safer local fallback movement
+  - far visible melee-only pressure no longer interrupts unarmed loot-zone commitment as aggressively
+  - tactical goals now always fall back to a defined value
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

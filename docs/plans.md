@@ -120,7 +120,9 @@ Last updated: 2026-05-26
 - Tightened that layered pass further:
   - zone-style macro goals now keep a short explicit lock
   - travel / safe-zone tactical goals now keep short explicit locks
-  - `move_to_safe_zone` is now used more explicitly in some disengage/heal fallback routes, not just gas escape
+  - `move_to_safe_zone` is now reserved for broader safe-zone routing, while `move_to_safe_position` covers safer local fallback routes during disengage/heal behavior
+  - unarmed recent-pressure memory now ignores weak far-visible melee-only pressure more often, so committed loot-zone travel is less likely to be interrupted for bad reasons
+  - tactical goals now always fall back to a defined value
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
 ## In Progress

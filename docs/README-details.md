@@ -77,6 +77,7 @@ The system is still incremental, but bots now carry explicit layered decision co
 - **Tactical**
   - `move_to_zone`
   - `move_to_safe_zone`
+  - `move_to_safe_position`
   - `enter_building`
   - `exit_building`
   - `pickup_loot`
@@ -86,6 +87,7 @@ The system is still incremental, but bots now carry explicit layered decision co
 
 Existing `state` is still the compatibility movement/combat state for controllers, but macro/tactical fields now express the broader intent separately.
 Zone-style macro goals and travel-style tactical goals now also keep short explicit lock windows, so bots can preserve a chosen area or safe-route a bit longer instead of thrashing between near-equivalent options every tick.
+`move_to_safe_zone` now means “make broader safe-zone progress,” while `move_to_safe_position` means “fall back to a safer local position” during disengage/heal behavior.
 
 ## Modes
 
@@ -152,7 +154,7 @@ Movement is state-driven and separate from shooting.
 - zone-style waypoints now keep longer TTL than generic roam steps, so bots have more commitment to the chosen building/area and can resume it after short safe loot/object detours
 - building targets now explicitly label `loot_building` while obstacle/outdoor targets label `loot_zone`
 - broader safety-oriented movement can now explicitly use tactical `move_to_safe_zone`, instead of relying only on implicit safe-zone clamping
-- `move_to_safe_zone` is now also used for some disengage/heal fallback routes when the chosen retreat point is really “go deeper into safety,” not just “step sideways from the target”
+- some disengage/heal fallback routes now use tactical `move_to_safe_position`, so logs can distinguish “retreat locally” from “rotate deeper into the safe zone”
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / center recovery only after local and regional interest fail
@@ -246,6 +248,7 @@ Unarmed bots default to:
 - unseen enemies matter less than for armed bots
 - visible armed hostiles matter much more
 - visible unarmed hostiles are treated as less threatening
+- distant visible unarmed hostiles now also contribute less to recent-pressure memory, so they are less likely to keep interrupting a committed loot-zone macro
 - distracted armed hostiles allow more opportunistic crate/object behavior
 - very close hostiles still count as melee pressure, so unarmed bots back off instead of passively standing on top of each other
 - if a visible hostile still appears unarmed and no immediate gun/object is available, bots now prefer nearby fallback loot or disengage instead of stalling in place
@@ -302,6 +305,7 @@ Bot debug logs now carry both immediate state and broader decision context:
 - `macroReason`
 - `tacticalGoal`
 - `tacticalReason`
+- tactical goals now always fall back to a defined value instead of being left undefined
 - `targetZoneId`
 - `targetBuildingId`
 - `zoneScore`

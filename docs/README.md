@@ -44,11 +44,12 @@ Bots follow a lightweight priority stack:
 - Armed bots treat lone visibly unarmed hostiles as less threatening unless they get close or show gun evidence
 - Decision-making is now starting to separate broader **macro goals** from immediate **tactical goals**, instead of relying only on one flat state
 - Zone-style macro goals now keep a short commitment window, so bots are less likely to immediately abandon one chosen building/area for another equally-good waypoint on the next tick
+- Tactical goals now always fall back to a defined value instead of being left blank in logs/context
 
 ### Movement
 - Use a lightweight movement state machine
 - `gas_escape` now acts as the first hard behavior override and forces tactical `move_to_safe_zone`
-- Safer retreat/heal routes can now also label tactical `move_to_safe_zone` outside pure gas cases, so “fall back toward safety” is more explicit in both behavior and logs
+- `move_to_safe_zone` now means broader safe-zone progress, while `move_to_safe_position` means a safer local fallback during disengage/heal behavior
 - Use short detours and fallback recovery instead of full pathfinding
 - Keep short detour-side commitment around blockers so bots are less likely to jitter between equivalent left/right micro-routes
 - In normal idle roaming, prefer nearby loot-bearing destructible objects or nearby buildings before falling back to generic random wandering
@@ -99,6 +100,7 @@ Bots follow a lightweight priority stack:
 - Treat very close visible hostiles as melee pressure and back off instead of passively face-hugging
 - If a visible hostile still appears unarmed, bots can keep taking nearby loot/object opportunities; otherwise they more deliberately disengage instead of idling
 - Keep a short recent-pressure memory before resuming loot/object farming, so bots are less likely to bounce immediately back onto the same crate/loot goal the moment a hostile flickers out of sight
+- Far visible melee-only hostiles now contribute much less to that recent-pressure memory, so unarmed bots are less likely to abandon a chosen loot zone just because a distant unarmed enemy is on screen
 - Score crowd density around wander / retreat / cover goals, so visible enemies act more like repulsors unless there is nearby gun loot worth contesting
 - Penalize goals that drift toward armed clusters, which helps unarmed bots spread out instead of all converging on the same “safe” building or cover pocket
 - Can redirect from a desired crate/object to a destructible route-blocker when that blocker is the only thing in the way

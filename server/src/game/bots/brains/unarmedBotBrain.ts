@@ -13,11 +13,14 @@ import {
     isBotUnarmed,
 } from "../botDecisionSupport";
 import {
+    captureDecisionSnapshot,
     getDecisionLogFields,
+    hasDecisionSnapshotChanged,
     setDecisionContext,
 } from "../botControllerShared";
 import { logBotCombat } from "../botCombatLogger";
 import { logBotStability } from "../botStabilityLogger";
+import { isZoneMacroGoal } from "../botCombat";
 import { BotTuning } from "../botTuning";
 import type { BotBrain, BotBrainContext } from "./botBrainLogic";
 
@@ -82,9 +85,7 @@ export class UnarmedBotBrain implements BotBrain {
         }
 
         const prevState = combat.state;
-        const prevEmergencyState = combat.emergencyState;
-        const prevMacroGoal = combat.macroGoal;
-        const prevTacticalGoal = combat.tacticalGoal;
+        const beforeDecision = captureDecisionSnapshot(combat);
         const prevObjectTargetId = combat.objectTargetId;
         const prevObjectInteractionMode = combat.objectInteractionMode;
         const prevObjectGoal = combat.goalPos ? v2.copy(combat.goalPos) : undefined;
@@ -132,11 +133,10 @@ export class UnarmedBotBrain implements BotBrain {
                 targetZonePos: game.gas.posNew,
             });
 
-            const decisionChanged =
-                prevState !== combat.state ||
-                prevEmergencyState !== combat.emergencyState ||
-                prevMacroGoal !== combat.macroGoal ||
-                prevTacticalGoal !== combat.tacticalGoal;
+            const decisionChanged = hasDecisionSnapshotChanged(
+                beforeDecision,
+                captureDecisionSnapshot(combat),
+            );
             if (Config.bots.debugCombat && decisionChanged) {
                 logBotCombat(game, {
                     botId: player.__id,
@@ -313,6 +313,13 @@ export class UnarmedBotBrain implements BotBrain {
             return bestGoal;
         };
 
+        const farVisibleUnarmedPressure =
+            visibleHostile &&
+            threatContext.hostileAppearsUnarmed &&
+            !threatContext.hostileHasShownGun &&
+            threat.nearestNearbyHostileDist >
+                BotTuning.unarmed.visibleMeleeDisengageDist;
+
         if (actionableTarget) {
             combat.unarmedThreatPos = v2.copy(actionableTarget.pos);
         }
@@ -321,7 +328,14 @@ export class UnarmedBotBrain implements BotBrain {
                 combat.unarmedPressureUntil,
                 timeNow + BotTuning.unarmed.recentDamageResumeSec,
             );
-        } else if (visibleHostile || enemyVeryClose) {
+        } else if (
+            enemyVeryClose ||
+            (visibleHostile &&
+                (!threatContext.hostileAppearsUnarmed ||
+                    threatContext.hostileHasShownGun ||
+                    threat.nearestNearbyHostileDist <=
+                        BotTuning.unarmed.visibleMeleeDisengageDist))
+        ) {
             combat.unarmedPressureUntil = Math.max(
                 combat.unarmedPressureUntil,
                 timeNow + BotTuning.unarmed.recentPressureResumeSec,
@@ -459,7 +473,12 @@ export class UnarmedBotBrain implements BotBrain {
         } else if (fallbackLoot && fallbackLootAllowed) {
             state = "loot";
             reason = fallbackLoot.reason;
-        } else if (visibleHostile && threatContext.hostileAppearsUnarmed && threat.nearestNearbyHostileDist < 24) {
+        } else if (
+            visibleHostile &&
+            threatContext.hostileAppearsUnarmed &&
+            threat.nearestNearbyHostileDist <
+                BotTuning.unarmed.visibleMeleeDisengageDist
+        ) {
             state = "back_off";
             reason = "unarmed_visible_melee_disengage";
         } else if (underRecentPressure && combat.unarmedThreatPos) {
@@ -470,10 +489,18 @@ export class UnarmedBotBrain implements BotBrain {
             reason = "unarmed_seek_object";
         }
 
+        const macroLockedToZone =
+            timeNow < combat.macroLockUntil && isZoneMacroGoal(combat.macroGoal);
+        const weakPressureInterrupt =
+            farVisibleUnarmedPressure ||
+            (underRecentPressure &&
+                !enemyVeryClose &&
+                !threatContext.hostileHasShownGun &&
+                danger < brainProfile.retreatDangerMin);
         const stateLocked = timeNow < combat.stateLockUntil;
         if (stateLocked) {
             const canPreserveFarmState =
-                !underRecentPressure &&
+                (!underRecentPressure || weakPressureInterrupt) &&
                 !recentlyDamaged &&
                 (!visibleHostile ||
                     threatContext.hostileAppearsUnarmed ||
@@ -497,6 +524,23 @@ export class UnarmedBotBrain implements BotBrain {
             ) {
                 state = prevState;
                 reason = combat.stateReason;
+            }
+        }
+
+        if (
+            macroLockedToZone &&
+            weakPressureInterrupt &&
+            (state === "back_off" || state === "seek_cover")
+        ) {
+            if (objectGoal && objectGoalAllowed) {
+                state = "interact_object";
+                reason = objectGoal.reason;
+            } else if (immediateGun || (fallbackLoot && fallbackLootAllowed)) {
+                state = "loot";
+                reason = immediateGun ? "unarmed_find_gun" : fallbackLoot!.reason;
+            } else {
+                state = "wander";
+                reason = "unarmed_seek_object";
             }
         }
 
@@ -808,11 +852,11 @@ export class UnarmedBotBrain implements BotBrain {
                 macroGoal: lowHp ? "heal" : "disengage",
                 macroReason: reason,
                 tacticalGoal: safeZoneRetreat
-                    ? "move_to_safe_zone"
+                    ? "move_to_safe_position"
                     : state === "seek_cover"
                       ? "seek_cover"
                       : "back_off",
-                tacticalReason: safeZoneRetreat ? "safe_zone_retreat" : reason,
+                tacticalReason: safeZoneRetreat ? "safe_position_retreat" : reason,
                 targetZoneId: zoneMeta?.targetZoneId,
                 targetBuildingId: zoneMeta?.targetBuildingId,
                 targetZonePos: zoneMeta?.targetZonePos,
@@ -835,11 +879,8 @@ export class UnarmedBotBrain implements BotBrain {
             });
         }
 
-        const decisionChanged =
-            stateChanged ||
-            prevEmergencyState !== combat.emergencyState ||
-            prevMacroGoal !== combat.macroGoal ||
-            prevTacticalGoal !== combat.tacticalGoal;
+        const afterDecision = captureDecisionSnapshot(combat);
+        const decisionChanged = hasDecisionSnapshotChanged(beforeDecision, afterDecision);
 
         if (Config.bots.debugCombat && decisionChanged) {
             logBotCombat(game, {

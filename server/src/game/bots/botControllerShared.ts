@@ -23,6 +23,7 @@ import type {
 } from "./botCombat";
 import {
     compatibilityStateFromTacticalGoal,
+    fallbackTacticalGoalForMacroGoal,
     isTacticalGoalAllowedForMacroGoal,
     isTravelTacticalGoal,
     isZoneMacroGoal,
@@ -35,6 +36,65 @@ import {
 import { logBotStability } from "./botStabilityLogger";
 import { BotTuning } from "./botTuning";
 import type { BotPerception } from "./systems/botPerception";
+
+type DecisionSnapshot = {
+    state: string;
+    stateReason: string;
+    emergencyState?: string;
+    emergencyReason: string;
+    macroGoal?: string;
+    macroReason: string;
+    tacticalGoal?: string;
+    tacticalReason: string;
+    targetZoneId?: number;
+    targetBuildingId?: number;
+    zoneScore?: number;
+    goalX?: number;
+    goalY?: number;
+    movementStyle: string;
+    lootTargetId?: number;
+    objectTargetId?: number;
+    objectInteractionMode?: string;
+    subGoal?: string;
+    resumeAfterSubGoal: boolean;
+};
+
+function roundedCoord(value: number | undefined): number | undefined {
+    return value !== undefined ? Number(value.toFixed(2)) : undefined;
+}
+
+export function captureDecisionSnapshot(combat: BotCombatMemory): DecisionSnapshot {
+    return {
+        state: combat.state,
+        stateReason: combat.stateReason,
+        emergencyState: combat.emergencyState,
+        emergencyReason: combat.emergencyReason,
+        macroGoal: combat.macroGoal,
+        macroReason: combat.macroReason,
+        tacticalGoal: combat.tacticalGoal,
+        tacticalReason: combat.tacticalReason,
+        targetZoneId: combat.targetZoneId,
+        targetBuildingId: combat.targetBuildingId,
+        zoneScore:
+            combat.zoneScore !== undefined ? Number(combat.zoneScore.toFixed(2)) : undefined,
+        goalX: roundedCoord(combat.goalPos?.x),
+        goalY: roundedCoord(combat.goalPos?.y),
+        movementStyle: combat.movementStyle,
+        lootTargetId: combat.lootTargetId,
+        objectTargetId: combat.objectTargetId,
+        objectInteractionMode: combat.objectInteractionMode,
+        subGoal: combat.subGoal,
+        resumeAfterSubGoal: combat.resumeAfterSubGoal,
+    };
+}
+
+export function hasDecisionSnapshotChanged(
+    before: DecisionSnapshot,
+    after: DecisionSnapshot,
+): boolean {
+    const keys = Object.keys(before) as Array<keyof DecisionSnapshot>;
+    return keys.some((key) => before[key] !== after[key]);
+}
 
 export function resolveValidTarget(
     game: Game,
@@ -381,7 +441,7 @@ export function setDecisionContext(
         tacticalGoal,
     )
         ? tacticalGoal
-        : undefined;
+        : fallbackTacticalGoalForMacroGoal(macroGoal);
     combat.setTacticalGoal(tacticalGoal, timeNow, tacticalReason);
     combat.targetZoneId = targetZoneId;
     combat.targetBuildingId = targetBuildingId;

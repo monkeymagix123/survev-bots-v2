@@ -8,7 +8,9 @@ import { v2 } from "../../../../../shared/utils/v2";
 import { Config } from "../../../config";
 import type { BotBrainType } from "../botBrain";
 import {
+    captureDecisionSnapshot,
     getDecisionLogFields,
+    hasDecisionSnapshotChanged,
     setDecisionContext,
     tacticalGoalFromCombatState,
 } from "../botControllerShared";
@@ -80,9 +82,7 @@ export class RealisticBotBrain implements BotBrain {
         }
 
         const prevState = combat.state;
-        const prevEmergencyState = combat.emergencyState;
-        const prevMacroGoal = combat.macroGoal;
-        const prevTacticalGoal = combat.tacticalGoal;
+        const beforeDecision = captureDecisionSnapshot(combat);
         const prevObjectTargetId = combat.objectTargetId;
         const prevObjectInteractionMode = combat.objectInteractionMode;
         const prevObjectGoal = combat.goalPos ? v2.copy(combat.goalPos) : undefined;
@@ -130,11 +130,10 @@ export class RealisticBotBrain implements BotBrain {
                 targetZonePos: game.gas.posNew,
             });
 
-            const decisionChanged =
-                prevState !== combat.state ||
-                prevEmergencyState !== combat.emergencyState ||
-                prevMacroGoal !== combat.macroGoal ||
-                prevTacticalGoal !== combat.tacticalGoal;
+            const decisionChanged = hasDecisionSnapshotChanged(
+                beforeDecision,
+                captureDecisionSnapshot(combat),
+            );
             if (Config.bots.debugCombat && decisionChanged) {
                 const { weaponClass } = weaponLogic.getWeaponInfo(player);
                 logBotCombat(game, {
@@ -291,11 +290,10 @@ export class RealisticBotBrain implements BotBrain {
                 });
             }
 
-            const decisionChanged =
-                prevState !== combat.state ||
-                prevEmergencyState !== combat.emergencyState ||
-                prevMacroGoal !== combat.macroGoal ||
-                prevTacticalGoal !== combat.tacticalGoal;
+            const decisionChanged = hasDecisionSnapshotChanged(
+                beforeDecision,
+                captureDecisionSnapshot(combat),
+            );
 
             if (Config.bots.debugCombat && decisionChanged) {
                 const { gunDef, weaponClass } = weaponLogic.getWeaponInfo(player);
@@ -904,10 +902,10 @@ export class RealisticBotBrain implements BotBrain {
                 macroGoal: "heal",
                 macroReason: "low_hp",
                 tacticalGoal: movesDeeperIntoSafeZone
-                    ? "move_to_safe_zone"
+                    ? "move_to_safe_position"
                     : "retreat_heal",
                 tacticalReason: movesDeeperIntoSafeZone
-                    ? "safe_zone_heal_route"
+                    ? "safe_position_heal_route"
                     : reason,
             });
         } else if (state === "loot" && opportunisticLoot) {
@@ -950,20 +948,19 @@ export class RealisticBotBrain implements BotBrain {
                     disengageState ? reason : "engaged_target",
                 tacticalGoal:
                     disengageState && movesDeeperIntoSafeZone
-                        ? "move_to_safe_zone"
+                        ? "move_to_safe_position"
                         : tacticalGoalFromCombatState(state),
                 tacticalReason:
                     disengageState && movesDeeperIntoSafeZone
-                        ? "safe_zone_disengage_route"
+                        ? "safe_position_disengage_route"
                         : reason,
             });
         }
 
-        const decisionChanged =
-            stateChanged ||
-            prevEmergencyState !== combat.emergencyState ||
-            prevMacroGoal !== combat.macroGoal ||
-            prevTacticalGoal !== combat.tacticalGoal;
+        const decisionChanged = hasDecisionSnapshotChanged(
+            beforeDecision,
+            captureDecisionSnapshot(combat),
+        );
 
         if (Config.bots.debugCombat && decisionChanged) {
             logBotCombat(game, {

@@ -27,6 +27,7 @@ export type BotMacroGoal =
 export type BotTacticalGoal =
     | "move_to_zone"
     | "move_to_safe_zone"
+    | "move_to_safe_position"
     | "enter_building"
     | "exit_building"
     | "pickup_loot"
@@ -58,11 +59,13 @@ export function isTravelTacticalGoal(
 ): tacticalGoal is
     | "move_to_zone"
     | "move_to_safe_zone"
+    | "move_to_safe_position"
     | "enter_building"
     | "exit_building" {
     return (
         tacticalGoal === "move_to_zone" ||
         tacticalGoal === "move_to_safe_zone" ||
+        tacticalGoal === "move_to_safe_position" ||
         tacticalGoal === "enter_building" ||
         tacticalGoal === "exit_building"
     );
@@ -74,6 +77,7 @@ export function compatibilityStateFromTacticalGoal(
     switch (tacticalGoal) {
         case "move_to_zone":
         case "move_to_safe_zone":
+        case "move_to_safe_position":
         case "enter_building":
         case "exit_building":
             return undefined;
@@ -108,7 +112,6 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
         "use_door",
         "enter_building",
         "exit_building",
-        "move_to_safe_zone",
     ],
     loot_building: [
         "move_to_zone",
@@ -117,7 +120,6 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
         "pickup_loot",
         "break_crate",
         "use_door",
-        "move_to_safe_zone",
     ],
     rotate_safe: [
         "move_to_safe_zone",
@@ -144,13 +146,38 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
         "back_off",
         "seek_cover",
         "move_to_safe_zone",
+        "move_to_safe_position",
         "enter_building",
         "exit_building",
         "retreat_reload",
         "retreat_heal",
     ],
-    heal: ["retreat_heal", "seek_cover", "back_off", "move_to_safe_zone"],
+    heal: [
+        "retreat_heal",
+        "seek_cover",
+        "back_off",
+        "move_to_safe_zone",
+        "move_to_safe_position",
+    ],
 } as const;
+
+export function fallbackTacticalGoalForMacroGoal(
+    macroGoal: BotMacroGoal | undefined,
+): BotTacticalGoal {
+    switch (macroGoal) {
+        case "loot_zone":
+        case "loot_building":
+            return "move_to_zone";
+        case "rotate_safe":
+            return "move_to_safe_zone";
+        case "disengage":
+        case "heal":
+            return "move_to_safe_position";
+        case "fight":
+        default:
+            return "hold_range";
+    }
+}
 
 export function isTacticalGoalAllowedForMacroGoal(
     macroGoal: BotMacroGoal | undefined,
