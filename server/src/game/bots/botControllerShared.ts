@@ -259,16 +259,10 @@ export function tryUseInteractObject(
 
 export function tryUseTravelDoor(
     msg: net.InputMsg,
-    combat: BotCombatMemory,
+    _combat: BotCombatMemory,
     player: Player,
     doorTarget: Obstacle | undefined,
 ): boolean {
-    if (
-        combat.tacticalGoal !== "enter_building" &&
-        combat.tacticalGoal !== "exit_building"
-    ) {
-        return false;
-    }
     if (
         !doorTarget ||
         !doorTarget.isDoor ||

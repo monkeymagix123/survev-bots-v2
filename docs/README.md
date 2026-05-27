@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -70,6 +70,7 @@ Bots follow a lightweight priority stack:
   - auto doors are treated as passable transitions
   - manual unlocked doors are approached from the current side and actively used before crossing
   - walls/windows are not treated as fake openings
+- Building interior travel can now reuse those same real door semantics inside practical buildings, so bots can route through unlocked internal doors instead of treating room-to-room travel as a dead end
 - Use local cover-lite sampling under pressure
 - Waypoint scoring now also penalizes regional crowding, especially around armed players, so bots spread out more naturally instead of collapsing into one “safe” area
 - Respect gas/safe-zone pressure first
@@ -137,6 +138,7 @@ Bots follow a lightweight priority stack:
   - now includes chosen target/item ids plus final goal position / movement style
   - now also includes higher-level decision context such as `emergencyState`, `macroGoal`, `macroReason`, `tacticalGoal`, `tacticalReason`, `targetZoneId`, `targetBuildingId`, `zoneScore`, `subGoal`, `resumeAfterSubGoal`, and zone/target positions
   - travel logs can now distinguish `enter_tunnel`, `exit_tunnel`, `enter_building`, and `exit_building` instead of flattening all structure travel into generic movement
+  - interior manual-door travel now shows up as `use_door` when bots are actually traversing that door
 - `Config.bots.debugMapIndicators`
   - shows live bot positions through the same player-status / minimap-position path used for faction-style player markers
   - bots are marked with a distinct blue debug dot so they are easier to spot in solo-mode testing

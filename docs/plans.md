@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Done
 
@@ -133,6 +133,10 @@ Last updated: 2026-05-26
   - manual unlocked doors can now be approached and actively used during enter/exit routing
   - door candidates are now filtered to doors that are directly traversable without breaking, including auto-open one-way semantics
   - tactical logs can now distinguish `enter_tunnel` / `exit_tunnel` alongside `enter_building` / `exit_building`
+- Added the first practical interior-building traversal pass:
+  - same-building / same-structure blocked routes can now choose an internal unlocked door
+  - manual interior doors can now actually be used during travel instead of stalling at the doorway
+  - tactical logs can now show `use_door` for those interior manual-door crossings
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
 ## In Progress
@@ -149,13 +153,14 @@ Last updated: 2026-05-26
 - Continued practical structure navigation:
   - greenhouse/tunnel-style stair openings now have explicit transition routing
   - practical buildings now have lightweight entry/exit routing through real door objects, including manual unlocked doors
+  - blocked same-building routes can now progress through interior unlocked doors one doorway at a time
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.
 - Manual sanity-checking of the new layered decision model is still useful:
   - emergency / macro / tactical logs
   - `gas_escape` behavior
   - `move_to_safe_zone` routing
 - Broader building navigation is the next natural extension after this:
-  - room/interior traversal
+  - deeper multi-room / room-preference traversal
   - practical non-warehouse open-shell cases
   - more chase quality around building edges and exits
 
