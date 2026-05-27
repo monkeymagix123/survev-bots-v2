@@ -63,7 +63,9 @@ Bots follow a lightweight priority stack:
 - Can now use simple auto-door building entry/exit points for practical buildings like greenhouses, instead of oscillating between an outside loot target and the building shell
 - Stair-connected structures now get their own short committed transition target, so bots can step through tunnel/stair openings more deliberately when switching between surface and underground
 - Can now choose exterior building-corner detours when a structure shell is the thing blocking a pursuit route, instead of only doing tiny local sidesteps
+- Small local blockers like stones/trees now get a more deliberate orbit-style detour, so bots are more willing to move around them instead of just staring through blocked LOS
 - Can bias detours to slide along or peel away from large indestructible walls
+- Generic building entry/exit routing stays conservative and now trusts explicit auto-door / structured openings only, so bots are less likely to mistake solid walls or windows for valid entry points
 - Use local cover-lite sampling under pressure
 - Waypoint scoring now also penalizes regional crowding, especially around armed players, so bots spread out more naturally instead of collapsing into one “safe” area
 - Respect gas/safe-zone pressure first

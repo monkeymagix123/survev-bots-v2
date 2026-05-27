@@ -123,6 +123,10 @@ Last updated: 2026-05-26
   - `move_to_safe_zone` is now reserved for broader safe-zone routing, while `move_to_safe_position` covers safer local fallback routes during disengage/heal behavior
   - unarmed recent-pressure memory now ignores weak far-visible melee-only pressure more often, so committed loot-zone travel is less likely to be interrupted for bad reasons
   - tactical goals now always fall back to a defined value
+- Added another practical nav pass:
+  - small blockers like stones/trees now get local orbit-style detours
+  - generic building entry/exit routing stays conservative and trusts explicit auto-door / structured openings
+  - stair transitions now sample slight side variants at the opening instead of only one center point
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
 ## In Progress

@@ -165,7 +165,9 @@ Movement is state-driven and separate from shooting.
 - stair-connected structures now get a short committed transition target, so bots can more reliably move through surface/underground stair openings instead of dithering at the threshold
 - simple auto-door building entry/exit routing now helps practical buildings like greenhouses, so bots can leave for nearby outside loot or enter for an inside goal without treating the shell like a generic wall
 - when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
+- when a small standalone blocker like a stone or tree is the first obstacle in a combat path, nav now tries a local orbit-style detour around that blocker before falling back to generic sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
+- generic building enter/exit routing stays conservative and prefers explicit auto-door / structured openings, which avoids pretending that arbitrary wall sides or windows are valid entry points
 - waypoint candidate scoring now applies a regional crowd penalty, with extra weight for nearby armed players, so safe-zone roaming does not keep pulling the whole lobby toward the same cluster
 
 It is **not** full pathfinding.

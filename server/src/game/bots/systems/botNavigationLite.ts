@@ -884,6 +884,17 @@ export class BotNavigationLite {
             return buildingCornerWaypoint;
         }
 
+        const blockerOrbitWaypoint = this._pickBlockerOrbitWaypoint(
+            game,
+            player,
+            goal,
+            directTrace,
+            gasEmergency,
+        );
+        if (blockerOrbitWaypoint) {
+            return blockerOrbitWaypoint;
+        }
+
         const wallSlideWaypoint = this._pickWallSlideWaypoint(
             game,
             player,
@@ -1534,20 +1545,40 @@ export class BotNavigationLite {
                 v2.sub(sideCenter, stair.center),
                 targetLayer === 0 ? v2.create(0, 1) : v2.create(0, -1),
             );
-            const candidate = v2.add(
-                sideCenter,
-                v2.mul(pushDir, BotTuning.navigation.stairExitInset),
-            );
-            game.map.clampToMapBounds(candidate, player.rad);
-            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
+            const tangent = v2.perp(pushDir);
+            const candidates = [
+                v2.add(
+                    sideCenter,
+                    v2.mul(pushDir, BotTuning.navigation.stairExitInset),
+                ),
+                v2.add(
+                    v2.add(
+                        sideCenter,
+                        v2.mul(pushDir, BotTuning.navigation.stairExitInset),
+                    ),
+                    v2.mul(tangent, 1.2),
+                ),
+                v2.add(
+                    v2.add(
+                        sideCenter,
+                        v2.mul(pushDir, BotTuning.navigation.stairExitInset),
+                    ),
+                    v2.mul(tangent, -1.2),
+                ),
+            ];
 
-            const trace = this._traceRoute(game, player, player.pos, candidate);
-            if (trace.blocked) continue;
+            for (const candidate of candidates) {
+                game.map.clampToMapBounds(candidate, player.rad);
+                if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
 
-            const score = v2.distance(player.pos, candidate);
-            if (score < bestScore) {
-                bestScore = score;
-                bestCandidate = v2.copy(candidate);
+                const trace = this._traceRoute(game, player, player.pos, candidate);
+                if (trace.blocked) continue;
+
+                const score = v2.distance(player.pos, candidate);
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestCandidate = v2.copy(candidate);
+                }
             }
         }
 
@@ -1666,7 +1697,7 @@ export class BotNavigationLite {
         gasEmergency: boolean,
         mode: "enter" | "exit",
     ): Vec2 | undefined {
-        const candidates = this._getBuildingDoorCandidates(
+        const candidates = this._getBuildingTransitionCandidates(
             game,
             player,
             building,
@@ -1690,7 +1721,7 @@ export class BotNavigationLite {
         return bestCandidate;
     }
 
-    private _getBuildingDoorCandidates(
+    private _getBuildingTransitionCandidates(
         game: Game,
         player: Player,
         building: Building,
@@ -1953,6 +1984,103 @@ export class BotNavigationLite {
             : undefined;
     }
 
+    private _pickBlockerOrbitWaypoint(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+        directTrace: RouteTrace,
+        gasEmergency: boolean,
+    ): { pos: Vec2; blockerId?: number; sideSign?: -1 | 1 } | undefined {
+        const blocker = directTrace.hitObstacle;
+        if (!blocker || blocker.parentBuilding || this._isLargeIndestructibleWall(blocker)) {
+            return undefined;
+        }
+
+        const blockerAabb = collider.toAabb(blocker.collider);
+        const halfSize = v2.mul(v2.sub(blockerAabb.max, blockerAabb.min), 0.5);
+        const orbitRadius =
+            Math.max(halfSize.x, halfSize.y) +
+            player.rad +
+            BotTuning.navigation.blockerOrbitClearanceDist;
+        const fromCenterToPlayer = v2.normalizeSafe(
+            v2.sub(player.pos, blocker.pos),
+            v2.create(1, 0),
+        );
+        const tangent = v2.perp(fromCenterToPlayer);
+        const towardGoal = v2.normalizeSafe(v2.sub(goal, blocker.pos), tangent);
+
+        let bestPos: Vec2 | undefined;
+        let bestScore = -Infinity;
+        let bestSideSign: -1 | 1 | undefined;
+        const directCoverage = directTrace.hitDist / Math.max(directTrace.len, 0.001);
+        const preferCommittedSide =
+            this._detourBlockerId === blocker.__id &&
+            this._time < this._detourCommitUntil
+                ? this._detourSideSign
+                : undefined;
+
+        for (const sideSign of [-1, 1] as const) {
+            const nearDir = v2.normalizeSafe(
+                v2.add(fromCenterToPlayer, v2.mul(tangent, sideSign * 1.1)),
+                fromCenterToPlayer,
+            );
+            const farDir = v2.normalizeSafe(
+                v2.add(towardGoal, v2.mul(tangent, sideSign * 0.9)),
+                towardGoal,
+            );
+            const candidates = [
+                v2.add(blocker.pos, v2.mul(nearDir, orbitRadius)),
+                v2.add(
+                    v2.add(blocker.pos, v2.mul(farDir, orbitRadius)),
+                    v2.mul(towardGoal, BotTuning.navigation.blockerOrbitForwardBiasDist),
+                ),
+            ];
+
+            for (const candidate of candidates) {
+                game.map.clampToMapBounds(candidate, player.rad);
+                if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
+                if (this._isRecentlyFailed(candidate)) continue;
+
+                const firstLeg = this._traceRoute(game, player, player.pos, candidate);
+                if (firstLeg.blocked) continue;
+
+                const secondLeg = this._traceRoute(game, player, candidate, goal);
+                const secondCoverage = secondLeg.hitDist / Math.max(secondLeg.len, 0.001);
+                if (secondLeg.blocked && secondCoverage <= directCoverage + 0.08) {
+                    continue;
+                }
+
+                const candidateToGoal = v2.distance(candidate, goal);
+                const progress = directTrace.len - candidateToGoal;
+                const score =
+                    (secondLeg.blocked ? 0 : 950) +
+                    secondCoverage * 180 +
+                    progress * 7 -
+                    v2.distance(player.pos, candidate) * 1.2 -
+                    candidateToGoal * 0.22;
+                const sideCommitBonus =
+                    preferCommittedSide !== undefined &&
+                    preferCommittedSide === sideSign
+                        ? BotTuning.navigation.detourSameSideBonus
+                        : 0;
+
+                if (score + sideCommitBonus > bestScore) {
+                    bestScore = score + sideCommitBonus;
+                    bestPos = v2.copy(candidate);
+                    bestSideSign = sideSign;
+                }
+            }
+        }
+
+        return bestPos
+            ? {
+                  pos: bestPos,
+                  blockerId: blocker.__id,
+                  sideSign: bestSideSign,
+              }
+            : undefined;
+    }
+
     private _isLargeIndestructibleWall(obstacle: Obstacle): boolean {
         if (obstacle.destructible || !obstacle.isWall) return false;
         const wallAabb = collider.toAabb(obstacle.collider);
@@ -1966,7 +2094,7 @@ export class BotNavigationLite {
     }
 
     private _blocksMovement(player: Player, obstacle: Obstacle): boolean {
-        if (obstacle.dead || !obstacle.collidable || obstacle.isWindow) return false;
+        if (obstacle.dead || !obstacle.collidable) return false;
         if (!util.sameLayer(obstacle.layer, player.layer)) return false;
         if (obstacle.isDoor && obstacle.door?.autoOpen && !obstacle.door.locked) {
             return false;

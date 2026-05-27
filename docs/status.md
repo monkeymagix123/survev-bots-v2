@@ -66,6 +66,10 @@ Last updated: 2026-05-26
   - `move_to_safe_zone` now refers to broader safe-zone progress, while `move_to_safe_position` covers safer local fallback movement
   - far visible melee-only pressure no longer interrupts unarmed loot-zone commitment as aggressively
   - tactical goals now always fall back to a defined value
+- Added another practical navigation pass:
+  - local orbit detours around stones/trees and similar blockers
+  - stricter building entry/exit routing so walls/windows are less likely to be treated as openings
+  - slightly more forgiving stair-opening candidate sampling
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
