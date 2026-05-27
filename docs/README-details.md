@@ -179,6 +179,7 @@ Movement is state-driven and separate from shooting.
   - if the direct route to an interior goal is blocked, nav builds a lightweight door graph over unlocked interior doors in the current building or same parent structure on the same layer
   - manual doors are approached on the current side, used, and then crossed
   - the bot then continues toward the next practical doorway on the path, so room-to-room travel is now true point-to-point indoor routing rather than only “pick one useful door and reevaluate”
+  - controller-side door travel now uses a tighter side-aware door-use approach point plus a smaller arrival/deadzone window, which helps prevent hovering just outside the doorway
 - when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
 - when a small standalone blocker like a stone or tree is the first obstacle in a combat path, nav now tries a local orbit-style detour around that blocker before falling back to generic sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker

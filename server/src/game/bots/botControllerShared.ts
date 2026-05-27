@@ -324,6 +324,32 @@ export function getMeleeApproachGoal(
     return approach;
 }
 
+export function getDoorUseApproachGoal(
+    game: Game,
+    player: Player,
+    obstacle: Obstacle,
+): Vec2 {
+    const boundaryPoint = getObstacleBoundaryPointTowardPlayer(player, obstacle);
+    let awayDir = v2.sub(player.pos, boundaryPoint);
+    if (v2.lengthSqr(awayDir) <= 0.0001) {
+        awayDir = v2.sub(player.pos, obstacle.pos);
+    }
+    if (v2.lengthSqr(awayDir) <= 0.0001) {
+        awayDir = v2.copy(player.dir);
+    }
+    const outward = v2.normalizeSafe(awayDir, v2.create(1, 0));
+    const interactionSlack = Math.max(
+        0.12,
+        Math.min(
+            Math.max(obstacle.interactionRad + player.rad - 0.2, 0.12),
+            0.75,
+        ),
+    );
+    const approach = v2.add(boundaryPoint, v2.mul(outward, interactionSlack));
+    game.map.clampToMapBounds(approach, player.rad);
+    return approach;
+}
+
 export function logIdleReason(params: {
     game: Game;
     brainType: BotBrainType;

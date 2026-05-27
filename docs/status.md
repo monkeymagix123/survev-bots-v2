@@ -78,6 +78,7 @@ Last updated: 2026-05-27
   - tactical logs can now distinguish `enter_tunnel` / `exit_tunnel` / `enter_building` / `exit_building`
 - Added a first real interior-building traversal pass so blocked same-building / same-structure routes can follow a lightweight unlocked-door graph toward another interior point instead of treating room-to-room travel as a dead end
 - Manual interior-door travel now shows up as `use_door` in tactical logging when that is the practical next step
+- Tightened manual-door approach movement so bots use a smaller door-use arrival/deadzone window and are less likely to stall just outside the doorway
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
