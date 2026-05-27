@@ -25,6 +25,7 @@ import {
     applyHealCancelInput,
     clearObjectInteraction,
     chooseSupportUseItem,
+    getDoorUseApproachGoal,
     getMeleeApproachGoal,
     getObjectTarget,
     isInMeleeRange,
@@ -235,6 +236,15 @@ export class BotController {
             this._combat.state === "interact_object" &&
             this._combat.objectInteractionMode === "melee_break" &&
             !!objectTarget;
+        const manualUseObjectActive =
+            this._combat.state === "interact_object" &&
+            this._combat.objectInteractionMode === "use" &&
+            !!objectTarget;
+        const preTravelDoorTarget = this._navigation.getTravelUseDoorTarget(
+            this.game,
+            player,
+            this._combat.goalPos,
+        );
         if (
             meleeBreakActive &&
             (player.curWeapIdx === GameConfig.WeaponSlot.Primary ||
@@ -246,16 +256,25 @@ export class BotController {
             meleeBreakActive && objectTarget
                 ? getMeleeApproachGoal(this.game, player, objectTarget)
                 : undefined;
+        const useDoorApproachGoal =
+            manualUseObjectActive && objectTarget
+                ? getDoorUseApproachGoal(this.game, player, objectTarget)
+                : preTravelDoorTarget
+                  ? getDoorUseApproachGoal(this.game, player, preTravelDoorTarget)
+                  : undefined;
+        const doorUseActive = !!useDoorApproachGoal;
         const goalArriveDist = meleeBreakActive
             ? BotTuning.objectInteract.meleeArriveDist
-            : BotTuning.navigation.arriveDist;
+            : doorUseActive
+              ? 0.2
+              : BotTuning.navigation.arriveDist;
 
         const goal = this._navigation.getGoal(
             this.game,
             player,
             gasEmergency,
             validTarget?.pos,
-            meleeApproachGoal ?? this._combat.goalPos,
+            meleeApproachGoal ?? useDoorApproachGoal ?? this._combat.goalPos,
             goalArriveDist,
         );
 
@@ -329,6 +348,8 @@ export class BotController {
             dt,
             moveDeadzone: meleeBreakActive
                 ? BotTuning.objectInteract.meleeMoveDeadzone
+                : doorUseActive
+                  ? 0.2
                 : undefined,
         });
 
@@ -371,11 +392,13 @@ export class BotController {
             this._lootScorer.markFailedLootTarget(previousLootTargetId, this._time);
         }
         applyLootInputs(msg, this._combat, player, lootTarget);
-        const travelDoorTarget = this._navigation.getTravelUseDoorTarget(
-            this.game,
-            player,
-            this._combat.goalPos,
-        );
+        const travelDoorTarget =
+            preTravelDoorTarget ??
+            this._navigation.getTravelUseDoorTarget(
+                this.game,
+                player,
+                this._combat.goalPos,
+            );
         tryUseTravelDoor(msg, this._combat, player, travelDoorTarget);
 
         const threat = this._perception.threat;
