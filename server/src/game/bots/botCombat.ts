@@ -28,6 +28,8 @@ export type BotTacticalGoal =
     | "move_to_zone"
     | "move_to_safe_zone"
     | "move_to_safe_position"
+    | "enter_tunnel"
+    | "exit_tunnel"
     | "enter_building"
     | "exit_building"
     | "pickup_loot"
@@ -60,12 +62,16 @@ export function isTravelTacticalGoal(
     | "move_to_zone"
     | "move_to_safe_zone"
     | "move_to_safe_position"
+    | "enter_tunnel"
+    | "exit_tunnel"
     | "enter_building"
     | "exit_building" {
     return (
         tacticalGoal === "move_to_zone" ||
         tacticalGoal === "move_to_safe_zone" ||
         tacticalGoal === "move_to_safe_position" ||
+        tacticalGoal === "enter_tunnel" ||
+        tacticalGoal === "exit_tunnel" ||
         tacticalGoal === "enter_building" ||
         tacticalGoal === "exit_building"
     );
@@ -78,6 +84,8 @@ export function compatibilityStateFromTacticalGoal(
         case "move_to_zone":
         case "move_to_safe_zone":
         case "move_to_safe_position":
+        case "enter_tunnel":
+        case "exit_tunnel":
         case "enter_building":
         case "exit_building":
             return undefined;
@@ -110,11 +118,15 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
         "pickup_loot",
         "break_crate",
         "use_door",
+        "enter_tunnel",
+        "exit_tunnel",
         "enter_building",
         "exit_building",
     ],
     loot_building: [
         "move_to_zone",
+        "enter_tunnel",
+        "exit_tunnel",
         "enter_building",
         "exit_building",
         "pickup_loot",
@@ -123,6 +135,8 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
     ],
     rotate_safe: [
         "move_to_safe_zone",
+        "enter_tunnel",
+        "exit_tunnel",
         "enter_building",
         "exit_building",
         "pickup_loot",
@@ -138,6 +152,8 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
         "chase_last_seen",
         "retreat_reload",
         "retreat_heal",
+        "enter_tunnel",
+        "exit_tunnel",
         "pickup_loot",
         "break_crate",
         "use_door",
@@ -147,6 +163,8 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
         "seek_cover",
         "move_to_safe_zone",
         "move_to_safe_position",
+        "enter_tunnel",
+        "exit_tunnel",
         "enter_building",
         "exit_building",
         "retreat_reload",
@@ -158,6 +176,8 @@ export const AllowedTacticalGoalsByMacroGoal: Record<
         "back_off",
         "move_to_safe_zone",
         "move_to_safe_position",
+        "enter_tunnel",
+        "exit_tunnel",
     ],
 } as const;
 

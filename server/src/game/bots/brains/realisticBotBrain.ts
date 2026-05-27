@@ -125,7 +125,12 @@ export class RealisticBotBrain implements BotBrain {
                 emergencyReason: "in_gas_or_outside_safe",
                 macroGoal: "rotate_safe",
                 macroReason: "gas_escape",
-                tacticalGoal: "move_to_safe_zone",
+                tacticalGoal: navigation.getTravelTacticalGoal(
+                    game,
+                    player,
+                    combat.goalPos,
+                    "move_to_safe_zone",
+                ),
                 tacticalReason: "gas_escape",
                 targetZonePos: game.gas.posNew,
             });
@@ -278,10 +283,14 @@ export class RealisticBotBrain implements BotBrain {
                     timeNow,
                     macroGoal: zoneMeta?.macroGoal ?? "rotate_safe",
                     macroReason: zoneMeta?.macroGoal ? "zone_commit" : "no_target",
-                    tacticalGoal:
+                    tacticalGoal: navigation.getTravelTacticalGoal(
+                        game,
+                        player,
+                        combat.goalPos,
                         (zoneMeta?.macroGoal ?? "rotate_safe") === "rotate_safe"
                             ? "move_to_safe_zone"
                             : "move_to_zone",
+                    ),
                     tacticalReason: "follow_waypoint",
                     targetZoneId: zoneMeta?.targetZoneId,
                     targetBuildingId: zoneMeta?.targetBuildingId,
@@ -901,9 +910,14 @@ export class RealisticBotBrain implements BotBrain {
                 timeNow,
                 macroGoal: "heal",
                 macroReason: "low_hp",
-                tacticalGoal: movesDeeperIntoSafeZone
-                    ? "move_to_safe_position"
-                    : "retreat_heal",
+                tacticalGoal: navigation.getTravelTacticalGoal(
+                    game,
+                    player,
+                    combat.goalPos,
+                    movesDeeperIntoSafeZone
+                        ? "move_to_safe_position"
+                        : "retreat_heal",
+                ),
                 tacticalReason: movesDeeperIntoSafeZone
                     ? "safe_position_heal_route"
                     : reason,
@@ -946,10 +960,20 @@ export class RealisticBotBrain implements BotBrain {
                     disengageState ? "disengage" : "fight",
                 macroReason:
                     disengageState ? reason : "engaged_target",
-                tacticalGoal:
-                    disengageState && movesDeeperIntoSafeZone
-                        ? "move_to_safe_position"
-                        : tacticalGoalFromCombatState(state),
+                tacticalGoal: disengageState
+                    ? navigation.getTravelTacticalGoal(
+                          game,
+                          player,
+                          combat.goalPos,
+                          movesDeeperIntoSafeZone
+                              ? "move_to_safe_position"
+                              : state === "seek_cover"
+                                ? "seek_cover"
+                                : state === "back_off"
+                                  ? "back_off"
+                                  : "retreat_reload",
+                      )
+                    : tacticalGoalFromCombatState(state),
                 tacticalReason:
                     disengageState && movesDeeperIntoSafeZone
                         ? "safe_position_disengage_route"

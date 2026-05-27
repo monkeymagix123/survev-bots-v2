@@ -14,7 +14,7 @@ import type { Player } from "../../objects/player";
 import type { Structure } from "../../objects/structure";
 import { isBotUnarmed } from "../botDecisionSupport";
 import { BotTuning } from "../botTuning";
-import type { BotMacroGoal } from "../botCombat";
+import type { BotMacroGoal, BotTacticalGoal } from "../botCombat";
 
 type FailedWaypoint = {
     pos: Vec2;
@@ -266,6 +266,27 @@ export class BotNavigationLite {
         }
 
         return activeGoal;
+    }
+
+    getTravelTacticalGoal(
+        game: Game,
+        player: Player,
+        goal: Vec2 | undefined,
+        fallback: BotTacticalGoal,
+    ): BotTacticalGoal {
+        if (!goal) return fallback;
+
+        const stairTactical = this._classifyStairTravelTacticalGoal(game, player, goal);
+        if (stairTactical) return stairTactical;
+
+        const buildingTactical = this._classifyBuildingTravelTacticalGoal(
+            game,
+            player,
+            goal,
+        );
+        if (buildingTactical) return buildingTactical;
+
+        return fallback;
     }
 
     observeMovement(params: {
@@ -1174,6 +1195,19 @@ export class BotNavigationLite {
         );
     }
 
+    private _classifyStairTravelTacticalGoal(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+    ): BotTacticalGoal | undefined {
+        const currentBaseLayer = util.toGroundLayer(player.layer) as 0 | 1;
+        const goalBaseLayer = this._getGoalBaseLayer(game, goal);
+        if (player.layer < 2 && currentBaseLayer === goalBaseLayer) {
+            return undefined;
+        }
+        return goalBaseLayer === 1 ? "enter_tunnel" : "exit_tunnel";
+    }
+
     private _getContainerExitGoal(
         game: Game,
         player: Player,
@@ -1722,6 +1756,37 @@ export class BotNavigationLite {
         }
 
         this._clearBuildingDoorTransition();
+        return undefined;
+    }
+
+    private _classifyBuildingTravelTacticalGoal(
+        game: Game,
+        player: Player,
+        goal: Vec2,
+    ): BotTacticalGoal | undefined {
+        const currentBuilding = this._getContainingStructuredBuilding(
+            game,
+            player.pos,
+            player.layer,
+            () => true,
+        );
+        if (
+            currentBuilding &&
+            !this._isPointInsideBuilding(currentBuilding, goal, player.layer)
+        ) {
+            return "exit_building";
+        }
+
+        const goalBuilding = this._getContainingStructuredBuilding(
+            game,
+            goal,
+            this._getGoalBaseLayer(game, goal),
+            () => true,
+        );
+        if (!currentBuilding && goalBuilding) {
+            return "enter_building";
+        }
+
         return undefined;
     }
 

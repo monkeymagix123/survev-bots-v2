@@ -128,7 +128,12 @@ export class UnarmedBotBrain implements BotBrain {
                 emergencyReason: "in_gas_or_outside_safe",
                 macroGoal: "rotate_safe",
                 macroReason: "gas_escape",
-                tacticalGoal: "move_to_safe_zone",
+                tacticalGoal: navigation.getTravelTacticalGoal(
+                    game,
+                    player,
+                    combat.goalPos,
+                    "move_to_safe_zone",
+                ),
                 tacticalReason: "gas_escape",
                 targetZonePos: game.gas.posNew,
             });
@@ -851,11 +856,16 @@ export class UnarmedBotBrain implements BotBrain {
                 timeNow,
                 macroGoal: lowHp ? "heal" : "disengage",
                 macroReason: reason,
-                tacticalGoal: safeZoneRetreat
-                    ? "move_to_safe_position"
-                    : state === "seek_cover"
-                      ? "seek_cover"
-                      : "back_off",
+                tacticalGoal: navigation.getTravelTacticalGoal(
+                    game,
+                    player,
+                    combat.goalPos,
+                    safeZoneRetreat
+                        ? "move_to_safe_position"
+                        : state === "seek_cover"
+                          ? "seek_cover"
+                          : "back_off",
+                ),
                 tacticalReason: safeZoneRetreat ? "safe_position_retreat" : reason,
                 targetZoneId: zoneMeta?.targetZoneId,
                 targetBuildingId: zoneMeta?.targetBuildingId,
@@ -867,10 +877,14 @@ export class UnarmedBotBrain implements BotBrain {
                 timeNow,
                 macroGoal: zoneMeta?.macroGoal ?? "rotate_safe",
                 macroReason: zoneMeta?.macroGoal ? "zone_commit" : "seek_safe_progress",
-                tacticalGoal:
+                tacticalGoal: navigation.getTravelTacticalGoal(
+                    game,
+                    player,
+                    combat.goalPos,
                     (zoneMeta?.macroGoal ?? "rotate_safe") === "rotate_safe"
                         ? "move_to_safe_zone"
                         : "move_to_zone",
+                ),
                 tacticalReason: "follow_waypoint",
                 targetZoneId: zoneMeta?.targetZoneId,
                 targetBuildingId: zoneMeta?.targetBuildingId,
