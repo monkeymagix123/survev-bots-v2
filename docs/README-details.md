@@ -176,9 +176,9 @@ Movement is state-driven and separate from shooting.
   - doors are only considered if they are directly traversable without breaking, including auto-open one-way side checks
   - this keeps practical buildings like greenhouses and houses aligned with actual `Obstacle.interact(...)` behavior instead of treating walls/windows as openings
 - same-building / same-structure interior travel now also reuses those real door objects:
-  - if the direct route to an interior goal is blocked, nav can pick an internal unlocked door in the current building
+  - if the direct route to an interior goal is blocked, nav builds a lightweight door graph over unlocked interior doors in the current building or same parent structure on the same layer
   - manual doors are approached on the current side, used, and then crossed
-  - after crossing one doorway, nav reevaluates again, so multi-room travel can progress one practical door at a time without pretending there is full indoor pathfinding
+  - the bot then continues toward the next practical doorway on the path, so room-to-room travel is now true point-to-point indoor routing rather than only “pick one useful door and reevaluate”
 - when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
 - when a small standalone blocker like a stone or tree is the first obstacle in a combat path, nav now tries a local orbit-style detour around that blocker before falling back to generic sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker

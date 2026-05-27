@@ -76,7 +76,7 @@ Last updated: 2026-05-27
   - manual unlocked doors can now be approached and actively used during enter/exit routing
   - door candidates are filtered to doors the server would actually let a player traverse without breaking
   - tactical logs can now distinguish `enter_tunnel` / `exit_tunnel` / `enter_building` / `exit_building`
-- Added a first interior-building traversal pass so blocked same-building routes can step through internal unlocked doors instead of treating room-to-room travel as a dead end
+- Added a first real interior-building traversal pass so blocked same-building / same-structure routes can follow a lightweight unlocked-door graph toward another interior point instead of treating room-to-room travel as a dead end
 - Manual interior-door travel now shows up as `use_door` in tactical logging when that is the practical next step
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
@@ -95,7 +95,7 @@ Last updated: 2026-05-27
 - Container/building-edge pursuit fixes for armed bots
 - More practical stair/building entry-exit sanity testing
 - Broader building navigation beyond doorway routing
-- Deeper multi-room building traversal and room choice
+- Better room preference / room choice inside larger buildings
 - More anti-oscillation work for unarmed movement
 - Manual sanity checks for the new layered decision model and `gas_escape` override path
 - Manual spectate tuning

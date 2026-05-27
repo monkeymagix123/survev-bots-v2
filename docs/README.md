@@ -70,7 +70,7 @@ Bots follow a lightweight priority stack:
   - auto doors are treated as passable transitions
   - manual unlocked doors are approached from the current side and actively used before crossing
   - walls/windows are not treated as fake openings
-- Building interior travel can now reuse those same real door semantics inside practical buildings, so bots can route through unlocked internal doors instead of treating room-to-room travel as a dead end
+- Building interior travel now uses a lightweight internal door graph inside practical buildings / same-structure rooms, so bots can move from one interior point toward another by traversing unlocked internal doors instead of treating room-to-room travel as a dead end
 - Use local cover-lite sampling under pressure
 - Waypoint scoring now also penalizes regional crowding, especially around armed players, so bots spread out more naturally instead of collapsing into one “safe” area
 - Respect gas/safe-zone pressure first

@@ -75,6 +75,8 @@ type WaypointMeta = {
     zoneScore?: number;
 };
 
+type DoorSideSign = -1 | 1;
+
 export class BotNavigationLite {
     waypoint?: Vec2;
     waypointTtl = 0;
@@ -1881,7 +1883,6 @@ export class BotNavigationLite {
             player,
             currentBuilding,
             goal,
-            directTrace,
             gasEmergency,
         );
         if (!transition) {
@@ -2013,68 +2014,180 @@ export class BotNavigationLite {
         player: Player,
         building: Building,
         goal: Vec2,
-        directTrace: RouteTrace,
         gasEmergency: boolean,
     ): BuildingDoorTransition | undefined {
         const insideInset = BotTuning.navigation.buildingDoorInsideInset;
         const outsideInset = BotTuning.navigation.buildingDoorOutsideInset;
-        let bestCandidate: BuildingDoorTransition | undefined;
-        let bestScore = -Infinity;
-        const directCoverage = directTrace.hitDist / Math.max(directTrace.len, 0.001);
+        const goalBuilding = this._getContainingStructuredBuilding(
+            game,
+            goal,
+            this._getGoalBaseLayer(game, goal),
+            () => true,
+        );
+        if (!goalBuilding) {
+            return undefined;
+        }
 
-        for (const obj of building.childObjects) {
-            if (obj.__type !== ObjectType.Obstacle) continue;
-            const obstacle = obj as Obstacle;
-            if (!util.sameLayer(obstacle.layer, player.layer)) continue;
+        type DoorGraphNode =
+            | { kind: "start"; pos: Vec2 }
+            | { kind: "goal"; pos: Vec2 }
+            | {
+                  kind: "door";
+                  pos: Vec2;
+                  doorId: number;
+                  buildingId: number;
+                  side: DoorSideSign;
+              };
 
-            const sidePoints = this._getBuildingDoorSidePoints(
-                game,
-                player,
-                building,
-                obstacle,
-                insideInset,
-                outsideInset,
-            );
-            const playerSide = this._getDoorSideForPoint(obstacle, player.pos);
-            const goalSide = this._getDoorSideForPoint(obstacle, goal);
-            if (playerSide === goalSide) continue;
+        const traversalBuildings = this._getInteriorTraversalBuildings(
+            game,
+            building,
+            goalBuilding,
+            player.layer,
+        );
+        const nodes: DoorGraphNode[] = [
+            { kind: "start", pos: v2.copy(player.pos) },
+            { kind: "goal", pos: v2.copy(goal) },
+        ];
 
-            const approachPos = playerSide < 0 ? sidePoints.inside : sidePoints.outside;
-            const crossPos = playerSide < 0 ? sidePoints.outside : sidePoints.inside;
-            if (!this._isDoorTraversableWithoutBreaking(obstacle, approachPos)) {
-                continue;
-            }
-            if (!this._isNavPointValid(game, player, approachPos, gasEmergency)) continue;
-            if (!this._isNavPointValid(game, player, crossPos, gasEmergency)) continue;
+        for (const traversalBuilding of traversalBuildings) {
+            for (const obj of traversalBuilding.childObjects) {
+                if (obj.__type !== ObjectType.Obstacle) continue;
+                const obstacle = obj as Obstacle;
+                if (!util.sameLayer(obstacle.layer, player.layer)) continue;
+                if (!obstacle.isDoor || !obstacle.door) continue;
 
-            const firstLeg = this._traceRoute(game, player, player.pos, approachPos);
-            if (firstLeg.blocked) continue;
+                const sidePoints = this._getBuildingDoorSidePoints(
+                    game,
+                    player,
+                    traversalBuilding,
+                    obstacle,
+                    insideInset,
+                    outsideInset,
+                );
 
-            const secondLeg = this._traceRoute(game, player, crossPos, goal);
-            const secondCoverage = secondLeg.hitDist / Math.max(secondLeg.len, 0.001);
-            if (secondLeg.blocked && secondCoverage <= directCoverage + 0.08) {
-                continue;
-            }
-
-            const score =
-                (secondLeg.blocked ? 0 : 1100) +
-                secondCoverage * 200 -
-                v2.distance(player.pos, approachPos) * 1.1 -
-                v2.distance(crossPos, goal) * 0.18;
-            if (score > bestScore) {
-                bestScore = score;
-                bestCandidate = {
-                    buildingId: building.__id,
-                    doorId: obstacle.__id,
-                    mode: "interior",
-                    targetSide: goalSide as -1 | 1,
-                    goal: v2.copy(goal),
-                    until: this._time + BotTuning.navigation.buildingDoorTransitionCommitSec,
-                };
+                for (const side of [-1, 1] as const) {
+                    const pos = sidePoints.bySide[side];
+                    if (!this._isDoorTraversableWithoutBreaking(obstacle, pos)) {
+                        continue;
+                    }
+                    if (!this._isNavPointValid(game, player, pos, gasEmergency)) continue;
+                    nodes.push({
+                        kind: "door",
+                        pos: v2.copy(pos),
+                        doorId: obstacle.__id,
+                        buildingId: traversalBuilding.__id,
+                        side,
+                    });
+                }
             }
         }
 
-        return bestCandidate;
+        if (nodes.length <= 2) {
+            return undefined;
+        }
+
+        const nodeCount = nodes.length;
+        const distances = new Array<number>(nodeCount).fill(Number.POSITIVE_INFINITY);
+        const previous = new Array<number>(nodeCount).fill(-1);
+        const visited = new Array<boolean>(nodeCount).fill(false);
+        distances[0] = 0;
+
+        const relax = (from: number, to: number, weight: number): void => {
+            const nextDist = distances[from] + weight;
+            if (nextDist < distances[to]) {
+                distances[to] = nextDist;
+                previous[to] = from;
+            }
+        };
+
+        for (let iter = 0; iter < nodeCount; iter++) {
+            let current = -1;
+            let bestDist = Number.POSITIVE_INFINITY;
+            for (let index = 0; index < nodeCount; index++) {
+                if (visited[index]) continue;
+                if (distances[index] < bestDist) {
+                    bestDist = distances[index];
+                    current = index;
+                }
+            }
+            if (current === -1 || current === 1) break;
+            visited[current] = true;
+
+            const currentNode = nodes[current];
+            for (let next = 0; next < nodeCount; next++) {
+                if (next === current || visited[next]) continue;
+                const nextNode = nodes[next];
+
+                if (
+                    currentNode.kind === "door" &&
+                    nextNode.kind === "door" &&
+                    currentNode.doorId === nextNode.doorId &&
+                    currentNode.side !== nextNode.side
+                ) {
+                    relax(current, next, 0.25);
+                    continue;
+                }
+
+                if (
+                    this._traceRoute(game, player, currentNode.pos, nextNode.pos).blocked
+                ) {
+                    continue;
+                }
+
+                relax(
+                    current,
+                    next,
+                    v2.distance(currentNode.pos, nextNode.pos),
+                );
+            }
+        }
+
+        if (!Number.isFinite(distances[1]) || previous[1] === -1) {
+            return undefined;
+        }
+
+        const path: number[] = [];
+        for (let cursor = 1; cursor !== -1; cursor = previous[cursor]) {
+            path.push(cursor);
+        }
+        path.reverse();
+
+        if (path.length < 2) {
+            return undefined;
+        }
+
+        const firstDoorIndex = path.find((index) => nodes[index]?.kind === "door");
+        if (firstDoorIndex === undefined) {
+            return undefined;
+        }
+
+        const firstPathIndex = path.indexOf(firstDoorIndex);
+        const firstDoorNode = nodes[firstDoorIndex];
+        if (firstDoorNode.kind !== "door") {
+            return undefined;
+        }
+
+        let targetSide = firstDoorNode.side;
+        const nextPathNode = path[firstPathIndex + 1]
+            ? nodes[path[firstPathIndex + 1]]
+            : undefined;
+        if (
+            nextPathNode?.kind === "door" &&
+            nextPathNode.doorId === firstDoorNode.doorId &&
+            nextPathNode.side !== firstDoorNode.side
+        ) {
+            targetSide = nextPathNode.side;
+        }
+
+        return {
+            buildingId: firstDoorNode.buildingId,
+            doorId: firstDoorNode.doorId,
+            mode: "interior",
+            targetSide,
+            goal: v2.copy(goal),
+            until: this._time + BotTuning.navigation.buildingDoorTransitionCommitSec,
+        };
     }
 
     private _getBuildingTransitionCandidates(
@@ -2121,6 +2234,34 @@ export class BotNavigationLite {
         return candidates;
     }
 
+    private _getInteriorTraversalBuildings(
+        game: Game,
+        currentBuilding: Building,
+        goalBuilding: Building,
+        layer: number,
+    ): Building[] {
+        const sameBuilding = currentBuilding.__id === goalBuilding.__id;
+        if (sameBuilding) {
+            return [currentBuilding];
+        }
+
+        const currentStructureId = currentBuilding.parentStructure?.__id;
+        const goalStructureId = goalBuilding.parentStructure?.__id;
+        if (!currentStructureId || currentStructureId !== goalStructureId) {
+            return [currentBuilding];
+        }
+
+        const buildings: Building[] = [];
+        for (const obj of game.objectRegister.objects) {
+            if (!obj || obj.__type !== ObjectType.Building) continue;
+            const building = obj as Building;
+            if (building.parentStructure?.__id !== currentStructureId) continue;
+            if (building.layer !== layer) continue;
+            buildings.push(building);
+        }
+        return buildings.length > 0 ? buildings : [currentBuilding];
+    }
+
     private _getBuildingDoorSidePoints(
         game: Game,
         player: Player,
@@ -2128,16 +2269,39 @@ export class BotNavigationLite {
         obstacle: Obstacle,
         insideInset: number,
         outsideInset: number,
-    ): { inside: Vec2; outside: Vec2 } {
-        const outward = v2.normalizeSafe(
-            v2.sub(obstacle.pos, building.pos),
-            v2.create(0, 1),
-        );
-        const inside = v2.add(obstacle.pos, v2.mul(outward, -insideInset));
-        const outside = v2.add(obstacle.pos, v2.mul(outward, outsideInset));
-        game.map.clampToMapBounds(inside, player.rad);
-        game.map.clampToMapBounds(outside, player.rad);
-        return { inside, outside };
+    ): { inside: Vec2; outside: Vec2; bySide: Record<DoorSideSign, Vec2> } {
+        const pointForSide = (side: DoorSideSign, dist: number): Vec2 => {
+            const doorDir = v2.rotate(v2.create(1, 0), obstacle.rot);
+            const signMul = side === -1 ? 1 : -1;
+            const point = v2.add(obstacle.pos, v2.mul(doorDir, dist * signMul));
+            game.map.clampToMapBounds(point, player.rad);
+            return point;
+        };
+
+        const probeDist = Math.max(0.45, Math.min(insideInset, outsideInset));
+        const probeNeg = pointForSide(-1, probeDist);
+        const probePos = pointForSide(1, probeDist);
+        const negInside = this._isPointInsideBuilding(building, probeNeg, player.layer);
+        const posInside = this._isPointInsideBuilding(building, probePos, player.layer);
+
+        let insideSide: DoorSideSign;
+        if (negInside !== posInside) {
+            insideSide = negInside ? -1 : 1;
+        } else {
+            insideSide = this._getDoorSideForPoint(obstacle, building.pos) as DoorSideSign;
+        }
+        const outsideSide: DoorSideSign = insideSide === -1 ? 1 : -1;
+
+        const bySide = {
+            [-1]: pointForSide(-1, insideSide === -1 ? insideInset : outsideInset),
+            [1]: pointForSide(1, insideSide === 1 ? insideInset : outsideInset),
+        } as Record<DoorSideSign, Vec2>;
+
+        return {
+            inside: bySide[insideSide],
+            outside: bySide[outsideSide],
+            bySide,
+        };
     }
 
     private _resolveBuildingDoorTransitionGoal(

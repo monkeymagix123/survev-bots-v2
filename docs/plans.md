@@ -134,8 +134,9 @@ Last updated: 2026-05-27
   - door candidates are now filtered to doors that are directly traversable without breaking, including auto-open one-way semantics
   - tactical logs can now distinguish `enter_tunnel` / `exit_tunnel` alongside `enter_building` / `exit_building`
 - Added the first practical interior-building traversal pass:
-  - same-building / same-structure blocked routes can now choose an internal unlocked door
+  - same-building / same-structure blocked routes now use a lightweight internal door graph on the current layer
   - manual interior doors can now actually be used during travel instead of stalling at the doorway
+  - bots can now progress toward a deeper interior point through multiple practical unlocked doors instead of only handling a single blocked doorway
   - tactical logs can now show `use_door` for those interior manual-door crossings
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
@@ -160,7 +161,7 @@ Last updated: 2026-05-27
   - `gas_escape` behavior
   - `move_to_safe_zone` routing
 - Broader building navigation is the next natural extension after this:
-  - deeper multi-room / room-preference traversal
+  - better room preference / room scoring inside larger buildings
   - practical non-warehouse open-shell cases
   - more chase quality around building edges and exits
 
