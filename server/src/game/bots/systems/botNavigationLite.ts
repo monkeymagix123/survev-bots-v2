@@ -38,9 +38,9 @@ type WarehouseTransition = {
 
 type StairTransition = {
     structureId: number;
+    stairIndex: number;
     targetLayer: 0 | 1;
     goal: Vec2;
-    opening: Vec2;
     until: number;
 };
 
@@ -189,12 +189,6 @@ export class BotNavigationLite {
             this._reachedPoint(player.pos, this._fallbackGoal, arriveDist)
         ) {
             this._clearFallback();
-        }
-        if (
-            this._stairTransition &&
-            this._reachedPoint(player.pos, this._stairTransition.opening, arriveDist)
-        ) {
-            this._clearStairTransition();
         }
         if (
             this._buildingDoorTransition &&
@@ -1141,15 +1135,14 @@ export class BotNavigationLite {
         goal: Vec2,
         gasEmergency: boolean,
     ): Vec2 | undefined {
-        const committedTransition = this._getCommittedStairTransition(player, goal);
+        const committedTransition = this._getCommittedStairTransition(
+            game,
+            player,
+            goal,
+            gasEmergency,
+        );
         if (committedTransition) {
             return committedTransition;
-        }
-
-        const structure = this._getContainingStairStructure(game, player.pos, player.layer);
-        if (!structure) {
-            this._clearStairTransition();
-            return undefined;
         }
 
         const currentBaseLayer = util.toGroundLayer(player.layer) as 0 | 1;
@@ -1159,26 +1152,26 @@ export class BotNavigationLite {
             return undefined;
         }
 
-        const opening = this._pickStairTransitionGoal(
+        const transition = this._pickStairTransition(
             game,
             player,
-            structure,
+            goal,
+            currentBaseLayer,
             goalBaseLayer,
             gasEmergency,
         );
-        if (!opening) {
+        if (!transition) {
             this._clearStairTransition();
             return undefined;
         }
 
-        this._stairTransition = {
-            structureId: structure.__id,
-            targetLayer: goalBaseLayer,
-            goal: v2.copy(goal),
-            opening: v2.copy(opening),
-            until: this._time + BotTuning.navigation.stairTransitionCommitSec,
-        };
-        return opening;
+        this._stairTransition = transition;
+        return this._resolveStairTransitionGoal(
+            game,
+            player,
+            transition,
+            gasEmergency,
+        );
     }
 
     private _getContainerExitGoal(
@@ -1434,8 +1427,10 @@ export class BotNavigationLite {
     }
 
     private _getCommittedStairTransition(
+        game: Game,
         player: Player,
         goal: Vec2,
+        gasEmergency: boolean,
     ): Vec2 | undefined {
         const transition = this._stairTransition;
         if (!transition) return undefined;
@@ -1449,16 +1444,22 @@ export class BotNavigationLite {
         }
         if (
             util.toGroundLayer(player.layer) === transition.targetLayer &&
-            this._reachedPoint(
-                player.pos,
-                transition.opening,
-                BotTuning.navigation.arriveDist,
-            )
+            player.layer < 2
         ) {
             this._clearStairTransition();
             return undefined;
         }
-        return transition.opening;
+        const transitionGoal = this._resolveStairTransitionGoal(
+            game,
+            player,
+            transition,
+            gasEmergency,
+        );
+        if (!transitionGoal) {
+            this._clearStairTransition();
+            return undefined;
+        }
+        return transitionGoal;
     }
 
     private _getGoalBaseLayer(game: Game, goal: Vec2): 0 | 1 {
@@ -1501,88 +1502,150 @@ export class BotNavigationLite {
         return undefined;
     }
 
-    private _getContainingStairStructure(
+    private _pickStairTransition(
         game: Game,
-        point: Vec2,
-        layer: number,
-    ): Structure | undefined {
-        const objs = game.grid.intersectPos(point);
-        for (const obj of objs) {
-            if (obj.__type !== ObjectType.Structure) continue;
+        player: Player,
+        goal: Vec2,
+        currentBaseLayer: 0 | 1,
+        targetLayer: 0 | 1,
+        gasEmergency: boolean,
+    ): StairTransition | undefined {
+        let bestTransition: StairTransition | undefined;
+        let bestScore = Infinity;
+
+        const structures = game.objectRegister.objects;
+        for (const obj of structures) {
+            if (!obj || obj.__type !== ObjectType.Structure) continue;
             const structure = obj as Structure;
-            for (const stair of structure.stairs) {
-                if (
-                    coldet.testCircleAabb(
-                        point,
-                        0.25,
-                        stair.collision.min,
-                        stair.collision.max,
-                    )
-                ) {
-                    return structure;
+
+            for (let stairIndex = 0; stairIndex < structure.stairs.length; stairIndex++) {
+                const stair = structure.stairs[stairIndex];
+                const entryCandidates = this._getStairSideCandidates(
+                    stair,
+                    currentBaseLayer,
+                    "enter",
+                );
+                const exitCandidates = this._getStairSideCandidates(
+                    stair,
+                    targetLayer,
+                    "exit",
+                );
+
+                let bestEntry: Vec2 | undefined;
+                let bestEntryScore = Infinity;
+                for (const candidate of entryCandidates) {
+                    game.map.clampToMapBounds(candidate, player.rad);
+                    if (!this._isNavPointValid(game, player, candidate, gasEmergency)) {
+                        continue;
+                    }
+
+                    const trace = this._traceRoute(game, player, player.pos, candidate);
+                    if (trace.blocked) continue;
+
+                    const score = v2.distance(player.pos, candidate);
+                    if (score < bestEntryScore) {
+                        bestEntryScore = score;
+                        bestEntry = v2.copy(candidate);
+                    }
+                }
+                if (!bestEntry) continue;
+
+                let bestExitDist = Infinity;
+                for (const candidate of exitCandidates) {
+                    bestExitDist = Math.min(bestExitDist, v2.distance(candidate, goal));
+                }
+
+                const score = bestEntryScore + bestExitDist * 0.35;
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestTransition = {
+                        structureId: structure.__id,
+                        stairIndex,
+                        targetLayer,
+                        goal: v2.copy(goal),
+                        until: this._time + BotTuning.navigation.stairTransitionCommitSec,
+                    };
                 }
             }
         }
 
-        const building = this._getContainingStructuredBuilding(game, point, layer, () => true);
-        return building?.parentStructure?.stairs.length ? building.parentStructure : undefined;
+        return bestTransition;
     }
 
-    private _pickStairTransitionGoal(
+    private _resolveStairTransitionGoal(
         game: Game,
         player: Player,
-        structure: Structure,
-        targetLayer: 0 | 1,
+        transition: StairTransition,
         gasEmergency: boolean,
     ): Vec2 | undefined {
+        const structure = game.objectRegister.getById(transition.structureId);
+        if (!structure || structure.__type !== ObjectType.Structure) {
+            return undefined;
+        }
+
+        const stair = (structure as Structure).stairs[transition.stairIndex];
+        if (!stair) {
+            return undefined;
+        }
+
+        const onStair =
+            player.layer >= 2 ||
+            coldet.testCircleAabb(
+                player.pos,
+                Math.max(player.rad, 0.25),
+                stair.collision.min,
+                stair.collision.max,
+            );
+        const sideLayer = onStair
+            ? transition.targetLayer
+            : (util.toGroundLayer(player.layer) as 0 | 1);
+        const candidates = this._getStairSideCandidates(
+            stair,
+            sideLayer,
+            onStair ? "exit" : "enter",
+        );
+
         let bestCandidate: Vec2 | undefined;
         let bestScore = Infinity;
+        for (const candidate of candidates) {
+            game.map.clampToMapBounds(candidate, player.rad);
+            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
 
-        for (const stair of structure.stairs) {
-            const sideAabb = targetLayer === 0 ? stair.upAabb : stair.downAabb;
-            const sideCenter = this._getAabbCenter(sideAabb);
-            const pushDir = v2.normalizeSafe(
-                v2.sub(sideCenter, stair.center),
-                targetLayer === 0 ? v2.create(0, 1) : v2.create(0, -1),
-            );
-            const tangent = v2.perp(pushDir);
-            const candidates = [
-                v2.add(
-                    sideCenter,
-                    v2.mul(pushDir, BotTuning.navigation.stairExitInset),
-                ),
-                v2.add(
-                    v2.add(
-                        sideCenter,
-                        v2.mul(pushDir, BotTuning.navigation.stairExitInset),
-                    ),
-                    v2.mul(tangent, 1.2),
-                ),
-                v2.add(
-                    v2.add(
-                        sideCenter,
-                        v2.mul(pushDir, BotTuning.navigation.stairExitInset),
-                    ),
-                    v2.mul(tangent, -1.2),
-                ),
-            ];
+            const trace = this._traceRoute(game, player, player.pos, candidate);
+            if (trace.blocked) continue;
 
-            for (const candidate of candidates) {
-                game.map.clampToMapBounds(candidate, player.rad);
-                if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
-
-                const trace = this._traceRoute(game, player, player.pos, candidate);
-                if (trace.blocked) continue;
-
-                const score = v2.distance(player.pos, candidate);
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestCandidate = v2.copy(candidate);
-                }
+            const score = v2.distance(player.pos, candidate);
+            if (score < bestScore) {
+                bestScore = score;
+                bestCandidate = v2.copy(candidate);
             }
         }
 
         return bestCandidate;
+    }
+
+    private _getStairSideCandidates(
+        stair: Structure["stairs"][0],
+        sideLayer: 0 | 1,
+        mode: "enter" | "exit",
+    ): Vec2[] {
+        const sideAabb = sideLayer === 0 ? stair.upAabb : stair.downAabb;
+        const sideCenter = this._getAabbCenter(sideAabb);
+        const pushDir = v2.normalizeSafe(
+            v2.sub(sideCenter, stair.center),
+            sideLayer === 0 ? v2.create(0, 1) : v2.create(0, -1),
+        );
+        const tangent = v2.perp(pushDir);
+        const forwardInset =
+            mode === "exit" ? BotTuning.navigation.stairExitInset : 0;
+        const base = v2.add(sideCenter, v2.mul(pushDir, forwardInset));
+        const sideOffset = 1.2;
+
+        return [
+            base,
+            v2.add(base, v2.mul(tangent, sideOffset)),
+            v2.add(base, v2.mul(tangent, -sideOffset)),
+        ];
     }
 
     private _getBuildingDoorTransitionGoal(
