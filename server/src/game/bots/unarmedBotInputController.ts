@@ -25,6 +25,7 @@ import {
     resolveValidTarget,
     shouldAbortObjectInteraction,
     tryUseInteractObject,
+    tryUseTravelDoor,
 } from "./botControllerShared";
 import type { BotBrainType } from "./botBrain";
 import type { BotBrainProfile } from "./botBrainProfiles";
@@ -191,6 +192,12 @@ export class UnarmedBotInputController {
             this.lootScorer.markFailedLootTarget(previousLootTargetId, timeNow);
         }
         applyLootInputs(msg, this.combat, player, lootTarget);
+        const travelDoorTarget = this.navigation.getTravelUseDoorTarget(
+            this.game,
+            player,
+            this.combat.goalPos,
+        );
+        tryUseTravelDoor(msg, this.combat, player, travelDoorTarget);
 
         const danger = computeBotDanger({
             targetVisible: !!validTarget && this.perception.targetVisible,

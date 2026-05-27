@@ -34,6 +34,7 @@ import {
     resolveValidTarget,
     shouldAbortObjectInteraction,
     tryUseInteractObject,
+    tryUseTravelDoor,
 } from "./botControllerShared";
 import type { BotDifficulty } from "./botDifficulty";
 import type { BotBrain } from "./brains/botBrainLogic";
@@ -370,6 +371,12 @@ export class BotController {
             this._lootScorer.markFailedLootTarget(previousLootTargetId, this._time);
         }
         applyLootInputs(msg, this._combat, player, lootTarget);
+        const travelDoorTarget = this._navigation.getTravelUseDoorTarget(
+            this.game,
+            player,
+            this._combat.goalPos,
+        );
+        tryUseTravelDoor(msg, this._combat, player, travelDoorTarget);
 
         const threat = this._perception.threat;
         const tactical = getBotTacticalSnapshot({

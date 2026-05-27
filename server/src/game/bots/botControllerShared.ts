@@ -257,6 +257,43 @@ export function tryUseInteractObject(
     return false;
 }
 
+export function tryUseTravelDoor(
+    msg: net.InputMsg,
+    combat: BotCombatMemory,
+    player: Player,
+    doorTarget: Obstacle | undefined,
+): boolean {
+    if (
+        combat.tacticalGoal !== "enter_building" &&
+        combat.tacticalGoal !== "exit_building"
+    ) {
+        return false;
+    }
+    if (
+        !doorTarget ||
+        !doorTarget.isDoor ||
+        !doorTarget.door ||
+        doorTarget.door.locked ||
+        !doorTarget.door.canUse ||
+        doorTarget.door.autoOpen ||
+        doorTarget.door.open
+    ) {
+        return false;
+    }
+
+    if (
+        player.actionType === GameConfig.Action.None &&
+        player
+            .getInteractableObstacles()
+            .some((obstacle) => obstacle.__id === doorTarget.__id)
+    ) {
+        msg.addInput(GameConfig.Input.Use);
+        return true;
+    }
+
+    return false;
+}
+
 export function isInMeleeRange(
     player: Player,
     obstacle: Obstacle,

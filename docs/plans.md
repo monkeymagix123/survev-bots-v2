@@ -127,6 +127,12 @@ Last updated: 2026-05-26
   - small blockers like stones/trees now get local orbit-style detours
   - generic building entry/exit routing stays conservative and trusts explicit auto-door / structured openings
   - stair transitions now sample slight side variants at the opening instead of only one center point
+- Tightened structure navigation again against the actual server implementation:
+  - stair/tunnel routing now explicitly follows the server’s `0 ↔ 1` connector model
+  - building transitions now use real door objects instead of only auto-door assumptions
+  - manual unlocked doors can now be approached and actively used during enter/exit routing
+  - door candidates are now filtered to doors that are directly traversable without breaking, including auto-open one-way semantics
+  - tactical logs can now distinguish `enter_tunnel` / `exit_tunnel` alongside `enter_building` / `exit_building`
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
 
 ## In Progress
@@ -142,12 +148,16 @@ Last updated: 2026-05-26
   - large indestructible wall blockers now bias navigation toward sliding/peeling off the wall instead of sitting on it
 - Continued practical structure navigation:
   - greenhouse/tunnel-style stair openings now have explicit transition routing
-  - practical auto-door buildings now have lightweight entry/exit routing
+  - practical buildings now have lightweight entry/exit routing through real door objects, including manual unlocked doors
 - Ongoing cleanup of shared vs specialized controller logic now that unarmed input has been split out.
 - Manual sanity-checking of the new layered decision model is still useful:
   - emergency / macro / tactical logs
   - `gas_escape` behavior
   - `move_to_safe_zone` routing
+- Broader building navigation is the next natural extension after this:
+  - room/interior traversal
+  - practical non-warehouse open-shell cases
+  - more chase quality around building edges and exits
 
 ## Next
 

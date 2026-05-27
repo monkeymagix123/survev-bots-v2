@@ -70,6 +70,12 @@ Last updated: 2026-05-26
   - local orbit detours around stones/trees and similar blockers
   - stricter building entry/exit routing so walls/windows are less likely to be treated as openings
   - slightly more forgiving stair-opening candidate sampling
+- Tightened structure navigation against actual server semantics:
+  - tunnel/stair routing now explicitly follows the server’s `0 ↔ 1` connector model
+  - building transitions now use real door objects
+  - manual unlocked doors can now be approached and actively used during enter/exit routing
+  - door candidates are filtered to doors the server would actually let a player traverse without breaking
+  - tactical logs can now distinguish `enter_tunnel` / `exit_tunnel` / `enter_building` / `exit_building`
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
@@ -86,6 +92,7 @@ Last updated: 2026-05-26
 
 - Container/building-edge pursuit fixes for armed bots
 - More practical stair/building entry-exit sanity testing
+- Broader building navigation beyond doorway routing
 - More anti-oscillation work for unarmed movement
 - Manual sanity checks for the new layered decision model and `gas_escape` override path
 - Manual spectate tuning

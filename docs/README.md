@@ -62,10 +62,14 @@ Bots follow a lightweight priority stack:
 - Keep a short committed warehouse opening target so bots are less likely to bounce in/out at the doorway threshold
 - Can now use simple auto-door building entry/exit points for practical buildings like greenhouses, instead of oscillating between an outside loot target and the building shell
 - Stair-connected structures now get their own short committed transition target, so bots can step through tunnel/stair openings more deliberately when switching between surface and underground
+- Tunnel/stair routing now follows the server’s actual layer model more closely: bots pick a real `0 ↔ 1` connector, approach the current-layer side first, then exit on the target-layer side
 - Can now choose exterior building-corner detours when a structure shell is the thing blocking a pursuit route, instead of only doing tiny local sidesteps
 - Small local blockers like stones/trees now get a more deliberate orbit-style detour, so bots are more willing to move around them instead of just staring through blocked LOS
 - Can bias detours to slide along or peel away from large indestructible walls
-- Generic building entry/exit routing stays conservative and now trusts explicit auto-door / structured openings only, so bots are less likely to mistake solid walls or windows for valid entry points
+- Generic building entry/exit routing now uses real door objects from the server model:
+  - auto doors are treated as passable transitions
+  - manual unlocked doors are approached from the current side and actively used before crossing
+  - walls/windows are not treated as fake openings
 - Use local cover-lite sampling under pressure
 - Waypoint scoring now also penalizes regional crowding, especially around armed players, so bots spread out more naturally instead of collapsing into one “safe” area
 - Respect gas/safe-zone pressure first
@@ -132,6 +136,7 @@ Bots follow a lightweight priority stack:
   - when `debugBotStability` is also enabled, its companion file lives beside it as `server/logs/<game-create-time>_<game-id>/bot-stability.log`
   - now includes chosen target/item ids plus final goal position / movement style
   - now also includes higher-level decision context such as `emergencyState`, `macroGoal`, `macroReason`, `tacticalGoal`, `tacticalReason`, `targetZoneId`, `targetBuildingId`, `zoneScore`, `subGoal`, `resumeAfterSubGoal`, and zone/target positions
+  - travel logs can now distinguish `enter_tunnel`, `exit_tunnel`, `enter_building`, and `exit_building` instead of flattening all structure travel into generic movement
 - `Config.bots.debugMapIndicators`
   - shows live bot positions through the same player-status / minimap-position path used for faction-style player markers
   - bots are marked with a distinct blue debug dot so they are easier to spot in solo-mode testing

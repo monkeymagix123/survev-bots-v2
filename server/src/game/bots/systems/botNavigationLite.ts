@@ -46,9 +46,9 @@ type StairTransition = {
 
 type BuildingDoorTransition = {
     buildingId: number;
+    doorId: number;
     mode: "enter" | "exit";
     goal: Vec2;
-    opening: Vec2;
     until: number;
 };
 
@@ -191,16 +191,6 @@ export class BotNavigationLite {
             this._clearFallback();
         }
         if (
-            this._buildingDoorTransition &&
-            this._reachedPoint(
-                player.pos,
-                this._buildingDoorTransition.opening,
-                arriveDist,
-            )
-        ) {
-            this._clearBuildingDoorTransition();
-        }
-        if (
             this._warehouseTransition &&
             this._reachedPoint(
                 player.pos,
@@ -287,6 +277,54 @@ export class BotNavigationLite {
         if (buildingTactical) return buildingTactical;
 
         return fallback;
+    }
+
+    getTravelUseDoorTarget(
+        game: Game,
+        player: Player,
+        goal: Vec2 | undefined,
+    ): Obstacle | undefined {
+        const transition = this._buildingDoorTransition;
+        if (!goal || !transition || !this._sameGoal(goal, transition.goal)) {
+            return undefined;
+        }
+
+        const buildingObj = game.objectRegister.getById(transition.buildingId);
+        const doorObj = game.objectRegister.getById(transition.doorId);
+        if (
+            !buildingObj ||
+            buildingObj.__type !== ObjectType.Building ||
+            !doorObj ||
+            doorObj.__type !== ObjectType.Obstacle
+        ) {
+            return undefined;
+        }
+
+        const building = buildingObj as Building;
+        const door = doorObj as Obstacle;
+        if (
+            !door.isDoor ||
+            !door.door ||
+            door.dead ||
+            door.destroyed ||
+            door.door.locked ||
+            !door.door.canUse ||
+            door.door.autoOpen ||
+            door.door.open ||
+            !util.sameLayer(door.layer, player.layer)
+        ) {
+            return undefined;
+        }
+
+        const inside = this._isPointInsideBuilding(building, player.pos, player.layer);
+        if (
+            (transition.mode === "enter" && inside) ||
+            (transition.mode === "exit" && !inside)
+        ) {
+            return undefined;
+        }
+
+        return door;
     }
 
     observeMovement(params: {
@@ -1689,8 +1727,10 @@ export class BotNavigationLite {
         gasEmergency: boolean,
     ): Vec2 | undefined {
         const committedTransition = this._getCommittedBuildingDoorTransition(
+            game,
             player,
             goal,
+            gasEmergency,
         );
         if (committedTransition) {
             return committedTransition;
@@ -1706,7 +1746,7 @@ export class BotNavigationLite {
             currentBuilding &&
             !this._isPointInsideBuilding(currentBuilding, goal, player.layer)
         ) {
-            const opening = this._pickBuildingDoorGoal(
+            const transition = this._pickBuildingDoorTransition(
                 game,
                 player,
                 currentBuilding,
@@ -1714,17 +1754,15 @@ export class BotNavigationLite {
                 gasEmergency,
                 "exit",
             );
-            if (opening) {
-                this._buildingDoorTransition = {
-                    buildingId: currentBuilding.__id,
-                    mode: "exit",
-                    goal: v2.copy(goal),
-                    opening: v2.copy(opening),
-                    until:
-                        this._time + BotTuning.navigation.buildingDoorTransitionCommitSec,
-                };
+            if (transition) {
+                this._buildingDoorTransition = transition;
+                return this._resolveBuildingDoorTransitionGoal(
+                    game,
+                    player,
+                    transition,
+                    gasEmergency,
+                );
             }
-            return opening;
         }
 
         const goalBuilding = this._getContainingStructuredBuilding(
@@ -1734,7 +1772,7 @@ export class BotNavigationLite {
             () => true,
         );
         if (!currentBuilding && goalBuilding) {
-            const opening = this._pickBuildingDoorGoal(
+            const transition = this._pickBuildingDoorTransition(
                 game,
                 player,
                 goalBuilding,
@@ -1742,17 +1780,15 @@ export class BotNavigationLite {
                 gasEmergency,
                 "enter",
             );
-            if (opening) {
-                this._buildingDoorTransition = {
-                    buildingId: goalBuilding.__id,
-                    mode: "enter",
-                    goal: v2.copy(goal),
-                    opening: v2.copy(opening),
-                    until:
-                        this._time + BotTuning.navigation.buildingDoorTransitionCommitSec,
-                };
+            if (transition) {
+                this._buildingDoorTransition = transition;
+                return this._resolveBuildingDoorTransitionGoal(
+                    game,
+                    player,
+                    transition,
+                    gasEmergency,
+                );
             }
-            return opening;
         }
 
         this._clearBuildingDoorTransition();
@@ -1791,8 +1827,10 @@ export class BotNavigationLite {
     }
 
     private _getCommittedBuildingDoorTransition(
+        game: Game,
         player: Player,
         goal: Vec2,
+        gasEmergency: boolean,
     ): Vec2 | undefined {
         const transition = this._buildingDoorTransition;
         if (!transition) return undefined;
@@ -1804,45 +1842,60 @@ export class BotNavigationLite {
             this._clearBuildingDoorTransition();
             return undefined;
         }
-        if (
-            this._reachedPoint(
-                player.pos,
-                transition.opening,
-                BotTuning.navigation.arriveDist,
-            )
-        ) {
+        const transitionGoal = this._resolveBuildingDoorTransitionGoal(
+            game,
+            player,
+            transition,
+            gasEmergency,
+        );
+        if (!transitionGoal) {
             this._clearBuildingDoorTransition();
             return undefined;
         }
-        return transition.opening;
+        return transitionGoal;
     }
 
-    private _pickBuildingDoorGoal(
+    private _pickBuildingDoorTransition(
         game: Game,
         player: Player,
         building: Building,
         goal: Vec2,
         gasEmergency: boolean,
         mode: "enter" | "exit",
-    ): Vec2 | undefined {
+    ): BuildingDoorTransition | undefined {
         const candidates = this._getBuildingTransitionCandidates(
             game,
             player,
             building,
             mode,
         );
-        let bestCandidate: Vec2 | undefined;
+        let bestCandidate: BuildingDoorTransition | undefined;
         let bestScore = Infinity;
 
         for (const candidate of candidates) {
-            if (!this._isNavPointValid(game, player, candidate, gasEmergency)) continue;
-            if (this._traceRoute(game, player, player.pos, candidate).blocked) continue;
+            if (!this._isNavPointValid(game, player, candidate.approachPos, gasEmergency)) {
+                continue;
+            }
+            if (!this._isNavPointValid(game, player, candidate.crossPos, gasEmergency)) {
+                continue;
+            }
+            if (this._traceRoute(game, player, player.pos, candidate.approachPos).blocked) {
+                continue;
+            }
 
             const score =
-                v2.distance(player.pos, candidate) * 0.35 + v2.distance(candidate, goal);
+                v2.distance(player.pos, candidate.approachPos) * 0.35 +
+                v2.distance(candidate.crossPos, goal);
             if (score < bestScore) {
                 bestScore = score;
-                bestCandidate = candidate;
+                bestCandidate = {
+                    buildingId: building.__id,
+                    doorId: candidate.doorId,
+                    mode,
+                    goal: v2.copy(goal),
+                    until:
+                        this._time + BotTuning.navigation.buildingDoorTransitionCommitSec,
+                };
             }
         }
 
@@ -1854,35 +1907,144 @@ export class BotNavigationLite {
         player: Player,
         building: Building,
         mode: "enter" | "exit",
-    ): Vec2[] {
-        const candidates: Vec2[] = [];
+    ): Array<{ doorId: number; approachPos: Vec2; crossPos: Vec2 }> {
+        const candidates: Array<{ doorId: number; approachPos: Vec2; crossPos: Vec2 }> = [];
         const insideInset = BotTuning.navigation.buildingDoorInsideInset;
         const outsideInset = BotTuning.navigation.buildingDoorOutsideInset;
 
         for (const obj of building.childObjects) {
             if (obj.__type !== ObjectType.Obstacle) continue;
             const obstacle = obj as Obstacle;
-            if (!obstacle.isDoor || !obstacle.door?.autoOpen || obstacle.door.locked) {
-                continue;
-            }
             if (!util.sameLayer(obstacle.layer, player.layer)) continue;
 
-            const outward = v2.normalizeSafe(
-                v2.sub(obstacle.pos, building.pos),
-                v2.create(0, 1),
+            const sidePoints = this._getBuildingDoorSidePoints(
+                game,
+                player,
+                building,
+                obstacle,
+                insideInset,
+                outsideInset,
             );
-            const candidate = v2.add(
-                obstacle.pos,
-                v2.mul(
-                    outward,
-                    mode === "enter" ? -insideInset : outsideInset,
-                ),
-            );
-            game.map.clampToMapBounds(candidate, player.rad);
-            candidates.push(candidate);
+            const approachPos =
+                mode === "enter" ? sidePoints.outside : sidePoints.inside;
+            const crossPos = mode === "enter" ? sidePoints.inside : sidePoints.outside;
+            if (
+                !this._isDoorTraversableWithoutBreaking(
+                    obstacle,
+                    approachPos,
+                )
+            ) {
+                continue;
+            }
+            candidates.push({
+                doorId: obstacle.__id,
+                approachPos,
+                crossPos,
+            });
         }
 
         return candidates;
+    }
+
+    private _getBuildingDoorSidePoints(
+        game: Game,
+        player: Player,
+        building: Building,
+        obstacle: Obstacle,
+        insideInset: number,
+        outsideInset: number,
+    ): { inside: Vec2; outside: Vec2 } {
+        const outward = v2.normalizeSafe(
+            v2.sub(obstacle.pos, building.pos),
+            v2.create(0, 1),
+        );
+        const inside = v2.add(obstacle.pos, v2.mul(outward, -insideInset));
+        const outside = v2.add(obstacle.pos, v2.mul(outward, outsideInset));
+        game.map.clampToMapBounds(inside, player.rad);
+        game.map.clampToMapBounds(outside, player.rad);
+        return { inside, outside };
+    }
+
+    private _resolveBuildingDoorTransitionGoal(
+        game: Game,
+        player: Player,
+        transition: BuildingDoorTransition,
+        gasEmergency: boolean,
+    ): Vec2 | undefined {
+        const buildingObj = game.objectRegister.getById(transition.buildingId);
+        const doorObj = game.objectRegister.getById(transition.doorId);
+        if (
+            !buildingObj ||
+            buildingObj.__type !== ObjectType.Building ||
+            !doorObj ||
+            doorObj.__type !== ObjectType.Obstacle
+        ) {
+            return undefined;
+        }
+
+        const building = buildingObj as Building;
+        const door = doorObj as Obstacle;
+        if (!door.isDoor || !door.door || door.dead || door.destroyed) {
+            return undefined;
+        }
+
+        const sidePoints = this._getBuildingDoorSidePoints(
+            game,
+            player,
+            building,
+            door,
+            BotTuning.navigation.buildingDoorInsideInset,
+            BotTuning.navigation.buildingDoorOutsideInset,
+        );
+        const inside = this._isPointInsideBuilding(building, player.pos, player.layer);
+        const targetReached =
+            transition.mode === "enter" ? inside : !inside;
+        if (targetReached) {
+            return undefined;
+        }
+
+        const currentGoal =
+            door.door.autoOpen || door.door.open
+                ? transition.mode === "enter"
+                    ? sidePoints.inside
+                    : sidePoints.outside
+                : transition.mode === "enter"
+                  ? sidePoints.outside
+                  : sidePoints.inside;
+        if (!this._isDoorTraversableWithoutBreaking(door, currentGoal)) {
+            return undefined;
+        }
+
+        if (!this._isNavPointValid(game, player, currentGoal, gasEmergency)) {
+            return undefined;
+        }
+        if (this._traceRoute(game, player, player.pos, currentGoal).blocked) {
+            return undefined;
+        }
+        return currentGoal;
+    }
+
+    private _isDoorTraversableWithoutBreaking(
+        obstacle: Obstacle,
+        approachPos: Vec2,
+    ): boolean {
+        if (!obstacle.isDoor || !obstacle.door) return false;
+        if (obstacle.dead || obstacle.destroyed) return false;
+        if (obstacle.door.locked || !obstacle.door.canUse) return false;
+        if (!obstacle.door.autoOpen) return true;
+        if (
+            obstacle.door.openOneWay &&
+            this._getDoorSideForPoint(obstacle, approachPos) !== obstacle.door.openOneWay
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    private _getDoorSideForPoint(obstacle: Obstacle, point: Vec2): number {
+        const toDoor = v2.sub(obstacle.pos, point);
+        const doorDir = v2.rotate(v2.create(1, 0), obstacle.rot);
+        return v2.dot(toDoor, doorDir) < 0 ? -1 : 1;
     }
 
     private _isPointInsideBuildingLayerExact(

@@ -78,6 +78,8 @@ The system is still incremental, but bots now carry explicit layered decision co
   - `move_to_zone`
   - `move_to_safe_zone`
   - `move_to_safe_position`
+  - `enter_tunnel`
+  - `exit_tunnel`
   - `enter_building`
   - `exit_building`
   - `pickup_loot`
@@ -88,6 +90,7 @@ The system is still incremental, but bots now carry explicit layered decision co
 Existing `state` is still the compatibility movement/combat state for controllers, but macro/tactical fields now express the broader intent separately.
 Zone-style macro goals and travel-style tactical goals now also keep short explicit lock windows, so bots can preserve a chosen area or safe-route a bit longer instead of thrashing between near-equivalent options every tick.
 `move_to_safe_zone` now means “make broader safe-zone progress,” while `move_to_safe_position` means “fall back to a safer local position” during disengage/heal behavior.
+Travel logging can now also distinguish `enter_tunnel` / `exit_tunnel` and `enter_building` / `exit_building`, which makes structure-nav debugging much easier than generic `move_to_zone`.
 
 ## Modes
 
@@ -162,12 +165,19 @@ Movement is state-driven and separate from shooting.
 - special-case warehouse entry/exit routing through the large side openings
 - warehouse entry now uses an interior opening point so bots cross the threshold instead of stalling just outside
 - warehouse transitions now keep a short committed opening target so bots do not flip between enter/exit while hovering on the doorway threshold
-- stair-connected structures now get a short committed transition target, so bots can more reliably move through surface/underground stair openings instead of dithering at the threshold
-- simple auto-door building entry/exit routing now helps practical buildings like greenhouses, so bots can leave for nearby outside loot or enter for an inside goal without treating the shell like a generic wall
+- stair-connected structures now get a short committed transition target, and the routing now explicitly matches the server’s real `0 ↔ 1` layer model:
+  - base routing only switches between ground `0` and underground `1`
+  - stair overlap layers `2` / `3` are treated as transient “on connector” states
+  - bots approach the current-layer side first, then exit on the target-layer side once they are on the stair volume
+- building entry/exit routing now follows real door behavior from the server:
+  - auto doors are treated as passable transitions
+  - manual unlocked doors are approached from the current side and actively used before bots cross
+  - doors are only considered if they are directly traversable without breaking, including auto-open one-way side checks
+  - this keeps practical buildings like greenhouses and houses aligned with actual `Obstacle.interact(...)` behavior instead of treating walls/windows as openings
 - when a route is blocked by a building child obstacle and both bot/goal are outside the building, nav now tries exterior building-corner detours before falling back to tiny local sidesteps
 - when a small standalone blocker like a stone or tree is the first obstacle in a combat path, nav now tries a local orbit-style detour around that blocker before falling back to generic sidesteps
 - wall-aware slide/escape detours when a large indestructible wall is the first movement blocker
-- generic building enter/exit routing stays conservative and prefers explicit auto-door / structured openings, which avoids pretending that arbitrary wall sides or windows are valid entry points
+- generic building enter/exit routing stays conservative and prefers explicit door / structured openings, which avoids pretending that arbitrary wall sides or windows are valid entry points
 - waypoint candidate scoring now applies a regional crowd penalty, with extra weight for nearby armed players, so safe-zone roaming does not keep pulling the whole lobby toward the same cluster
 
 It is **not** full pathfinding.
