@@ -277,6 +277,10 @@ export class BotManager {
         }
     }
 
+    clearInternalBots(): void {
+        this._removeAllInternalBots();
+    }
+
     private _cleanupDeadInternalBots(): void {
         const playerBarn = this.game.playerBarn;
         const deadBots = playerBarn.players.filter(

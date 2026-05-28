@@ -1,5 +1,5 @@
-import { Game, ProcessMsgType } from "../../server/src/game/game";
-import type { ProcessMsg } from "../../server/src/utils/types";
+import { Game } from "../../server/src/game/game";
+import { ProcessMsgType, type ProcessMsg } from "../../server/src/utils/types";
 
 let game: Game | undefined;
 
@@ -52,6 +52,9 @@ addEventListener("message", async (message) => {
     switch (msg.type) {
         case ProcessMsgType.AddJoinToken:
             game.addJoinTokens(msg.tokens, false);
+            break;
+        case ProcessMsgType.SetBotsConfig:
+            game.setDesiredBotCount(msg.desiredBots);
             break;
         case ProcessMsgType.SocketMsg:
             const sMsg = msg.msgs[0];

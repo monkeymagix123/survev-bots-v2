@@ -38,6 +38,7 @@ export enum ProcessMsgType {
     KeepAlive,
     UpdateData,
     AddJoinToken,
+    SetBotsConfig,
     SocketMsg,
     SocketClose,
 }
@@ -183,6 +184,24 @@ export class Game {
         this.logger.info(`Created in ${Date.now() - this.start} ms`);
 
         this.updateData();
+    }
+
+    setDesiredBotCount(desiredBots: number): void {
+        const count = Math.max(0, Math.floor(desiredBots));
+
+        if (count <= 0) {
+            Config.bots.enabled = false;
+            Config.bots.maxBots = 0;
+            this.botManager.clearInternalBots();
+            return;
+        }
+
+        Config.bots.enabled = true;
+        Config.bots.maxBots = count;
+
+        const maxPlayers = this.map.mapDef.gameMode.maxPlayers;
+        const assumedHumans = Math.max(1, Config.bots.minHumansToEnable);
+        Config.bots.reserveSlots = Math.max(0, maxPlayers - (count + assumedHumans));
     }
 
     update(dt?: number) {

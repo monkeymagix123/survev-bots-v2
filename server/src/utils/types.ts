@@ -86,6 +86,7 @@ export enum ProcessMsgType {
     KeepAlive,
     UpdateData,
     AddJoinToken,
+    SetBotsConfig,
     SocketMsg,
     SocketClose,
 }
@@ -112,6 +113,11 @@ export interface AddJoinTokenMsg {
     type: ProcessMsgType.AddJoinToken;
     autoFill: boolean;
     tokens: FindGamePrivateBody["playerData"];
+}
+
+export interface SetBotsConfigMsg {
+    type: ProcessMsgType.SetBotsConfig;
+    desiredBots: number;
 }
 
 /**
@@ -145,5 +151,6 @@ export type ProcessMsg =
     | KeepAliveMsg
     | UpdateDataMsg
     | AddJoinTokenMsg
+    | SetBotsConfigMsg
     | SocketMsgsMsg
     | SocketCloseMsg;

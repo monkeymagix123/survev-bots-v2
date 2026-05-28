@@ -1,14 +1,13 @@
 import $ from "jquery";
-import { ProcessMsgType } from "../../server/src/game/game";
 import type {
     FindGamePrivateBody,
     GameData,
     ProcessMsg,
 } from "../../server/src/utils/types";
+import { ProcessMsgType } from "../../server/src/utils/types";
 import { type MapDef, MapDefs } from "../../shared/defs/mapDefs";
 import type { TeamMode } from "../../shared/gameConfig";
 import { math } from "../../shared/utils/math";
-import { Bot } from "./bot";
 import GameWorkerImport from "./gameWorker?worker";
 import { helpers } from "./helpers";
 
@@ -87,6 +86,7 @@ class GameWorker implements GameData {
     stoppedTime = Date.now();
 
     avaliableSlots = 0;
+    maxPlayers = 0;
 
     constructor(manager: OfflineServer, id: string, config: ServerGameConfig) {
         this.manager = manager;
@@ -159,7 +159,17 @@ class GameWorker implements GameData {
         this.mapName = config.mapName;
 
         const mapDef = MapDefs[this.mapName as keyof typeof MapDefs] as MapDef;
-        this.avaliableSlots = mapDef.gameMode.maxPlayers;
+        this.maxPlayers = mapDef.gameMode.maxPlayers;
+        this.avaliableSlots = this.maxPlayers;
+    }
+
+    setDesiredBotCount(desiredBots: number) {
+        const count = math.clamp(Math.floor(desiredBots), 0, this.maxPlayers - 1);
+        this.send({
+            type: ProcessMsgType.SetBotsConfig,
+            desiredBots: count,
+        });
+        this.avaliableSlots = Math.max(0, this.maxPlayers - count);
     }
 
     addJoinToken(tokens: FindGamePrivateBody["playerData"]) {
@@ -198,8 +208,6 @@ export class OfflineServer {
     readonly workerById = new Map<string, GameWorker>();
     readonly workers: GameWorker[] = [];
 
-    readonly bots = new Set<Bot>();
-
     constructor() {
         setInterval(() => {
             for (const gameWorker of this.workers) {
@@ -225,17 +233,7 @@ export class OfflineServer {
         }, 5000);
     }
 
-    update() {
-        for (const bot of this.bots) {
-            if (Math.random() < 0.02) {
-                bot.updateInputs();
-                bot.sendInputs();
-                if (bot.disconnected) {
-                    this.bots.delete(bot);
-                }
-            }
-        }
-    }
+    update() {}
 
     newGame(config: ServerGameConfig): GameWorker {
         // FIXME: running 2 games at the same time seems to be laggy as fuck
@@ -264,16 +262,7 @@ export class OfflineServer {
 
         const countInput = $("#offline-bot-count");
         const count = math.clamp(countInput.val() as number, 0, 79);
-        for (let i = 0; i < count; i++) {
-            setTimeout(() => {
-                const bot = new Bot(i);
-                const token = helpers.random64();
-                gameProc.addJoinToken([{ token, ip: "", userId: null }]);
-                const socket = this.connect(id);
-                bot.connect(socket, token);
-                this.bots.add(bot);
-            }, 100 * i);
-        }
+        gameProc.setDesiredBotCount(count);
 
         this.workerById.set(id, gameProc);
 
