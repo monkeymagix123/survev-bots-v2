@@ -82,3 +82,12 @@ export const zGiveXpParams = z.object({
     slug: z.string(),
     xp: z.number().positive(),
 });
+
+export const zLogoutFromGameParams = z.object({
+    slug: z.string(),
+    game_id: z.uuid(),
+});
+
+export const zResetStatsParams = z.object({
+    slug: z.string(),
+});

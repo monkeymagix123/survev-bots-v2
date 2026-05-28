@@ -28,6 +28,8 @@ export const enum Command {
     SetClientTheme = "set_client_theme",
     ResetPass = "reset_pass",
     GiveXp = "give_xp",
+    LogoutFromGame = "logout_from_game",
+    ResetStats = "reset_stats",
 }
 
 export const honoClient = hc<PrivateRouteApp>(API_URL, {

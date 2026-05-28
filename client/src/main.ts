@@ -1,5 +1,6 @@
 import $ from "jquery";
 import * as PIXI from "pixi.js-legacy";
+import { MapDefs } from "../../shared/defs/mapDefs";
 import { GameConfig } from "../../shared/gameConfig";
 import * as net from "../../shared/net/net";
 import type {
@@ -20,6 +21,7 @@ import { Game } from "./game";
 import { helpers } from "./helpers";
 import { InputHandler } from "./input";
 import { InputBinds, InputBindUi } from "./inputBinds";
+import { OfflineServer } from "./offlineServer";
 import { PingTest } from "./pingTest";
 import { proxy } from "./proxy";
 import { ResourceManager } from "./resources";
@@ -95,6 +97,8 @@ export class Application {
     checkedPingTest = false;
     hasFocus = true;
     newsDisplayed = true;
+
+    offlineServer = new OfflineServer();
 
     updateLogoBasedOnLanguage(lang: string) {
         const header = $("#start-row-header");
@@ -265,22 +269,36 @@ export class Application {
                 this.game?.free();
                 this.teamMenu.leave();
             });
-            const r = $("#news-current").data("date");
-            const a = new Date(r).getTime();
+
+            // hide pass and show news by default if login is unsupported
+            const loginSupported = !SDK.isAnySDK && proxy.anyLoginSupported();
+            if (loginSupported) {
+                $("#news-wrapper").hide();
+                $("#pass-wrapper").show();
+                this.newsDisplayed = false;
+            } else {
+                $(".right-column-toggle").hide();
+                $("#news-wrapper").show();
+                $("#pass-wrapper").hide();
+                this.newsDisplayed = true;
+            }
+
+            const currentNews = $("#news-current").data("date");
+            const currentNewsTime = new Date(currentNews).getTime();
             $(".right-column-toggle").on("click", () => {
                 if (this.newsDisplayed) {
                     $("#news-wrapper").fadeOut(250);
                     $("#pass-wrapper").fadeIn(250);
                 } else {
-                    this.config.set("lastNewsTimestamp", a);
+                    this.config.set("lastNewsTimestamp", currentNewsTime);
                     $(".news-toggle").find(".account-alert").css("display", "none");
                     $("#news-wrapper").fadeIn(250);
                     $("#pass-wrapper").fadeOut(250);
                 }
                 this.newsDisplayed = !this.newsDisplayed;
             });
-            const i = this.config.get("lastNewsTimestamp")!;
-            if (a > i) {
+            const lastSeenNewsTime = this.config.get("lastNewsTimestamp")!;
+            if (currentNewsTime > lastSeenNewsTime) {
                 $(".news-toggle").find(".account-alert").css("display", "block");
             }
             this.setDOMFromConfig();
@@ -368,6 +386,7 @@ export class Application {
                 this.resourceManager,
                 onJoin,
                 onQuit,
+                this.offlineServer,
             );
             this.loadoutDisplay = new LoadoutDisplay(
                 this.pixi,
@@ -385,6 +404,18 @@ export class Application {
             loadStaticDomImages();
 
             SDK.gameLoadComplete();
+
+            $(".btn-play").on("click", async (e) => {
+                const mapName = e.target.attributes.getNamedItem("data-mapName")!
+                    .value as keyof typeof MapDefs;
+
+                $(e.target).html('<div class="ui-spinner"></div>');
+
+                const res = await this.offlineServer.findGame(mapName);
+                if (res) {
+                    this.game?.tryJoinGame(res.gameId, res.data, "", () => {});
+                }
+            });
         }
     }
 
@@ -584,6 +615,19 @@ export class Application {
         updateButton(this.playMode0Btn, 0);
         updateButton(this.playMode1Btn, 1);
         updateButton(this.playMode2Btn, 2);
+
+        if (!this.game?.connecting) {
+            $(".btn-play").each((_i, ele) => {
+                const btn = $(ele);
+                const mapId = btn.attr("data-mapName") as keyof typeof MapDefs;
+                const def = MapDefs[mapId];
+                const name = def.desc.name;
+
+                btn.html(
+                    `Play ${name} ${name.toLowerCase() == mapId ? "" : `(${mapId})`}`,
+                );
+            });
+        }
     }
 
     waitOnAccount(cb: () => void) {
@@ -928,6 +972,8 @@ export class Application {
             this.pass?.update(dt);
         }
         this.input!.flush();
+
+        this.offlineServer.update();
     }
 }
 

@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { GameConfig, TeamMode } from "../../../shared/gameConfig";
 import * as net from "../../../shared/net/net";
 import type { Loadout } from "../../../shared/utils/loadout";
@@ -8,12 +6,11 @@ import { v2 } from "../../../shared/utils/v2";
 import { Config } from "../config";
 import { ServerLogger } from "../utils/logger";
 import { apiPrivateRouter } from "../utils/serverHelpers";
-import {
-    type FindGamePrivateBody,
-    ProcessMsgType,
-    type SaveGameBody,
-    type ServerGameConfig,
-    type UpdateDataMsg,
+import type {
+    FindGamePrivateBody,
+    SaveGameBody,
+    ServerGameConfig,
+    UpdateDataMsg,
 } from "../utils/types";
 import { GameModeManager } from "./gameModeManager";
 import { Grid } from "./grid";
@@ -34,6 +31,16 @@ import { SmokeBarn } from "./objects/smoke";
 import { BotManager } from "./bots/botManager";
 import { PluginManager } from "./pluginManager";
 import { Profiler } from "./profiler";
+
+export enum ProcessMsgType {
+    Create,
+    Created,
+    KeepAlive,
+    UpdateData,
+    AddJoinToken,
+    SocketMsg,
+    SocketClose,
+}
 
 export interface JoinTokenData {
     expiresAt: number;
@@ -696,6 +703,7 @@ export class Game {
                 `[${region}] Failed to save game data, saving locally instead`,
             );
 
+            /*
             const dir = path.resolve("lost_game_data");
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir);
@@ -705,6 +713,7 @@ export class Game {
                 JSON.stringify(values),
                 "utf8",
             );
+            */
         }
     }
 
