@@ -162,6 +162,8 @@ Movement is state-driven and separate from shooting.
 - outside-next-safe rotation now aims for a practical near-edge entry point instead of the exact circle center, which reduces over-rotation and late gas failures
 - some disengage/heal fallback routes now use tactical `move_to_safe_position`, so logs can distinguish “retreat locally” from “rotate deeper into the safe zone”
 - if nav makes no progress for too long, the brains can now fire an explicit `hard_unstuck` emergency that resets route state and picks a fresh zone/safety goal
+- gas-emergency execution now respects the brain-provided override goal first, so a safer precomputed edge-entry rotation is not silently replaced by raw `gas.posNew`
+- “idle with a meaningful goal” now feeds the same stuck-recovery path as failed movement, so anchor/no-input stalls can still trigger repath/fallback/hard-unstuck instead of resetting the timer forever
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / center recovery only after local and regional interest fail

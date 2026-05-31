@@ -84,6 +84,8 @@ Last updated: 2026-05-31
 - Armed bots now force-equip a real gun under active threat if they are still on melee/fists after arming up
 - Perception scans now reuse a real short TTL cache, and loot/object scorers now also cache short-lived “no target found” results
 - Bot-manager hot paths now do less repeated work, and debug bot logs no longer use synchronous append writes
+- Gas-emergency routing now respects the brain’s override goal first, so safe-edge rotations are no longer replaced by raw center-point gas routing
+- No-input stalls with a meaningful goal now count toward stuck recovery, so idle-anchor bots can still repath/fallback/hard-unstuck
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work

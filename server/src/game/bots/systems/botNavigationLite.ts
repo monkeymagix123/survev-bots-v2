@@ -421,15 +421,27 @@ export class BotNavigationLite {
             !goal || v2.distance(player.pos, goal) <= arriveDist;
 
         if (!attemptedMove) {
-            this._progressPos = v2.copy(player.pos);
-            this._progressGoal = goal ? v2.copy(goal) : undefined;
-            this._stuckTimer = 0;
-            this._nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
-
             if (intentionalStationary) {
+                this._progressPos = v2.copy(player.pos);
+                this._progressGoal = goal ? v2.copy(goal) : undefined;
+                this._stuckTimer = 0;
+                this._nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
                 this._clearFallback();
                 this._clearForcedDetour();
+                return;
             }
+
+            if (
+                !goal ||
+                !this._progressGoal ||
+                !this._sameGoal(goal, this._progressGoal)
+            ) {
+                this._progressPos = v2.copy(player.pos);
+                this._progressGoal = goal ? v2.copy(goal) : undefined;
+                this._stuckTimer = 0;
+                this._nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
+            }
+            this._advanceStuckRecovery(dt, game, player, goal);
             return;
         }
 
@@ -457,6 +469,15 @@ export class BotNavigationLite {
             return;
         }
 
+        this._advanceStuckRecovery(dt, game, player, goal);
+    }
+
+    private _advanceStuckRecovery(
+        dt: number,
+        game: Game,
+        player: Player,
+        goal: Vec2,
+    ): void {
         this._stuckTimer += dt;
 
         if (
@@ -960,11 +981,11 @@ export class BotNavigationLite {
         targetPos?: Vec2,
         overrideGoal?: Vec2,
     ): Vec2 | undefined {
-        if (gasEmergency) {
-            return game.gas.posNew;
-        }
         if (overrideGoal) {
             return overrideGoal;
+        }
+        if (gasEmergency) {
+            return game.gas.posNew;
         }
         if (targetPos) {
             return targetPos;
