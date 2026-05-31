@@ -2,7 +2,7 @@
 
 Short snapshot of current bot work.
 
-Last updated: 2026-05-27
+Last updated: 2026-05-30
 
 ## Current State
 
@@ -79,6 +79,9 @@ Last updated: 2026-05-27
 - Added a first real interior-building traversal pass so blocked same-building / same-structure routes can follow a lightweight unlocked-door graph toward another interior point instead of treating room-to-room travel as a dead end
 - Manual interior-door travel now shows up as `use_door` in tactical logging when that is the practical next step
 - Tightened manual-door approach movement so bots use a smaller door-use arrival/deadzone window and are less likely to stall just outside the doorway
+- Late gas rotation now aims for a practical near-edge safe entry point instead of the exact next-circle center
+- Hard-stuck bots now explicitly reset route state and pick a fresh zone/safe goal instead of grinding the same failed path forever
+- Armed bots now force-equip a real gun under active threat if they are still on melee/fists after arming up
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
@@ -99,6 +102,7 @@ Last updated: 2026-05-27
 - Better room preference / room choice inside larger buildings
 - More anti-oscillation work for unarmed movement
 - Manual sanity checks for the new layered decision model and `gas_escape` override path
+- Replay-driven sanity checks for late gas rotation, hard-stuck recoveries, and weapon-ready-but-no-fire bots
 - Manual spectate tuning
 - Duo/squad behavior
 - Additional debug/stability events if needed

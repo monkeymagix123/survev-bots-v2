@@ -139,6 +139,43 @@ export class BotNavigationLite {
         );
     }
 
+    isHardStuck(): boolean {
+        return this._stuckTimer >= BotTuning.navigation.hardUnstuckSec;
+    }
+
+    resetForHardUnstuck(): void {
+        this.waypoint = undefined;
+        this.waypointTtl = 0;
+        this.waypointMeta = undefined;
+        this._clearDetour();
+        this._clearFallback();
+        this._clearForcedDetour();
+        this._clearStairTransition();
+        this._clearBuildingDoorTransition();
+        this._clearWarehouseTransition();
+        this._progressPos = undefined;
+        this._progressGoal = undefined;
+        this._stuckTimer = 0;
+        this._nextRepathAt = BotTuning.navigation.stuckRepathAfterSec;
+        this._failedWaypoints = [];
+        this._routeTraceCache.clear();
+    }
+
+    getSafeZoneGoal(game: Game, player: Player): Vec2 {
+        const gas = game.gas;
+        const inset = BotTuning.navigation.safeZoneGoalInset;
+        const delta = v2.sub(player.pos, gas.posNew);
+        if (v2.lengthSqr(delta) <= 0.0001) {
+            return v2.copy(gas.posNew);
+        }
+
+        const dir = v2.normalizeSafe(delta, v2.create(1, 0));
+        const safeRadius = Math.max(gas.radNew - inset, 0);
+        const goal = v2.add(gas.posNew, v2.mul(dir, safeRadius));
+        game.map.clampToMapBounds(goal, player.rad);
+        return goal;
+    }
+
     ensureWaypoint(game: Game, player: Player): void {
         const waypointReached =
             !!this.waypoint &&

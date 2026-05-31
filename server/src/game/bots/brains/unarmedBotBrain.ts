@@ -112,11 +112,13 @@ export class UnarmedBotBrain implements BotBrain {
 
             return goal;
         };
+        const safeProgressGoal = () =>
+            sanitizeGoal(navigation.getSafeZoneGoal(game, player));
 
         if (gasEmergency) {
             combat.setState("wander", timeNow, "gas_escape");
             combat.stateLockUntil = timeNow;
-            combat.goalPos = sanitizeGoal(game.gas.posNew);
+            combat.goalPos = safeProgressGoal();
             combat.movementStyle = "direct";
             combat.lootTargetId = undefined;
             combat.lootWeaponSlot = undefined;
@@ -135,7 +137,7 @@ export class UnarmedBotBrain implements BotBrain {
                     "move_to_safe_zone",
                 ),
                 tacticalReason: "gas_escape",
-                targetZonePos: game.gas.posNew,
+                targetZonePos: combat.goalPos,
             });
 
             const decisionChanged = hasDecisionSnapshotChanged(
@@ -198,6 +200,128 @@ export class UnarmedBotBrain implements BotBrain {
                         scan.visible && perception.targetAppearsUnarmed,
                     hostileDistracted:
                         scan.visible && perception.targetDistracted,
+                    targetId: actionableTarget?.__id,
+                    targetX: actionableTarget
+                        ? Number(actionableTarget.pos.x.toFixed(2))
+                        : undefined,
+                    targetY: actionableTarget
+                        ? Number(actionableTarget.pos.y.toFixed(2))
+                        : undefined,
+                    goalX: Number(combat.goalPos.x.toFixed(2)),
+                    goalY: Number(combat.goalPos.y.toFixed(2)),
+                    movementStyle: combat.movementStyle,
+                    lootTargetId: undefined,
+                    objectTargetId: undefined,
+                    objectInteractionMode: undefined,
+                    ...getDecisionLogFields(combat),
+                });
+            }
+            return;
+        }
+
+        if (navigation.isHardStuck()) {
+            navigation.resetForHardUnstuck();
+            navigation.ensureWaypoint(game, player);
+            const unstuckGoal =
+                threat.hasRecentEnemy || scan.visible
+                    ? safeProgressGoal()
+                    : navigation.waypoint
+                      ? sanitizeGoal(navigation.waypoint)
+                      : safeProgressGoal();
+
+            combat.setState("wander", timeNow, "hard_unstuck");
+            combat.stateLockUntil = timeNow;
+            combat.goalPos = unstuckGoal;
+            combat.movementStyle = "direct";
+            combat.lootTargetId = undefined;
+            combat.lootWeaponSlot = undefined;
+            combat.objectTargetId = undefined;
+            combat.objectInteractionMode = undefined;
+            setDecisionContext(combat, {
+                timeNow,
+                emergencyState: "hard_unstuck",
+                emergencyReason: "stuck_no_progress",
+                macroGoal:
+                    threat.hasRecentEnemy || scan.visible
+                        ? "disengage"
+                        : game.gas.isOutSideSafeZone(player.pos)
+                          ? "rotate_safe"
+                          : navigation.waypointMeta?.macroGoal ?? "loot_zone",
+                macroReason: "hard_unstuck",
+                tacticalGoal: navigation.getTravelTacticalGoal(
+                    game,
+                    player,
+                    combat.goalPos,
+                    threat.hasRecentEnemy || scan.visible
+                        ? "move_to_safe_position"
+                        : game.gas.isOutSideSafeZone(player.pos)
+                          ? "move_to_safe_zone"
+                          : "move_to_zone",
+                ),
+                tacticalReason: "hard_unstuck",
+                targetZoneId: navigation.waypointMeta?.targetZoneId,
+                targetBuildingId: navigation.waypointMeta?.targetBuildingId,
+                targetZonePos:
+                    navigation.waypointMeta?.targetZonePos ?? combat.goalPos,
+                zoneScore: navigation.waypointMeta?.zoneScore,
+            });
+
+            const decisionChanged = hasDecisionSnapshotChanged(
+                beforeDecision,
+                captureDecisionSnapshot(combat),
+            );
+            if (Config.bots.debugCombat && decisionChanged) {
+                logBotCombat(game, {
+                    botId: player.__id,
+                    brainType,
+                    state: combat.state,
+                    stateReason: combat.stateReason,
+                    danger: 0,
+                    hp: Math.round(player.health),
+                    dist: actionableTarget
+                        ? Number(v2.distance(player.pos, actionableTarget.pos).toFixed(2))
+                        : undefined,
+                    visible: scan.visible,
+                    recentlyDamaged,
+                    gasEmergency: game.gas.isOutSideSafeZone(player.pos),
+                    unarmed: true,
+                    hostileHasShownGun: scan.visible && perception.targetHasShownGun,
+                    hostileDistracted: scan.visible && perception.targetDistracted,
+                    targetId: actionableTarget?.__id,
+                    targetX: actionableTarget
+                        ? Number(actionableTarget.pos.x.toFixed(2))
+                        : undefined,
+                    targetY: actionableTarget
+                        ? Number(actionableTarget.pos.y.toFixed(2))
+                        : undefined,
+                    goalX: Number(combat.goalPos.x.toFixed(2)),
+                    goalY: Number(combat.goalPos.y.toFixed(2)),
+                    movementStyle: combat.movementStyle,
+                    lootTargetId: undefined,
+                    objectTargetId: undefined,
+                    objectInteractionMode: undefined,
+                    ...getDecisionLogFields(combat),
+                });
+            }
+            if (decisionChanged) {
+                logBotStability(game, "state_change", {
+                    brainType,
+                    botId: player.__id,
+                    state: combat.state,
+                    reason: combat.stateReason,
+                    previousState: prevState,
+                    hp: Math.round(player.health),
+                    danger: 0,
+                    distToTarget: actionableTarget
+                        ? Number(v2.distance(player.pos, actionableTarget.pos).toFixed(2))
+                        : undefined,
+                    visible: scan.visible,
+                    gasEmergency: game.gas.isOutSideSafeZone(player.pos),
+                    unarmed: true,
+                    hostileHasShownGun: scan.visible && perception.targetHasShownGun,
+                    hostileAppearsUnarmed:
+                        scan.visible && perception.targetAppearsUnarmed,
+                    hostileDistracted: scan.visible && perception.targetDistracted,
                     targetId: actionableTarget?.__id,
                     targetX: actionableTarget
                         ? Number(actionableTarget.pos.x.toFixed(2))
@@ -750,7 +874,7 @@ export class UnarmedBotBrain implements BotBrain {
                 } else {
                     combat.goalPos = navigation.waypoint
                         ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
-                        : sanitizeGoal(game.gas.posNew);
+                        : safeProgressGoal();
                 }
                 break;
             }
@@ -771,7 +895,7 @@ export class UnarmedBotBrain implements BotBrain {
                 } else {
                     combat.goalPos = navigation.waypoint
                         ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
-                        : sanitizeGoal(game.gas.posNew);
+                        : safeProgressGoal();
                 }
                 break;
             case "back_off": {
@@ -783,7 +907,7 @@ export class UnarmedBotBrain implements BotBrain {
                     ? retreatPointFrom(retreatFrom, 14)
                     : navigation.waypoint
                       ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
-                      : sanitizeGoal(game.gas.posNew);
+                      : safeProgressGoal();
                 break;
             }
             case "seek_cover": {
@@ -795,14 +919,14 @@ export class UnarmedBotBrain implements BotBrain {
                     ? pickCoverPoint(retreatFrom) ?? retreatPointFrom(retreatFrom, 16)
                     : navigation.waypoint
                       ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
-                      : sanitizeGoal(game.gas.posNew);
+                      : safeProgressGoal();
                 break;
             }
             case "wander":
             default:
                 combat.goalPos = navigation.waypoint
                     ? chooseSpreadOutGoal(sanitizeGoal(navigation.waypoint))
-                    : sanitizeGoal(game.gas.posNew);
+                    : safeProgressGoal();
                 break;
         }
 

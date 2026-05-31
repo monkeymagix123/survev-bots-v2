@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-27
+Last updated: 2026-05-30
 
 ## Core Model
 
@@ -59,6 +59,7 @@ Important distinction:
 - this keeps unarmed-specific caution, loot-object farming, and object-abort behavior separate from the armed path
 - shared controller mechanics now live in `botControllerShared.ts`, so common helper behavior stays aligned between both paths
 - once a bot acquires a primary or secondary gun again, it returns to the normal armed brain/controller path
+- armed input generation now also force-equips a real gun under active threat if the bot is still on melee/fists after arming up, which helps newly armed bots actually enter combat instead of wandering weapon-ready but inactive
 
 ## Decision Layers
 
@@ -158,7 +159,9 @@ Movement is state-driven and separate from shooting.
 - zone-style waypoints now keep longer TTL than generic roam steps, so bots have more commitment to the chosen building/area and can resume it after short safe loot/object detours
 - building targets now explicitly label `loot_building` while obstacle/outdoor targets label `loot_zone`
 - broader safety-oriented movement can now explicitly use tactical `move_to_safe_zone`, instead of relying only on implicit safe-zone clamping
+- outside-next-safe rotation now aims for a practical near-edge entry point instead of the exact circle center, which reduces over-rotation and late gas failures
 - some disengage/heal fallback routes now use tactical `move_to_safe_position`, so logs can distinguish “retreat locally” from “rotate deeper into the safe zone”
+- if nav makes no progress for too long, the brains can now fire an explicit `hard_unstuck` emergency that resets route state and picks a fresh zone/safety goal
 - stuck detection
 - forced re-path attempts
 - safe fallback waypoint / center recovery only after local and regional interest fail

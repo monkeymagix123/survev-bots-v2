@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-27
+Last updated: 2026-05-30
 
 ## Done
 
@@ -139,6 +139,10 @@ Last updated: 2026-05-27
   - bots can now progress toward a deeper interior point through multiple practical unlocked doors instead of only handling a single blocked doorway
   - tactical logs can now show `use_door` for those interior manual-door crossings
 - Added `Config.bots.debugMapIndicators` so bot positions can be shown through the faction-style player-status/minimap-position path during debugging, with a distinct blue bot marker
+- Tightened late-match survival / activation behavior:
+  - gas-escape rotation now targets a practical near-edge entry point instead of the exact next-circle center
+  - hard-stuck bots now explicitly reset route state and pick a fresh zone/safe goal
+  - armed bots now force-equip a real gun under active threat if they are still on melee/fists after arming up
 
 ## In Progress
 

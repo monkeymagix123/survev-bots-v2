@@ -212,6 +212,7 @@ export class BotController {
         msg.seq = this._seq++ % 256;
 
         const validTarget = resolveValidTarget(this.game, player, this._perception);
+        const combatGunSlot = this._getPreferredCombatGunSlot(player);
 
         const gas = this.game.gas;
         const gasEmergency = gas.isInGas(player.pos) || gas.isOutSideSafeZone(player.pos);
@@ -392,6 +393,23 @@ export class BotController {
             this._lootScorer.markFailedLootTarget(previousLootTargetId, this._time);
         }
         applyLootInputs(msg, this._combat, player, lootTarget);
+
+        const activeWeaponDef = GameObjectDefs[player.activeWeapon];
+        const activeGunReady = activeWeaponDef?.type === "gun";
+        const shouldForceCombatGun =
+            combatGunSlot !== undefined &&
+            !activeGunReady &&
+            !objectInteractionActive &&
+            player.actionType === GameConfig.Action.None &&
+            (!!validTarget || this._perception.threat.hasRecentEnemy);
+        if (shouldForceCombatGun) {
+            msg.addInput(
+                combatGunSlot === GameConfig.WeaponSlot.Primary
+                    ? GameConfig.Input.EquipPrimary
+                    : GameConfig.Input.EquipSecondary,
+            );
+        }
+
         const travelDoorTarget =
             preTravelDoorTarget ??
             this._navigation.getTravelUseDoorTarget(
@@ -641,6 +659,35 @@ export class BotController {
         }
 
         return undefined;
+    }
+
+    private _getPreferredCombatGunSlot(
+        player: Player,
+    ):
+        | typeof GameConfig.WeaponSlot.Primary
+        | typeof GameConfig.WeaponSlot.Secondary
+        | undefined {
+        const remembered = this._getResumeGunSlot(player);
+        if (remembered !== undefined && player.weapons[remembered].ammo > 0) {
+            return remembered;
+        }
+
+        let fallback = remembered;
+        for (const slot of [
+            GameConfig.WeaponSlot.Primary,
+            GameConfig.WeaponSlot.Secondary,
+        ] as const) {
+            const type = player.weapons[slot].type;
+            if (!type || GameObjectDefs[type]?.type !== "gun") continue;
+            if (player.weapons[slot].ammo > 0) {
+                return slot;
+            }
+            if (fallback === undefined) {
+                fallback = slot;
+            }
+        }
+
+        return fallback;
     }
 
 }

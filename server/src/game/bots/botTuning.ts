@@ -70,6 +70,8 @@ export const BotTuning = {
         sameGoalDist: 2.5,
         arriveDist: 1.5,
         progressDist: 0.75,
+        hardUnstuckSec: 6,
+        safeZoneGoalInset: 1.6,
         waypointLocalRoamDist: 24,
         waypointLocalRoamMinStep: 8,
         waypointInterestSearchDist: 28,

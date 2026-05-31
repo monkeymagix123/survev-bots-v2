@@ -2,7 +2,7 @@
 
 Concise overview of the current server-side bot behavior.
 
-Last updated: 2026-05-27
+Last updated: 2026-05-30
 
 Internal bots are normal `Player` objects with `player.isAi = true` and `player.hasClient = false`. They are spawned/managed by `BotManager` and driven by server-side bot controllers/brains.
 
@@ -49,6 +49,7 @@ Bots follow a lightweight priority stack:
 ### Movement
 - Use a lightweight movement state machine
 - `gas_escape` now acts as the first hard behavior override and forces tactical `move_to_safe_zone`
+- Safe-zone rotation now aims for a practical near-edge entry point instead of always dragging bots toward the exact next-circle center
 - `move_to_safe_zone` now means broader safe-zone progress, while `move_to_safe_position` means a safer local fallback during disengage/heal behavior
 - Use short detours and fallback recovery instead of full pathfinding
 - Keep short detour-side commitment around blockers so bots are less likely to jitter between equivalent left/right micro-routes
@@ -71,6 +72,7 @@ Bots follow a lightweight priority stack:
   - manual unlocked doors are approached from the current side and actively used before crossing
   - walls/windows are not treated as fake openings
 - Building interior travel now uses a lightweight internal door graph inside practical buildings / same-structure rooms, so bots can move from one interior point toward another by traversing unlocked internal doors instead of treating room-to-room travel as a dead end
+- Hard-stuck bots now explicitly reset their routing and pick a fresh safe/zone goal instead of endlessly grinding the same failed path
 - Use local cover-lite sampling under pressure
 - Waypoint scoring now also penalizes regional crowding, especially around armed players, so bots spread out more naturally instead of collapsing into one “safe” area
 - Respect gas/safe-zone pressure first
@@ -93,6 +95,7 @@ Bots follow a lightweight priority stack:
 - `melee_break` punch checks now use the bot’s intended same-tick aim direction, so bots are less likely to stand next to a crate without actually swinging
 - `melee_break` now has a tiny configurable swing-plant window (`BotTuning.objectInteract.meleeSwingStopSec`); set it to `0` if you want no stop-at-all behavior
 - Armed bots now remember and re-equip their gun after temporary melee crate-breaking instead of getting stranded on fists
+- Armed bots now also force-equip a real gun when a threat is active and they are still on fists/melee after arming up
 - Windows are not treated as loot-break targets
 - Armored / stone-plated break targets are only chosen when the bot’s melee weapon can actually pierce them
 - Loot objects that are blocked behind walls/building separation are rejected unless an unarmed bot can first clear a destructible blocker
