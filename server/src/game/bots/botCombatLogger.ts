@@ -1,8 +1,8 @@
-import fs from "fs";
 import path from "path";
 import { Config } from "../../config";
 import type { Game } from "../game";
 import { getBotLogDir } from "./botLogPaths";
+import { appendBotLogLine } from "./botLogWriter";
 
 const enabled = Config.bots.debugCombat;
 
@@ -58,8 +58,7 @@ export function logBotCombat(game: Game, fields: Record<string, unknown>): void 
     };
 
     try {
-        fs.mkdirSync(path.dirname(logPath), { recursive: true });
-        fs.appendFileSync(logPath, `${JSON.stringify(payload)}\n`);
+        appendBotLogLine(logPath, JSON.stringify(payload));
     } catch {
         // Best-effort debug logging only.
     }

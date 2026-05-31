@@ -53,6 +53,11 @@ type LootChoiceCacheEntry = {
     choice?: BotLootChoice;
 };
 
+type LootChoiceCacheResult = {
+    hit: boolean;
+    choice?: BotLootChoice;
+};
+
 export class BotLootScorer {
     private _cache?: LootChoiceCacheEntry;
     private readonly _failedLootIds = new Map<number, number>();
@@ -89,8 +94,8 @@ export class BotLootScorer {
             unarmedThreat,
             maxDist,
         });
-        if (cached !== undefined) {
-            return cached;
+        if (cached?.hit) {
+            return cached.choice;
         }
 
         const nearby = game.grid.intersectCollider(
@@ -203,7 +208,7 @@ export class BotLootScorer {
         onlyGuns: boolean;
         unarmedThreat?: BotUnarmedThreatContext;
         maxDist: number;
-    }): BotLootChoice | undefined {
+    }): LootChoiceCacheResult | undefined {
         const {
             game,
             player,
@@ -232,7 +237,9 @@ export class BotLootScorer {
         ) {
             return undefined;
         }
-        if (!cached.choice) return undefined;
+        if (!cached.choice) {
+            return { hit: true, choice: undefined };
+        }
         if (this._failedLootIds.has(cached.choice.lootId)) return undefined;
 
         const obj = game.objectRegister.getById(cached.choice.lootId);
@@ -248,8 +255,11 @@ export class BotLootScorer {
         if (v2.distance(player.pos, obj.pos) > maxDist) return undefined;
 
         return {
-            ...cached.choice,
-            pos: v2.copy(obj.pos),
+            hit: true,
+            choice: {
+                ...cached.choice,
+                pos: v2.copy(obj.pos),
+            },
         };
     }
 

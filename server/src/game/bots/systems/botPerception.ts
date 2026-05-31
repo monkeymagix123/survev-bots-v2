@@ -49,7 +49,7 @@ export type BotThreatSnapshot = {
 };
 
 type ScanCacheEntry = {
-    timeNow: number;
+    until: number;
     botId: number;
     brainType: BotBrainType;
     layer: number;
@@ -412,7 +412,7 @@ export class BotPerception {
         const cached = this._scanCache;
         if (!cached) return undefined;
         if (
-            cached.timeNow !== timeNow ||
+            cached.until < timeNow ||
             cached.botId !== player.__id ||
             cached.brainType !== brainType ||
             cached.layer !== player.layer
@@ -463,7 +463,7 @@ export class BotPerception {
     }): void {
         const { player, timeNow, brainType, target, visible, threat } = params;
         this._scanCache = {
-            timeNow,
+            until: timeNow + BotTuning.optimization.selectionCacheTtlSec,
             botId: player.__id,
             brainType,
             layer: player.layer,

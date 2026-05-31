@@ -2,7 +2,7 @@
 
 Deeper implementation notes for the current internal bot system.
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 ## Core Model
 
@@ -311,9 +311,12 @@ Shared helper layer:
 Recent optimization work stayed deliberately conservative:
 - removed the old legacy parity-comparison path from live bot updates
 - added short-lived local-selection caches inside `BotLootScorer` and `BotObjectInteractionScorer`
+- those loot/object caches now also remember short-lived “no target found” results instead of treating empty-space rescans as cache misses
 - added brief cooldown memory for failed loot/object/blocker picks so bots do not immediately retry the same bad choice
 - centralized armed tactical danger/threat derivation through a shared snapshot helper instead of recomputing overlapping booleans in multiple places
-- added strict same-tick/local reuse for `BotPerception` scans and repeated `BotNavigationLite` route traces
+- `BotPerception` scan reuse is now TTL-based like the other selection caches, so it can actually survive across nearby ticks instead of only matching the exact same `timeNow`
+- `BotManager` now avoids unnecessary controller work after shutdown/endgame/disabled states, throttles fill bookkeeping a bit, and reuses normalized brain weights instead of recomputing them every pick
+- debug bot logs now write through cached append streams instead of `appendFileSync`, which reduces the distortion cost when those logs are enabled during performance testing
 
 This was meant to reduce repeated hot-path scans and retry loops without materially changing bot personalities.
 

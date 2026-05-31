@@ -123,6 +123,7 @@ interface WaveState {
 
 /** Seconds to pause between waves if a map does not override it. */
 const DEFAULT_WAVE_INTER_DELAY_S = 3;
+const FILL_BOOKKEEPING_INTERVAL_SEC = 0.25;
 
 // ─── BotManager ──────────────────────────────────────────────────────────────
 
@@ -131,6 +132,13 @@ export class BotManager {
 
     private _spawnBudget = 0;
     private _retireBudget = 0;
+    private _fillBookkeepingTimer = 0;
+    private _cachedFillTarget?: {
+        desiredBots: number;
+        connectedHumans: number;
+    };
+    private _cachedBrainWeights = DefaultBrainWeights;
+    private _brainMixCacheKey = "";
 
     private readonly _controllers = new Map<number, BotController>();
 
@@ -145,6 +153,7 @@ export class BotManager {
     private _wavePausedForNoHumans = false;
 
     constructor(readonly game: Game) {
+        this._refreshBrainWeightCache();
         const waveModeEnabled = !!this.game.map.mapDef.isWave;
         this._waveConfig = waveModeEnabled ? this._loadWaveConfig() : null;
 
@@ -309,8 +318,6 @@ export class BotManager {
     // ── Main update ──────────────────────────────────────────────────────────
 
     update(dt: number): void {
-        this._updateControllers(dt);
-
         const isWaveMap = !!this.game.map.mapDef.isWave;
         const botsEnabled = Config.bots.enabled || isWaveMap;
 
@@ -321,6 +328,8 @@ export class BotManager {
         if (this.game.stopped || this.game.over) {
             return;
         }
+
+        this._updateControllers(dt);
 
         if (isWaveMap) {
             const connectedHumans = this._countConnectedHumans();
@@ -344,7 +353,7 @@ export class BotManager {
             return;
         }
 
-        const fill = this._computeFillTarget();
+        const fill = this._getFillTarget(dt);
         this._applyFillTarget(dt, fill);
     }
 
@@ -449,8 +458,8 @@ export class BotManager {
             return mix.force;
         }
 
-        const weights = normalizeBrainWeights(mix.weights);
-        return sampleBrainType(weights);
+        this._refreshBrainWeightCache();
+        return sampleBrainType(this._cachedBrainWeights);
     }
 
     // ── Fill-mode helpers ────────────────────────────────────────────────────
@@ -509,6 +518,34 @@ export class BotManager {
         }
 
         return { desiredBots, connectedHumans };
+    }
+
+    private _getFillTarget(dt: number): {
+        desiredBots: number;
+        connectedHumans: number;
+    } {
+        this._fillBookkeepingTimer -= dt;
+        if (!this._cachedFillTarget || this._fillBookkeepingTimer <= 0) {
+            this._cachedFillTarget = this._computeFillTarget();
+            this._fillBookkeepingTimer = FILL_BOOKKEEPING_INTERVAL_SEC;
+        }
+        return this._cachedFillTarget;
+    }
+
+    private _refreshBrainWeightCache(): void {
+        const mix = Config.bots.brainMix;
+        const key = [
+            mix.force ?? "-",
+            mix.weights?.practice ?? "d",
+            mix.weights?.realistic ?? "d",
+            mix.weights?.competitive ?? "d",
+        ].join("|");
+        if (key === this._brainMixCacheKey) {
+            return;
+        }
+
+        this._brainMixCacheKey = key;
+        this._cachedBrainWeights = normalizeBrainWeights(mix.weights);
     }
 
     private _applyFillTarget(

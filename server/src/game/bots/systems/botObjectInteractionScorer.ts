@@ -44,6 +44,11 @@ type ObjectChoiceCacheEntry = {
     choice?: BotObjectInteractionChoice;
 };
 
+type ObjectChoiceCacheResult = {
+    hit: boolean;
+    choice?: BotObjectInteractionChoice;
+};
+
 export class BotObjectInteractionScorer {
     private _cache?: ObjectChoiceCacheEntry;
     private readonly _failedObstacleIds = new Map<number, number>();
@@ -84,8 +89,8 @@ export class BotObjectInteractionScorer {
             unarmedThreat,
             maxDist,
         });
-        if (cached !== undefined) {
-            return cached;
+        if (cached?.hit) {
+            return cached.choice;
         }
 
         const nearby = game.grid.intersectCollider(
@@ -606,7 +611,7 @@ export class BotObjectInteractionScorer {
         baseGoal?: Vec2;
         unarmedThreat?: BotUnarmedThreatContext;
         maxDist: number;
-    }): BotObjectInteractionChoice | undefined {
+    }): ObjectChoiceCacheResult | undefined {
         const {
             game,
             player,
@@ -637,7 +642,9 @@ export class BotObjectInteractionScorer {
             return undefined;
         }
         if (!this._sameBaseGoal(cached.baseGoal, baseGoal)) return undefined;
-        if (!cached.choice) return undefined;
+        if (!cached.choice) {
+            return { hit: true, choice: undefined };
+        }
         if (this._failedObstacleIds.has(cached.choice.obstacleId)) return undefined;
 
         const obj = game.objectRegister.getById(cached.choice.obstacleId);
@@ -652,8 +659,11 @@ export class BotObjectInteractionScorer {
         if (v2.distance(player.pos, obj.pos) > maxDist) return undefined;
 
         return {
-            ...cached.choice,
-            pos: v2.copy(obj.pos),
+            hit: true,
+            choice: {
+                ...cached.choice,
+                pos: v2.copy(obj.pos),
+            },
         };
     }
 

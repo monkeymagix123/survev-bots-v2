@@ -1,8 +1,8 @@
-import fs from "fs";
 import path from "path";
 import { Config } from "../../config";
 import type { Game } from "../game";
 import { getBotLogDir } from "./botLogPaths";
+import { appendBotLogLine } from "./botLogWriter";
 
 const enabled = Config.bots.debugBotStability;
 
@@ -100,7 +100,7 @@ export function logBotStability(
     };
 
     try {
-        fs.appendFileSync(logPath, `${JSON.stringify(payload)}\n`);
+        appendBotLogLine(logPath, JSON.stringify(payload));
     } catch {
         // Best-effort debug logging only.
     }

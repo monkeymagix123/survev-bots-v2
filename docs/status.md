@@ -2,7 +2,7 @@
 
 Short snapshot of current bot work.
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 ## Current State
 
@@ -82,6 +82,8 @@ Last updated: 2026-05-30
 - Late gas rotation now aims for a practical near-edge safe entry point instead of the exact next-circle center
 - Hard-stuck bots now explicitly reset route state and pick a fresh zone/safe goal instead of grinding the same failed path forever
 - Armed bots now force-equip a real gun under active threat if they are still on melee/fists after arming up
+- Perception scans now reuse a real short TTL cache, and loot/object scorers now also cache short-lived “no target found” results
+- Bot-manager hot paths now do less repeated work, and debug bot logs no longer use synchronous append writes
 - Added short-lived loot/object selection caches plus failed-target cooldowns to reduce repeated retry loops
 - Centralized armed tactical danger/threat derivation into a shared helper
 - Added small perception/nav reuse so bots do less repeated target-scan and route-trace work
@@ -103,6 +105,7 @@ Last updated: 2026-05-30
 - More anti-oscillation work for unarmed movement
 - Manual sanity checks for the new layered decision model and `gas_escape` override path
 - Replay-driven sanity checks for late gas rotation, hard-stuck recoveries, and weapon-ready-but-no-fire bots
+- If wave-map CPU is still heavy after this, the next likely optimization is reducing full-player scans there — but that one can slightly change long-range awareness / wave behavior, so it deserves a deliberate follow-up pass
 - Manual spectate tuning
 - Duo/squad behavior
 - Additional debug/stability events if needed

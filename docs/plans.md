@@ -2,7 +2,7 @@
 
 Authoritative progress log for the bot work.
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 ## Done
 
@@ -143,6 +143,11 @@ Last updated: 2026-05-30
   - gas-escape rotation now targets a practical near-edge entry point instead of the exact next-circle center
   - hard-stuck bots now explicitly reset route state and pick a fresh zone/safe goal
   - armed bots now force-equip a real gun under active threat if they are still on melee/fists after arming up
+- Added another low-risk optimization pass:
+  - perception target scans now use TTL-based cache reuse instead of exact-tick-only matching
+  - loot/object scorer caches now remember short-lived “no target nearby” results too
+  - `BotManager` now skips controller updates after disabled/endgame guards, throttles fill bookkeeping, and reuses normalized brain weights
+  - debug bot logs now write through cached streams instead of synchronous append calls
 
 ## In Progress
 
